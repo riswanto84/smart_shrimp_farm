@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Hapus Pengguna</h1>
+    <p>Konfirmasi penghapusan akun pengguna.</p>
+  </div>
+  <a class="btn btn-outline-primary" href="{% url 'accounts:users' %}"><i class="fa-solid fa-arrow-left"></i> Kembali</a>
+</div>
+
+<div class="cardx">
+  <div class="alert alert-danger app-alert">
+    <strong>Perhatian!</strong> Pengguna <b>{{ deleted_user.get_full_name|default:deleted_user.username }}</b> akan dihapus permanen dari sistem.
+  </div>
+  <table class="table app-table mb-3">
+    <tr><th style="width:180px">Nama</th><td>{{ deleted_user.get_full_name|default:deleted_user.username }}</td></tr>
+    <tr><th>Username</th><td>{{ deleted_user.username }}</td></tr>
+    <tr><th>Email</th><td>{{ deleted_user.email|default:'-' }}</td></tr>
+  </table>
+  <form method="post" class="d-flex gap-2">
+    {% csrf_token %}
+    <button class="btn btn-danger"><i class="fa-solid fa-trash"></i> Ya, Hapus</button>
+    <a class="btn btn-outline-secondary" href="{% url 'accounts:users' %}">Batal</a>
+  </form>
+</div>
+{% endblock %}

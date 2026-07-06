@@ -1,0 +1,204 @@
+{% load static currency %}
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}SMART SHRIMP FARM{% endblock %}</title>
+  <link rel="icon" type="image/png" href="{% static 'img/favicon.png' %}">
+  <link rel="apple-touch-icon" href="{% static 'img/favicon.png' %}">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}?v=20260622-notif-read">
+</head>
+<body>
+{% if user.is_authenticated %}
+<div class="app-shell">
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <aside class="sidebar" id="appSidebar">
+    <div class="sidebar-brand">
+      <img src="{% static 'img/logo_uen.png' %}" alt="Udang Emas Nusantara">
+      <div>
+        <strong>SMART SHRIMP FARM</strong>
+        <small>by Udang Emas Nusantara</small>
+      </div>
+    </div>
+    <nav class="menu">
+      {% for item in APP_MENU %}
+        {% if item.type == 'group' %}
+          <p>{{ item.label }}</p>
+        {% else %}
+          <a class="{% if request.path == item.url %}active{% endif %}" href="{{ item.url }}"><i class="{{ item.icon }}"></i><span>{{ item.label }}</span></a>
+        {% endif %}
+      {% endfor %}
+      <p>AKUN</p>
+      <a href="/accounts/logout/"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a>
+    </nav>
+    <div class="sidebar-user">
+      <div class="avatar">{{ user.username|first|upper }}</div>
+      <div><strong>{{ user.get_full_name|default:user.username }}</strong><small>{{ PRIMARY_ROLE_LABEL }}</small></div>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <button class="hamburger" id="sidebarToggle" type="button" aria-label="Buka menu"><i class="fa-solid fa-bars"></i></button>
+      <div class="topbar-spacer"></div>
+      <div class="top-pill"><i class="fa-solid fa-cloud-sun text-warning"></i><strong>28°C</strong><small>Muara Gembong</small></div>
+      <div class="top-pill"><i class="fa-regular fa-calendar"></i><strong>{{ app_today|date:"d M Y" }}</strong><small>{{ app_today|date:"H:i" }} WIB</small></div>
+      <div class="notif-wrap">
+        <button class="notif-btn" id="notifToggle" type="button" aria-label="Buka notifikasi" aria-haspopup="true" aria-controls="notifPanel" aria-expanded="false" data-notification-key="{{ app_notification_key }}" data-notification-count="{{ app_notification_count }}">
+          <i class="fa-regular fa-bell"></i>
+          {% if app_notification_count %}<span class="notif-badge" id="notifBadge">{{ app_notification_count }}</span>{% endif %}
+        </button>
+        <section class="notif-panel" id="notifPanel" aria-labelledby="notifToggle" role="menu">
+          <div class="notif-head">
+            <div>
+              <strong>Notifikasi</strong>
+              <small id="notifSummary">{% if app_notification_count %}{{ app_notification_count }} perlu perhatian{% elif app_notification_total_count %}Sudah dibaca{% else %}Semua aktivitas aman{% endif %}</small>
+            </div>
+            <span class="notif-status {% if app_notification_count %}has-alert{% endif %}" id="notifStatus">{% if app_notification_count %}Perlu dicek{% elif app_notification_total_count %}Sudah dibaca{% else %}Aman{% endif %}</span>
+          </div>
+          <div class="notif-list">
+            {% for n in app_notifications %}
+              {% if n.url %}
+              <a class="notif-item {{ n.level|default:'info' }}" href="{{ n.url }}" role="menuitem">
+                <span class="notif-icon"><i class="fa-solid {{ n.icon }}"></i></span>
+                <span class="notif-copy">
+                  <b>{{ n.title }}</b>
+                  <small>{{ n.text }}</small>
+                  {% if n.meta %}<em>{{ n.meta }}</em>{% endif %}
+                </span>
+                <i class="fa-solid fa-chevron-right notif-chevron"></i>
+              </a>
+              {% else %}
+              <div class="notif-empty" role="status">
+                <span class="notif-icon"><i class="fa-solid {{ n.icon }}"></i></span>
+                <span class="notif-copy">
+                  <b>{{ n.title }}</b>
+                  <small>{{ n.text }}</small>
+                </span>
+              </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+          <div class="notif-foot">
+            <a href="/dashboard/">Buka Dashboard</a>
+            <button type="button" id="notifClose">Tutup</button>
+          </div>
+        </section>
+      </div>
+    </div>
+    {% if messages %}{% for m in messages %}<div class="alert alert-info app-alert">{{m}}</div>{% endfor %}{% endif %}
+    {% block content %}{% endblock %}
+    <footer class="app-footer">© 2026 Udang Emas Nusantara. All rights reserved. <span>Versi 1.0.0</span></footer>
+  </main>
+  <nav class="bottom-nav">
+    {% for item in BOTTOM_MENU %}
+      <a href="{{ item.url }}"><i class="{{ item.icon }}"></i><br>{{ item.label }}</a>
+    {% endfor %}
+  </nav>
+</div>
+{% else %}
+  {% if messages %}<div class="position-fixed top-0 start-50 translate-middle-x p-3" style="z-index:1050">{% for m in messages %}<div class="alert alert-info shadow">{{m}}</div>{% endfor %}</div>{% endif %}
+  {% block public_content %}{% endblock %}
+{% endif %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function(){
+  const sidebar = document.getElementById('appSidebar');
+  const toggle = document.getElementById('sidebarToggle');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  function openMenu(){
+    if(!sidebar) return;
+    sidebar.classList.add('show');
+    if(backdrop) backdrop.classList.add('show');
+    document.body.classList.add('menu-open');
+  }
+  function closeMenu(){
+    if(!sidebar) return;
+    sidebar.classList.remove('show');
+    if(backdrop) backdrop.classList.remove('show');
+    document.body.classList.remove('menu-open');
+  }
+  if(toggle){ toggle.addEventListener('click', function(e){ e.preventDefault(); sidebar && sidebar.classList.contains('show') ? closeMenu() : openMenu(); }); }
+  if(backdrop){ backdrop.addEventListener('click', closeMenu); }
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeMenu(); });
+  document.querySelectorAll('.sidebar .menu a').forEach(function(link){ link.addEventListener('click', function(){ if(window.innerWidth <= 820) closeMenu(); }); });
+
+  const notifToggle = document.getElementById('notifToggle');
+  const notifPanel = document.getElementById('notifPanel');
+  const notifClose = document.getElementById('notifClose');
+  const notifBadge = document.getElementById('notifBadge');
+  const notifSummary = document.getElementById('notifSummary');
+  const notifStatus = document.getElementById('notifStatus');
+
+  function getCookie(name){
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if(parts.length === 2) return parts.pop().split(';').shift();
+    return '';
+  }
+  function closeNotif(){
+    if(!notifPanel || !notifToggle) return;
+    notifPanel.classList.remove('show');
+    notifToggle.setAttribute('aria-expanded', 'false');
+  }
+  function setNotificationReadUI(){
+    if(notifBadge){
+      notifBadge.classList.add('notif-badge-hide');
+      window.setTimeout(function(){ if(notifBadge && notifBadge.parentNode){ notifBadge.parentNode.removeChild(notifBadge); } }, 180);
+    }
+    if(notifSummary) notifSummary.textContent = 'Sudah dibaca';
+    if(notifStatus){
+      notifStatus.classList.remove('has-alert');
+      notifStatus.textContent = 'Sudah dibaca';
+    }
+    notifToggle.dataset.notificationCount = '0';
+    notifToggle.classList.add('notif-read');
+  }
+  function markNotificationsRead(){
+    if(!notifToggle) return;
+    const count = parseInt(notifToggle.dataset.notificationCount || '0', 10);
+    const key = notifToggle.dataset.notificationKey || '';
+    if(!count || !key || key === 'none') return;
+
+    setNotificationReadUI();
+    fetch('/notifications/read/', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+        'X-CSRFToken': getCookie('csrftoken')
+      },
+      body: 'key=' + encodeURIComponent(key)
+    }).catch(function(){
+      /* UI tetap ditandai dibaca. Jika request gagal, badge akan muncul kembali saat refresh. */
+    });
+  }
+  if(notifToggle && notifPanel){
+    notifToggle.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      markNotificationsRead();
+      const open = notifPanel.classList.toggle('show');
+      notifToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    notifPanel.addEventListener('click', function(e){ e.stopPropagation(); });
+    if(notifClose){ notifClose.addEventListener('click', function(e){ e.preventDefault(); closeNotif(); }); }
+    document.addEventListener('click', closeNotif);
+    document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeNotif(); });
+  }
+
+  function formatRupiahInput(value){
+    const digits = String(value || '').replace(/[^0-9]/g, '');
+    if(!digits) return '';
+    return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  }
+  document.querySelectorAll('[data-rupiah-input]').forEach(function(input){
+    input.addEventListener('input', function(){ input.value = formatRupiahInput(input.value); });
+    if(input.value) input.value = formatRupiahInput(input.value);
+  });
+})();
+</script>
+</body>
+</html>

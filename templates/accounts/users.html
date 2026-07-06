@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Pengguna & Hak Akses</h1>
+    <p>Satu pengguna dapat memiliki lebih dari satu role, misalnya Teknisi + Kasir.</p>
+  </div>
+  <a class="btn btn-primary" href="{% url 'accounts:add_user' %}"><i class="fa-solid fa-user-plus"></i> Tambah Pengguna</a>
+</div>
+
+<div class="kpi-grid mb-3">
+  <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-users"></i></div><div><span>Total Pengguna</span><strong>{{ users.count }}</strong><small>Semua pengguna terdaftar</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-shield-halved"></i></div><div><span>User Aktif</span><strong>{{ active_count }}</strong><small>Akun aktif</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-user-gear"></i></div><div><span>Total Role</span><strong>{{ roles.count }}</strong><small>Role sistem tersedia</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-pen-to-square"></i></div><div><span>Aksi Data</span><strong>Edit / Hapus</strong><small>Kelola pengguna</small></div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12">
+    <div class="cardx table-responsive">
+      <table class="table app-table align-middle">
+        <thead>
+          <tr>
+            <th>Nama</th>
+            <th>Username</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th class="text-end">Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr>
+            <td><b>{{ u.get_full_name|default:u.username }}</b></td>
+            <td>{{ u.username }}</td>
+            <td>{{ u.email|default:'-' }}</td>
+            <td>
+              {% for r in u.userprofile.roles.all %}
+                <span class="badge-soft me-1">{{ r.name }}</span>
+              {% empty %}
+                <span class="text-muted">-</span>
+              {% endfor %}
+            </td>
+            <td>
+              {% if u.is_active %}
+                <span class="status status-budidaya">Aktif</span>
+              {% else %}
+                <span class="status status-kosong">Nonaktif</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <a class="btn btn-sm btn-outline-primary me-1" href="{% url 'accounts:edit_user' u.id %}">
+                <i class="fa-solid fa-pen-to-square"></i> Edit
+              </a>
+              {% if u.id != request.user.id %}
+              <a class="btn btn-sm btn-outline-danger" href="{% url 'accounts:delete_user' u.id %}">
+                <i class="fa-solid fa-trash"></i> Hapus
+              </a>
+              {% else %}
+              <button class="btn btn-sm btn-outline-secondary" disabled title="Akun yang sedang login tidak dapat dihapus">
+                <i class="fa-solid fa-lock"></i> Hapus
+              </button>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center text-muted py-4">Belum ada pengguna.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

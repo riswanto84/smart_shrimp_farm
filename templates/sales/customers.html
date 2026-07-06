@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Pelanggan</h1>
+    <p>Master data pelanggan untuk nota PDF, WhatsApp, email, dan riwayat transaksi.</p>
+  </div>
+  <a class="btn btn-primary" href="{% url 'sales:add_customer' %}"><i class="fa-solid fa-plus"></i> Tambah Pelanggan</a>
+</div>
+
+<a class="mobile-fab" href="{% url 'sales:add_customer' %}" aria-label="Tambah pelanggan"><i class="fa-solid fa-user-plus"></i></a>
+
+<div class="cardx table-responsive">
+  <table class="table app-table align-middle">
+    <thead>
+      <tr><th>Nama</th><th>No HP</th><th>Email</th><th>Alamat</th></tr>
+    </thead>
+    <tbody>
+    {% for c in customers %}
+      <tr>
+        <td><b>{{c.name}}</b></td>
+        <td>{{c.phone|default:'-'}}</td>
+        <td>{{c.email|default:'-'}}</td>
+        <td>{{c.address|default:'-'|truncatechars:60}}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4" class="text-muted text-center py-4">Belum ada pelanggan. Klik tombol <b>Tambah Pelanggan</b> untuk membuat data baru.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

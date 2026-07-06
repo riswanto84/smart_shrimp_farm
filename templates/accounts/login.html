@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Login User - SMART SHRIMP FARM{% endblock %}
+{% block public_content %}
+<div class="login-page login-page-pro">
+  <section class="login-left login-left-pro">
+    <div class="login-brand-area">
+      <img class="login-brand-logo" src="{% static 'img/logo_uen.png' %}" alt="Udang Emas Nusantara">
+      <div class="login-kicker">SMART SHRIMP FARM</div>
+      <h2>Tambak Nusantara<br><span>Untuk Kualitas Dunia!</span></h2>
+      <div class="login-gold-line"></div>
+      <div class="login-quote">
+        <span class="quote-mark quote-open">“</span>
+        <p>Setiap benur yang ditebar adalah harapan, setiap kerja adalah ibadah, setiap ikhtiar dan sistem yang baik adalah jalan menuju kesuksesan kita doa.</p>
+        <span class="quote-mark quote-close">”</span>
+      </div>
+      <p class="login-description">Sistem manajemen tambak terintegrasi untuk membantu Anda mengelola tambak dengan lebih efisien, produktif, dan berkelanjutan.</p>
+    </div>
+  </section>
+
+  <section class="login-card-wrap login-card-wrap-pro">
+    <div class="login-card login-card-pro">
+      <div class="login-lock"><i class="fa-solid fa-shield-halved"></i></div>
+      <h1>Login User</h1>
+      <p class="subtitle">SMART SHRIMP FARM</p>
+      <div class="gold-line"></div>
+      <form method="post" autocomplete="off">{% csrf_token %}
+        <div class="field-icon mb-3"><i class="fa-solid fa-user"></i><input class="form-control" name="username" placeholder="Username" required></div>
+        <div class="field-icon mb-3"><i class="fa-solid fa-lock"></i><input class="form-control" name="password" type="password" placeholder="Password" required></div>
+        <label class="form-label fw-bold">Kode Keamanan</label>
+        <div class="captcha-box">{{ captcha_question }}</div>
+        <div class="field-icon"><i class="fa-solid fa-shield-halved"></i><input class="form-control" name="captcha" placeholder="Jawaban Anda" inputmode="numeric" required></div>
+        <div class="login-meta"><label><input class="form-check-input me-2" type="checkbox" checked> Ingat saya</label><a href="#">Lupa password?</a></div>
+        <button class="login-btn">Login</button>
+        <div class="secure-note"><i class="fa-solid fa-shield-halved"></i><span><b>Sistem aman &amp; terenkripsi</b><br>Data Anda terlindungi dengan sistem keamanan aplikasi.</span></div>
+      </form>
+    </div>
+  </section>
+
+  <div class="login-features login-features-pro">
+    <div><i class="fa-solid fa-shield-halved"></i><span><b>Aman &amp; Terpercaya</b>Sistem terenkripsi dengan standar keamanan tinggi</span></div>
+    <div><i class="fa-solid fa-chart-line"></i><span><b>Monitoring Real-time</b>Pantau kondisi tambak secara real-time dari mana saja</span></div>
+    <div><i class="fa-solid fa-database"></i><span><b>Data Terintegrasi</b>Semua data terpusat dan mudah diakses</span></div>
+    <div><i class="fa-solid fa-users"></i><span><b>Kolaborasi Tim</b>Kelola tim dan operasional lebih efektif</span></div>
+  </div>
+</div>
+{% endblock %}
