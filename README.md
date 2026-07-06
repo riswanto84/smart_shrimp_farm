@@ -68,3 +68,4 @@ File utama yang diubah:
 - `static/css/app.css`
 - `sales/pdf.py`
 - `static/img/logo_uen_thermal.png`
+# smart_shrimp_farm
