@@ -15,8 +15,9 @@ from .models import (
     DailyParameter, Treatment, FeedLog, Harvest,
     DailyPondRecord, AncoCheck, SamplingRecord, SiphonRecord, Stocking,
 )
-from chat_ai.services import ask_ollama
+from chat_ai.services import ask_ollama, ollama_health
 from core.reporting import get_date_range, filter_by_date_range, format_date_range, export_excel, export_pdf
+from core.pagination import paginate_queryset
 
 
 def _selected_pond(request):
@@ -111,6 +112,7 @@ def production_dashboard(request):
         'active_stocking': active_stocking,
         'latest_samples': latest_samples,
         'pond_cards': pond_cards,
+        'ollama_health': ollama_health(),
     }
     return render(request, 'operations/production_dashboard.html', context)
 
@@ -132,7 +134,7 @@ def _parameter_rows(items):
     rows = []
     for i in items:
         rows.append([
-            i.date.strftime('%d/%m/%Y'), i.pond.name, i.doc, i.temperature, i.ph_morning,
+            i.date.strftime('%d/%m/%Y'), i.pond.name, i.doc, i.water_level_cm, i.temperature, i.ph_morning,
             i.ph_evening, i.do_morning, i.do_night, i.salinity, i.alkalinity, i.transparency,
             i.feed_kg, i.mortality, i.water_color, i.technician.username if i.technician else '-', i.ai_recommendation,
         ])
@@ -143,7 +145,8 @@ def _parameter_rows(items):
 @permission_required('operations.parameters')
 def parameters(request):
     items, date_from, date_to = _parameter_queryset(request)
-    return render(request, 'operations/parameters.html', {'items': items, 'date_from': date_from, 'date_to': date_to, 'ponds': Pond.objects.all()})
+    page_obj = paginate_queryset(request, items, per_page=10)
+    return render(request, 'operations/parameters.html', {'items': page_obj, 'page_obj': page_obj, 'date_from': date_from, 'date_to': date_to, 'ponds': Pond.objects.all()})
 
 
 @login_required
@@ -152,7 +155,7 @@ def export_parameters_excel(request):
     items, date_from, date_to = _parameter_queryset(request)
     return export_excel(
         'laporan_parameter_harian', 'Laporan Parameter Harian', f'Periode: {format_date_range(date_from, date_to)}',
-        ['Tanggal', 'Kolam', 'DOC', 'Suhu', 'pH Pagi', 'pH Sore', 'DO Pagi', 'DO Malam', 'Salinitas', 'Alkalinitas', 'Kecerahan', 'Pakan Kg', 'Kematian', 'Warna Air', 'Teknisi', 'Rekomendasi AI'],
+        ['Tanggal', 'Kolam', 'DOC', 'Tinggi Air', 'Suhu', 'pH Pagi', 'pH Sore', 'DO Pagi', 'DO Malam', 'Salinitas', 'Alkalinitas', 'Kecerahan', 'Pakan Kg', 'Kematian', 'Warna Air', 'Teknisi', 'Rekomendasi AI'],
         _parameter_rows(items),
     )
 
@@ -162,10 +165,10 @@ def export_parameters_excel(request):
 def export_parameters_pdf(request):
     items, date_from, date_to = _parameter_queryset(request)
     rows = _parameter_rows(items)
-    short_rows = [[r[0], r[1], r[2], r[3], r[5], r[7], r[8], r[11], r[14], (r[15] or '')[:80]] for r in rows]
+    short_rows = [[r[0], r[1], r[2], r[3], r[4], r[6], r[8], r[9], r[12], r[15], (r[16] or '')[:80]] for r in rows]
     return export_pdf(
         'laporan_parameter_harian', 'Laporan Parameter Harian', f'Periode: {format_date_range(date_from, date_to)}',
-        ['Tanggal', 'Kolam', 'DOC', 'Suhu', 'pH Sore', 'DO Malam', 'Salinitas', 'Pakan', 'Teknisi', 'AI'], short_rows,
+        ['Tanggal', 'Kolam', 'DOC', 'Tinggi Air', 'Suhu', 'pH Sore', 'DO Malam', 'Salinitas', 'Pakan', 'Teknisi', 'AI'], short_rows,
     )
 
 
@@ -176,15 +179,16 @@ def add_parameter(request):
     if request.method == 'POST':
         obj = DailyParameter.objects.create(
             pond_id=request.POST['pond'], technician=request.user, date=request.POST['date'], doc=request.POST.get('doc') or 0,
-            temperature=request.POST.get('temperature') or None, ph_morning=request.POST.get('ph_morning') or None,
-            ph_evening=request.POST.get('ph_evening') or None, do_morning=request.POST.get('do_morning') or None,
-            do_night=request.POST.get('do_night') or None, salinity=request.POST.get('salinity') or None,
-            alkalinity=request.POST.get('alkalinity') or None, transparency=request.POST.get('transparency') or None,
-            feed_kg=request.POST.get('feed_kg') or 0, mortality=request.POST.get('mortality') or 0,
+            water_level_cm=_post_decimal(request.POST.get('water_level_cm')) if request.POST.get('water_level_cm') else None,
+            temperature=_post_decimal(request.POST.get('temperature')) if request.POST.get('temperature') else None, ph_morning=_post_decimal(request.POST.get('ph_morning')) if request.POST.get('ph_morning') else None,
+            ph_evening=_post_decimal(request.POST.get('ph_evening')) if request.POST.get('ph_evening') else None, do_morning=_post_decimal(request.POST.get('do_morning')) if request.POST.get('do_morning') else None,
+            do_night=_post_decimal(request.POST.get('do_night')) if request.POST.get('do_night') else None, salinity=_post_decimal(request.POST.get('salinity')) if request.POST.get('salinity') else None,
+            alkalinity=_post_decimal(request.POST.get('alkalinity')) if request.POST.get('alkalinity') else None, transparency=_post_decimal(request.POST.get('transparency')) if request.POST.get('transparency') else None,
+            feed_kg=_post_decimal(request.POST.get('feed_kg') or 0), mortality=request.POST.get('mortality') or 0,
             water_color=request.POST.get('water_color', ''), notes=request.POST.get('notes', '')
         )
         if 'analyse' in request.POST:
-            prompt = f"Anda asisten tambak udang vaname. Analisa parameter kolam {obj.pond.name}: DOC {obj.doc}, suhu {obj.temperature}, pH pagi {obj.ph_morning}, pH sore {obj.ph_evening}, DO pagi {obj.do_morning}, DO malam {obj.do_night}, salinitas {obj.salinity}, alkalinitas {obj.alkalinity}. Berikan status, risiko, dan rekomendasi singkat."
+            prompt = f"Anda asisten tambak udang vaname. Analisa parameter kolam {obj.pond.name}: DOC {obj.doc}, tinggi air {obj.water_level_cm} cm, suhu {obj.temperature}, pH pagi {obj.ph_morning}, pH sore {obj.ph_evening}, DO pagi {obj.do_morning}, DO malam {obj.do_night}, salinitas {obj.salinity}, alkalinitas {obj.alkalinity}. Berikan status, risiko, dan rekomendasi singkat."
             obj.ai_recommendation = ask_ollama(prompt); obj.save()
         return redirect('operations:parameters')
     return render(request, 'operations/parameter_form.html', {'ponds': ponds})
@@ -203,7 +207,8 @@ def daily_records(request):
     items = DailyPondRecord.objects.select_related('pond', 'technician').order_by('-date')
     items, date_from, date_to, pond = _apply_common_filters(request, items)
     total_feed = items.aggregate(s=Sum('daily_feed_kg'))['s'] or 0
-    return render(request, 'operations/daily_records.html', {'items': items, 'date_from': date_from, 'date_to': date_to, 'ponds': Pond.objects.all(), 'total_feed': total_feed})
+    page_obj = paginate_queryset(request, items, per_page=10)
+    return render(request, 'operations/daily_records.html', {'items': page_obj, 'page_obj': page_obj, 'date_from': date_from, 'date_to': date_to, 'ponds': Pond.objects.all(), 'total_feed': total_feed})
 
 
 @login_required
@@ -243,7 +248,8 @@ def anco_checks(request):
     items = AncoCheck.objects.select_related('pond','technician').order_by('-date')
     items, date_from, date_to, pond = _apply_common_filters(request, items)
     alerts = items.filter(appetite_status__in=['Nafsu makan turun','Ada sisa pakan']).count()
-    return render(request, 'operations/anco_checks.html', {'items': items, 'date_from': date_from, 'date_to': date_to, 'ponds': Pond.objects.all(), 'alerts': alerts})
+    page_obj = paginate_queryset(request, items, per_page=10)
+    return render(request, 'operations/anco_checks.html', {'items': page_obj, 'page_obj': page_obj, 'date_from': date_from, 'date_to': date_to, 'ponds': Pond.objects.all(), 'alerts': alerts})
 
 
 @login_required
@@ -302,8 +308,9 @@ def sampling_records(request):
     avg_fcr = items.aggregate(a=Avg('fcr'))['a'] or 0
     avg_adg = items.aggregate(a=Avg('adg_weekly'))['a'] or 0
     biomass = items.aggregate(s=Sum('biomass_kg'))['s'] or 0
+    page_obj = paginate_queryset(request, items, per_page=10)
     return render(request, 'operations/sampling_records.html', {
-        'items': items, 'date_from': date_from, 'date_to': date_to, 'ponds': Pond.objects.all(),
+        'items': page_obj, 'page_obj': page_obj, 'date_from': date_from, 'date_to': date_to, 'ponds': Pond.objects.all(),
         'avg_abw': avg_abw, 'avg_fcr': avg_fcr, 'avg_adg': avg_adg, 'biomass': biomass
     })
 
@@ -367,7 +374,8 @@ def siphon_records(request):
     dead_total = items.aggregate(s=Sum('dead_count'))['s'] or 0
     daily_total = items.aggregate(s=Sum('daily_total'))['s'] or 0
     risk_count = items.filter(health_indicator__icontains='Risiko').count()
-    return render(request, 'operations/siphon_records.html', {'items': items, 'date_from': date_from, 'date_to': date_to, 'ponds': Pond.objects.all(), 'dead_total': dead_total, 'daily_total': daily_total, 'risk_count': risk_count})
+    page_obj = paginate_queryset(request, items, per_page=10)
+    return render(request, 'operations/siphon_records.html', {'items': page_obj, 'page_obj': page_obj, 'date_from': date_from, 'date_to': date_to, 'ponds': Pond.objects.all(), 'dead_total': dead_total, 'daily_total': daily_total, 'risk_count': risk_count})
 
 
 @login_required
@@ -431,7 +439,8 @@ def _harvest_rows(items):
 def harvests(request):
     items, date_from, date_to = _harvest_queryset(request)
     total_kg = items.aggregate(s=Sum('total_kg'))['s'] or 0
-    return render(request, 'operations/harvests.html', {'items': items, 'date_from': date_from, 'date_to': date_to, 'ponds': Pond.objects.all(), 'total_kg': total_kg})
+    page_obj = paginate_queryset(request, items, per_page=10)
+    return render(request, 'operations/harvests.html', {'items': page_obj, 'page_obj': page_obj, 'date_from': date_from, 'date_to': date_to, 'ponds': Pond.objects.all(), 'total_kg': total_kg})
 
 
 @login_required
@@ -590,7 +599,7 @@ def edit_parameter(request, pk):
     ponds = Pond.objects.all()
     if request.method == 'POST':
         obj.pond_id = request.POST['pond']; obj.technician = request.user; obj.date = request.POST['date']; obj.doc = request.POST.get('doc') or 0
-        for field in ['temperature','ph_morning','ph_evening','do_morning','do_night','salinity','alkalinity','transparency']:
+        for field in ['water_level_cm','temperature','ph_morning','ph_evening','do_morning','do_night','salinity','alkalinity','transparency']:
             val = request.POST.get(field)
             setattr(obj, field, _post_decimal(val) if val else None)
         obj.feed_kg = _post_decimal(request.POST.get('feed_kg') or 0)
@@ -598,7 +607,7 @@ def edit_parameter(request, pk):
         obj.water_color = request.POST.get('water_color','')
         obj.notes = request.POST.get('notes','')
         if 'analyse' in request.POST:
-            prompt = f"Anda asisten tambak udang vaname. Analisa parameter kolam {obj.pond.name}: DOC {obj.doc}, suhu {obj.temperature}, pH pagi {obj.ph_morning}, pH sore {obj.ph_evening}, DO pagi {obj.do_morning}, DO malam {obj.do_night}, salinitas {obj.salinity}, alkalinitas {obj.alkalinity}. Berikan status, risiko, dan rekomendasi singkat."
+            prompt = f"Anda asisten tambak udang vaname. Analisa parameter kolam {obj.pond.name}: DOC {obj.doc}, tinggi air {obj.water_level_cm} cm, suhu {obj.temperature}, pH pagi {obj.ph_morning}, pH sore {obj.ph_evening}, DO pagi {obj.do_morning}, DO malam {obj.do_night}, salinitas {obj.salinity}, alkalinitas {obj.alkalinity}. Berikan status, risiko, dan rekomendasi singkat."
             obj.ai_recommendation = ask_ollama(prompt)
         obj.save()
         messages.success(request, 'Parameter harian berhasil diperbarui.')

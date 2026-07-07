@@ -61,7 +61,7 @@
     <div class="report-kpi-card blue"><span><i class="fa-solid fa-chart-line"></i></span><div><small>Total Omzet</small><strong>{{ revenue|rupiah }}</strong><em>{{ total_kg|ribuan }} kg terjual</em></div></div>
     <div class="report-kpi-card orange"><span><i class="fa-solid fa-wallet"></i></span><div><small>Total Pengeluaran</small><strong>{{ expense_total|rupiah }}</strong><em>Biaya operasional</em></div></div>
     <div class="report-kpi-card green"><span><i class="fa-solid fa-square-poll-vertical"></i></span><div><small>Laba Bersih</small><strong>{{ profit|rupiah }}</strong><em>Omzet - pengeluaran</em></div></div>
-    <div class="report-kpi-card purple"><span><i class="fa-solid fa-credit-card"></i></span><div><small>Piutang Belum Lunas</small><strong>{{ receivable_total|rupiah }}</strong><em>{{ total_transactions }} transaksi periode ini</em></div></div>
+    <div class="report-kpi-card purple"><span><i class="fa-solid fa-credit-card"></i></span><div><small>Piutang Belum Lunas</small><strong>{{ receivable_total|rupiah }}</strong><em>{{ total_transactions|ribuan }} transaksi periode ini</em></div></div>
   </section>
 
   {% if period_type == 'receivable' %}
@@ -71,7 +71,7 @@
       <canvas id="agingChart" height="130"></canvas>
       <div class="aging-summary">
         {% for row in aging_rows %}
-          <div><b>{{ row.label }}</b><span>{{ row.amount|rupiah }}</span><small>{{ row.percent|floatformat:1 }}%</small></div>
+          <div><b>{{ row.label }}</b><span>{{ row.amount|rupiah }}</span><small>{{ row.percent|angka:1 }}%</small></div>
         {% endfor %}
       </div>
     </div>
@@ -98,7 +98,7 @@
       <canvas id="expenseChart" height="170"></canvas>
       <div class="composition-list">
         {% for item in composition %}
-          <div><span>{{ item.label }}</span><b>{{ item.amount|rupiah }}</b><small>{{ item.percent|floatformat:1 }}%</small></div>
+          <div><span>{{ item.label }}</span><b>{{ item.amount|rupiah }}</b><small>{{ item.percent|angka:1 }}%</small></div>
         {% empty %}<p class="text-muted mb-0">Belum ada data pengeluaran.</p>{% endfor %}
       </div>
     </div>

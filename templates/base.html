@@ -200,5 +200,20 @@
   });
 })();
 </script>
+
+<script>
+(function(){
+  function formatID(value, maxDecimal=2){
+    if(value===null || value===undefined || value==='') return '';
+    var n=Number(String(value).replace(/\./g,'').replace(',', '.'));
+    if(!isFinite(n)) return value;
+    return new Intl.NumberFormat('id-ID',{maximumFractionDigits:maxDecimal}).format(n);
+  }
+  document.querySelectorAll('[data-format-number]').forEach(function(el){
+    var max=Number(el.getAttribute('data-decimals') || 2);
+    el.textContent=formatID(el.textContent.trim(), max);
+  });
+})();
+</script>
 </body>
 </html>

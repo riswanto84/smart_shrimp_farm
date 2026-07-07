@@ -96,7 +96,7 @@
           {% for i in sale.items.all %}
           <tr>
             <td>Udang Vaname Fresh<br><small>Size {{ i.size_text|default:"-" }}</small></td>
-            <td>{{ i.weight_kg }} kg</td>
+            <td>{{ i.weight_kg|angka:2 }} kg</td>
             <td>{{ i.price_per_kg|ribuan }}</td>
             <td>{{ i.subtotal|ribuan }}</td>
           </tr>
@@ -110,7 +110,7 @@
         {% if sale.shipping_cost %}<div><span>Ongkos Kirim</span><b>{{ sale.shipping_cost|ribuan }}</b></div>{% endif %}
         {% if sale.packing_cost %}<div><span>Pengepakan</span><b>{{ sale.packing_cost|ribuan }}</b></div>{% endif %}
         {% if sale.other_cost %}<div><span>Biaya Lainnya</span><b>{{ sale.other_cost|ribuan }}</b></div>{% endif %}
-        <div><span>Total Kg</span><b>{{ sale.total_kg }} kg</b></div>
+        <div><span>Total Kg</span><b>{{ sale.total_kg|angka:2 }} kg</b></div>
         <div class="grand"><span>TOTAL</span><b>{{ sale.total_amount|ribuan }}</b></div>
         <div><span>Status</span><b>{{ sale.status }}</b></div>
       </div>

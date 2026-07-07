@@ -50,7 +50,7 @@
           </div>
           <div class="field-pro">
             <label>Sumber Panen</label>
-            <div class="input-icon-pro"><i class="fa-solid fa-water"></i><select class="form-select" name="harvest"><option value="">Tanpa sumber panen</option>{% for h in harvests %}<option value="{{ h.id }}" {% if item and item.harvest_id == h.id %}selected{% endif %}>{{ h.pond.name }} - {{ h.date }} - {{ h.total_kg }} kg</option>{% endfor %}</select></div>
+            <div class="input-icon-pro"><i class="fa-solid fa-water"></i><select class="form-select" name="harvest"><option value="">Tanpa sumber panen</option>{% for h in harvests %}<option value="{{ h.id }}" {% if item and item.harvest_id == h.id %}selected{% endif %}>{{ h.pond.name }} - {{ h.date }} - {{ h.total_kg|angka:2 }} kg</option>{% endfor %}</select></div>
           </div>
         </div>
       </section>
@@ -65,11 +65,11 @@
         <div class="form-grid-pro two">
           <div class="field-pro">
             <label>Berat (Kg)</label>
-            <div class="input-icon-pro"><i class="fa-solid fa-scale-balanced"></i><input class="form-control" name="weight_kg" id="weightInputPro" step="0.01" value="{{ item.weight_kg|default:sale.total_kg }}" required></div>
+            <div class="input-icon-pro"><i class="fa-solid fa-scale-balanced"></i><input class="form-control" name="weight_kg" id="weightInputPro" step="0.01" value="{{ item.weight_kg|default:sale.total_kg|angka:2 }}" required></div>
           </div>
           <div class="field-pro">
             <label>Harga / Kg (Rp)</label>
-            <div class="input-icon-pro prefix"><span>Rp</span><input class="form-control" name="price_per_kg" id="priceInputPro" inputmode="numeric" data-rupiah-input value="{{ item.price_per_kg|floatformat:0|default:'' }}" placeholder="70.000" required></div>
+            <div class="input-icon-pro prefix"><span>Rp</span><input class="form-control" name="price_per_kg" id="priceInputPro" inputmode="numeric" data-rupiah-input value="{{ item.price_per_kg|angka:0|default:'' }}" placeholder="70.000" required></div>
             <small>Format otomatis Rupiah, contoh Rp 70.000/kg.</small>
           </div>
         </div>
@@ -78,9 +78,9 @@
       <section class="form-section-pro soft">
         <div class="section-head-pro"><i class="fa-solid fa-circle-plus"></i><div><h2>Biaya Tambahan Opsional</h2><p>Kosongkan bila tidak ada. Nilai ini akan ditambahkan ke total akhir nota.</p></div></div>
         <div class="form-grid-pro three">
-          <div class="field-pro"><label>Ongkos Kirim (Rp)</label><div class="input-icon-pro"><i class="fa-solid fa-truck-fast"></i><input class="form-control" name="shipping_cost" inputmode="numeric" data-rupiah-input value="{{ sale.shipping_cost|floatformat:0 }}" placeholder="0"></div></div>
-          <div class="field-pro"><label>Pengepakan (Rp)</label><div class="input-icon-pro"><i class="fa-solid fa-box-open"></i><input class="form-control" name="packing_cost" inputmode="numeric" data-rupiah-input value="{{ sale.packing_cost|floatformat:0 }}" placeholder="0"></div></div>
-          <div class="field-pro"><label>Biaya Lainnya (Rp)</label><div class="input-icon-pro"><i class="fa-solid fa-ellipsis"></i><input class="form-control" name="other_cost" inputmode="numeric" data-rupiah-input value="{{ sale.other_cost|floatformat:0 }}" placeholder="0"></div></div>
+          <div class="field-pro"><label>Ongkos Kirim (Rp)</label><div class="input-icon-pro"><i class="fa-solid fa-truck-fast"></i><input class="form-control" name="shipping_cost" inputmode="numeric" data-rupiah-input value="{{ sale.shipping_cost|angka:0 }}" placeholder="0"></div></div>
+          <div class="field-pro"><label>Pengepakan (Rp)</label><div class="input-icon-pro"><i class="fa-solid fa-box-open"></i><input class="form-control" name="packing_cost" inputmode="numeric" data-rupiah-input value="{{ sale.packing_cost|angka:0 }}" placeholder="0"></div></div>
+          <div class="field-pro"><label>Biaya Lainnya (Rp)</label><div class="input-icon-pro"><i class="fa-solid fa-ellipsis"></i><input class="form-control" name="other_cost" inputmode="numeric" data-rupiah-input value="{{ sale.other_cost|angka:0 }}" placeholder="0"></div></div>
         </div>
       </section>
 

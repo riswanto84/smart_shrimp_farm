@@ -1,1 +1,1 @@
-{% extends 'base.html' %}{% block content %}<h2>{{pond.name}}</h2><div class="cardx"><p>Status: {{pond.status}}</p><p>Luas: {{pond.area_m2}} m²</p><p>Kapasitas: {{pond.capacity_seed}}</p><p>{{pond.notes}}</p></div>{% endblock %}
+{% extends 'base.html' %}{% block content %}<h2>{{pond.name}}</h2><div class="cardx"><p>Status: {{pond.status}}</p><p>Luas: {{pond.area_m2|angka:2}} m²</p><p>Kapasitas: {{pond.capacity_seed|ribuan}}</p><p>{{pond.notes}}</p></div>{% endblock %}

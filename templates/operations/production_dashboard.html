@@ -19,21 +19,26 @@
   </div>
 
   <div class="kpi-grid">
-    <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-fish-fins"></i></div><div><span>Populasi Tebar</span><strong>{{ active_stocking|floatformat:0 }} ekor</strong><small>Akumulasi data tebar</small></div></div>
-    <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-bowl-rice"></i></div><div><span>Pakan Hari Ini</span><strong>{{ feed_today|floatformat:2 }} Kg</strong><small>Data harian pakan</small></div></div>
-    <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-weight-scale"></i></div><div><span>Rata-rata ABW</span><strong>{{ avg_abw|floatformat:2 }} g</strong><small>Data sampling</small></div></div>
-    <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-triangle-exclamation"></i></div><div><span>Alert Anco/Mortalitas</span><strong>{{ anco_alerts }} / {{ dead_7d }}</strong><small>Anco 3 hari / mati 7 hari</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-fish-fins"></i></div><div><span>Populasi Tebar</span><strong>{{ active_stocking|ribuan }} ekor</strong><small>Akumulasi data tebar</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-bowl-rice"></i></div><div><span>Pakan Hari Ini</span><strong>{{ feed_today|angka:2 }} Kg</strong><small>Data harian pakan</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-weight-scale"></i></div><div><span>Rata-rata ABW</span><strong>{{ avg_abw|angka:2 }} g</strong><small>Data sampling</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-triangle-exclamation"></i></div><div><span>Alert Anco/Mortalitas</span><strong>{{ anco_alerts|ribuan }} / {{ dead_7d|ribuan }}</strong><small>Anco 3 hari / mati 7 hari</small></div></div>
   </div>
 
   <div class="ops-grid">
     <section class="panel ops-panel-wide">
       <div class="panel-head"><h2>Kondisi Terbaru Per Kolam</h2><a href="{% url 'operations:sampling_records' %}">Lihat Sampling</a></div>
-      <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>DOC</th><th>Pakan Terakhir</th><th>Anco</th><th>ABW / Size</th><th>FCR</th><th>Siphon</th><th>Estimasi</th></tr></thead><tbody>{% for row in pond_cards %}<tr><td><b>{{ row.pond.name }}</b><br><small class="text-muted">{{ row.pond.status }}</small></td><td>{% if row.daily %}{{ row.daily.doc }}{% elif row.sample %}{{ row.sample.doc }}{% else %}-{% endif %}</td><td>{% if row.daily %}{{ row.daily.daily_feed_kg }} Kg<br><small>{{ row.daily.date }}</small>{% else %}-{% endif %}</td><td>{% if row.anco %}<span class="badge-soft">{{ row.anco.appetite_status }}</span>{% else %}-{% endif %}</td><td>{% if row.sample %}<b>{{ row.sample.abw_g }} g</b><br><small>Size {{ row.sample.size }}</small>{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.fcr }}{% else %}-{% endif %}</td><td>{% if row.siphon %}{{ row.siphon.dead_count }} mati<br><small>{{ row.siphon.health_indicator }}</small>{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.harvest_estimation }}{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="8" class="text-center text-muted">Belum ada data kolam.</td></tr>{% endfor %}</tbody></table></div>
+      <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>DOC</th><th>Pakan Terakhir</th><th>Anco</th><th>ABW / Size</th><th>FCR</th><th>Siphon</th><th>Estimasi</th></tr></thead><tbody>{% for row in pond_cards %}<tr><td><b>{{ row.pond.name }}</b><br><small class="text-muted">{{ row.pond.status }}</small></td><td>{% if row.daily %}{{ row.daily.doc|ribuan }}{% elif row.sample %}{{ row.sample.doc|ribuan }}{% else %}-{% endif %}</td><td>{% if row.daily %}{{ row.daily.daily_feed_kg|angka:2 }} Kg<br><small>{{ row.daily.date }}</small>{% else %}-{% endif %}</td><td>{% if row.anco %}<span class="badge-soft">{{ row.anco.appetite_status }}</span>{% else %}-{% endif %}</td><td>{% if row.sample %}<b>{{ row.sample.abw_g|angka:2 }} g</b><br><small>Size {{ row.sample.size|angka:2 }}</small>{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.fcr|angka:2 }}{% else %}-{% endif %}</td><td>{% if row.siphon %}{{ row.siphon.dead_count|ribuan }} mati<br><small>{{ row.siphon.health_indicator }}</small>{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.harvest_estimation }}{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="8" class="text-center text-muted">Belum ada data kolam.</td></tr>{% endfor %}</tbody></table></div>
     </section>
     <aside class="panel insight-panel">
+      <div class="ai-management-box mb-3">
+        <h3><i class="fa-solid fa-robot"></i> AI Manajemen Tambak</h3>
+        <p>Status Ollama: {% if ollama_health.ok %}<b>Tersambung</b>{% else %}<b>Belum tersambung</b>{% endif %}. Gunakan Chat AI untuk analisa gabungan sampling, siphon, anco, pakan, dan panen.</p>
+        <a class="btn btn-sm mt-3" href="{% url 'chat_ai:chat' %}">Buka Chat AI</a>
+      </div>
       <div class="panel-head"><h2>Insight Operasional</h2></div>
-      <div class="insight-card green-soft"><i class="fa-solid fa-arrow-trend-up"></i><div><b>FCR Rata-rata</b><p>{{ avg_fcr|floatformat:3 }}. Jaga pakan agar FCR tetap efisien.</p></div></div>
-      <div class="insight-card orange-soft"><i class="fa-solid fa-shrimp"></i><div><b>Monitoring Siphon</b><p>{{ dead_7d }} ekor mati tercatat dalam 7 hari terakhir.</p></div></div>
+      <div class="insight-card green-soft"><i class="fa-solid fa-arrow-trend-up"></i><div><b>FCR Rata-rata</b><p>{{ avg_fcr|angka:2 }}. Jaga pakan agar FCR tetap efisien.</p></div></div>
+      <div class="insight-card orange-soft"><i class="fa-solid fa-shrimp"></i><div><b>Monitoring Siphon</b><p>{{ dead_7d|ribuan }} ekor mati tercatat dalam 7 hari terakhir.</p></div></div>
       <div class="insight-card blue-soft"><i class="fa-solid fa-clipboard-list"></i><div><b>Data Terintegrasi</b><p>Data harian, anco, sampling, dan siphon menjadi dasar dashboard dan laporan investor.</p></div></div>
     </aside>
   </div>

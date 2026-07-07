@@ -18,7 +18,7 @@
         <div class="section-head-pro"><i class="fa-solid fa-user-tag"></i><div><h2>Informasi Pelanggan & Panen</h2><p>Pilih pelanggan dan sumber panen bila transaksi terhubung dengan data panen.</p></div></div>
         <div class="form-grid-pro two">
           <div class="field-pro"><label>Pelanggan</label><div class="input-icon-pro"><i class="fa-solid fa-users"></i><select class="form-select" name="customer"><option value="">Pilih Pelanggan</option>{% for c in customers %}<option value="{{c.id}}">{{c.name}} - {{c.phone}}</option>{% endfor %}</select></div></div>
-          <div class="field-pro"><label>Sumber Panen</label><div class="input-icon-pro"><i class="fa-solid fa-water"></i><select class="form-select" name="harvest"><option value="">Tanpa sumber panen</option>{% for h in harvests %}<option value="{{h.id}}">{{h.pond.name}} - {{h.date}} - {{h.total_kg}} kg</option>{% endfor %}</select></div></div>
+          <div class="field-pro"><label>Sumber Panen</label><div class="input-icon-pro"><i class="fa-solid fa-water"></i><select class="form-select" name="harvest"><option value="">Tanpa sumber panen</option>{% for h in harvests %}<option value="{{h.id}}">{{h.pond.name}} - {{h.date}} - {{h.total_kg|angka:2}} kg</option>{% endfor %}</select></div></div>
         </div>
       </section>
 

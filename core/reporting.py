@@ -41,13 +41,34 @@ def format_date_range(date_from, date_to):
     return "Semua tanggal"
 
 
-def rupiah(value):
+def _format_id_number(value, decimals=2):
     value = value or 0
     try:
         value = Decimal(value)
     except Exception:
         value = Decimal(0)
-    return "Rp {:,.0f}".format(value).replace(",", ".")
+    if decimals > 2:
+        decimals = 2
+    q = Decimal('1') if decimals == 0 else Decimal('1').scaleb(-decimals)
+    value = value.quantize(q)
+    sign = '-' if value < 0 else ''
+    value = abs(value)
+    whole = int(value)
+    frac = value - Decimal(whole)
+    txt = f"{whole:,}".replace(',', '.')
+    if decimals:
+        frac_txt = f"{frac:.{decimals}f}".split('.')[1].rstrip('0')
+        if frac_txt:
+            txt = f"{txt},{frac_txt}"
+    return sign + txt
+
+
+def rupiah(value):
+    return "Rp " + _format_id_number(value, 2)
+
+
+def angka(value, decimals=2):
+    return _format_id_number(value, decimals)
 
 
 def export_excel(filename, title, subtitle, headers, rows, total_rows=None):

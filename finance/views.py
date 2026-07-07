@@ -18,6 +18,7 @@ from sales.models import Sale
 from .models import OperationalExpense
 from core.reporting import get_date_range, filter_by_date_range, format_date_range, export_excel, export_pdf, rupiah
 from core.utils import parse_rupiah
+from core.pagination import paginate_queryset
 
 
 def _expense_queryset(request):
@@ -54,8 +55,10 @@ def expenses(request):
     items, date_from, date_to = _expense_queryset(request)
     total = items.aggregate(s=Sum('amount'))['s'] or 0
     ponds = Pond.objects.all()
+    page_obj = paginate_queryset(request, items, per_page=10)
     return render(request, 'finance/expenses.html', {
-        'items': items,
+        'items': page_obj,
+        'page_obj': page_obj,
         'total': total,
         'date_from': date_from,
         'date_to': date_to,

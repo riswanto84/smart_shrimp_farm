@@ -43,7 +43,7 @@ class Stocking(models.Model):
         ordering = ['-date']
 
     def __str__(self):
-        return f'{self.pond} - {self.seed_count:,} ekor'
+        return f'{self.pond} - {self.seed_count:,} ekor'.replace(',', '.')
 
 
 class DailyParameter(models.Model):
@@ -51,6 +51,7 @@ class DailyParameter(models.Model):
     technician=models.ForeignKey(User,on_delete=models.SET_NULL,null=True,blank=True)
     date=models.DateField()
     doc=models.IntegerField(default=0)
+    water_level_cm=models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     temperature=models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     ph_morning=models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
     ph_evening=models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)

@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}AI Prediksi Panen Parsial{% endblock %}
+{% block content %}
+{% include 'chat_ai/_ai_header.html' with page_title='AI Prediksi Panen Parsial' page_subtitle='Prediksi waktu dan potensi panen parsial berdasarkan sampling, biomassa, size, SR, FCR, dan tren pertumbuhan.' show_pond=False %}
+<form class="ai-inline-filter" method="get">
+  <label>Kolam<select name="pond" class="form-select">{% for p in ponds %}<option value="{{p.id}}" {% if selected_pond and selected_pond.id == p.id %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></label>
+  <label>Target Size<select name="target_size" class="form-select"><option {% if target_size == 70 %}selected{% endif %}>70</option><option {% if target_size == 60 %}selected{% endif %}>60</option><option {% if target_size == 50 %}selected{% endif %}>50</option><option {% if target_size == 40 %}selected{% endif %}>40</option></select></label>
+  <label>Harga Referensi<input class="form-control" name="price" value="{{ price }}"></label>
+  <input type="hidden" name="generate" value="1"><button class="btn btn-primary"><i class="fa-solid fa-wand-magic-sparkles"></i> Prediksi Panen</button>
+</form>
+<div class="ai-kpi-grid">
+  <div class="ai-kpi success"><i class="fa-solid fa-calendar-check"></i><span>Estimasi Tanggal</span><b>{{ prediction.date|date:'d M Y' }}</b><small>{{ prediction.days|ribuan }} hari lagi</small></div>
+  <div class="ai-kpi"><i class="fa-solid fa-fish-fins"></i><span>Target Size</span><b>{{ prediction.target_size|angka:2 }}</b><small>ekor/kg</small></div>
+  <div class="ai-kpi warning"><i class="fa-solid fa-weight-hanging"></i><span>Estimasi Biomassa</span><b>{{ prediction.biomass|angka:2 }} kg</b><small>basis sampling terakhir</small></div>
+  <div class="ai-kpi success"><i class="fa-solid fa-money-bill-trend-up"></i><span>Potensi Nilai</span><b>{{ value_rp }}</b><small>berdasarkan harga referensi</small></div>
+</div>
+<div class="ai-dashboard-grid">
+  <div class="ai-card wide">
+    <div class="ai-section-title"><i class="fa-solid fa-chart-line"></i><h2>Ringkasan Prediksi</h2></div>
+    <p class="ai-note">{{ prediction.summary }}</p>
+    <div class="ai-two-col">
+      <ul class="ai-check-list"><li>ABW: {% if prediction.sample %}{{ prediction.sample.abw_g|angka:2 }} g{% else %}-{% endif %}</li><li>Size sekarang: {% if prediction.sample %}{{ prediction.sample.size|angka:2 }}{% else %}-{% endif %}</li><li>ADG: {% if prediction.sample %}{{ prediction.sample.adg_weekly|angka:2 }} g/hari{% else %}-{% endif %}</li><li>FCR: {% if prediction.sample %}{{ prediction.sample.fcr|angka:2 }}{% else %}-{% endif %}</li></ul>
+      <div><h3>Skenario Panen</h3><div class="ai-scenario good"><b>Optimistis</b><span>Lebih cepat 2 hari jika ADG naik</span></div><div class="ai-scenario"><b>Normal</b><span>{{ prediction.date|date:'d M Y' }} berdasarkan data saat ini</span></div><div class="ai-scenario warn"><b>Konservatif</b><span>Tambah 3–5 hari jika nafsu makan turun</span></div></div>
+    </div>
+  </div>
+  <div class="ai-card"><div class="ai-section-title"><i class="fa-solid fa-list-check"></i><h2>Rekomendasi Panen</h2></div><ul class="ai-reco-list"><li><i class="fa-solid fa-check"></i>Cek harga pasar target size sebelum panen.</li><li><i class="fa-solid fa-check"></i>Prioritaskan panen pagi hari.</li><li><i class="fa-solid fa-check"></i>Jaga kualitas air sebelum panen.</li><li><i class="fa-solid fa-check"></i>Siapkan cold chain dan nota penjualan.</li></ul></div>
+</div>
+{% include 'chat_ai/_ai_result.html' %}
+{% include 'chat_ai/_source_data.html' %}
+{% endblock %}

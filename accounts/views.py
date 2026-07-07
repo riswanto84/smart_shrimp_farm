@@ -8,6 +8,7 @@ from accounts.rbac import permission_required, normalized_roles
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.models import User
 from .models import Role, PermissionItem, AuditLog
+from core.pagination import paginate_queryset
 
 
 def is_staff_or_superuser(user):
@@ -60,7 +61,8 @@ def users(request):
     users=User.objects.select_related('userprofile').prefetch_related('userprofile__roles').all().order_by('first_name','username')
     roles=Role.objects.all()
     active_count=users.filter(is_active=True).count()
-    return render(request,'accounts/users.html',{'users':users,'roles':roles,'active_count':active_count})
+    page_obj = paginate_queryset(request, users, per_page=10)
+    return render(request,'accounts/users.html',{'users':page_obj,'page_obj':page_obj,'roles':roles,'active_count':active_count})
 
 @permission_required('accounts.users')
 def add_user(request):
@@ -126,5 +128,7 @@ def delete_user(request, user_id):
 
 @permission_required('accounts.roles')
 def roles(request):
-    roles=Role.objects.all(); perms=PermissionItem.objects.all().order_by('group','code')
-    return render(request,'accounts/roles.html',{'roles':roles,'perms':perms})
+    roles = Role.objects.all().order_by('name')
+    perms = PermissionItem.objects.all().order_by('group','code')
+    page_obj = paginate_queryset(request, perms, per_page=10)
+    return render(request,'accounts/roles.html',{'roles':roles,'perms':page_obj,'page_obj':page_obj})

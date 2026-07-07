@@ -15,10 +15,10 @@ ROLE_PERMISSIONS = {
         'operations.harvests', 'weather.view', 'chat.view'
     },
     'kasir': {
-        'dashboard', 'sales.cashier', 'sales.invoices', 'sales.customers'
+        'dashboard', 'sales.dashboard', 'sales.cashier', 'sales.invoices', 'sales.customers'
     },
     'akuntan': {
-        'dashboard', 'sales.invoices', 'finance.expenses', 'finance.profit_loss', 'finance.periodic_report'
+        'dashboard', 'sales.dashboard', 'sales.invoices', 'finance.expenses', 'finance.profit_loss', 'finance.periodic_report'
     },
     'investor': {
         'dashboard', 'investor.dashboard'
@@ -37,6 +37,7 @@ MENU_DEFINITIONS = [
     {'type': 'item', 'label': 'Parameter Harian', 'url': '/operations/parameters/', 'icon': 'fa-solid fa-flask-vial', 'perm': 'operations.parameters'},
     {'type': 'item', 'label': 'Panen', 'url': '/operations/harvests/', 'icon': 'fa-solid fa-shrimp', 'perm': 'operations.harvests'},
     {'type': 'group', 'label': 'PENJUALAN'},
+    {'type': 'item', 'label': 'Dashboard Penjualan', 'url': '/sales/dashboard/', 'icon': 'fa-solid fa-chart-pie', 'perm': 'sales.dashboard'},
     {'type': 'item', 'label': 'Kasir Penjualan', 'url': '/sales/cashier/', 'icon': 'fa-solid fa-cash-register', 'perm': 'sales.cashier'},
     {'type': 'item', 'label': 'Nota', 'url': '/sales/invoices/', 'icon': 'fa-solid fa-file-invoice-dollar', 'perm': 'sales.invoices'},
     {'type': 'item', 'label': 'Pelanggan', 'url': '/sales/customers/', 'icon': 'fa-solid fa-users', 'perm': 'sales.customers'},
@@ -47,6 +48,12 @@ MENU_DEFINITIONS = [
     {'type': 'group', 'label': 'LAINNYA'},
     {'type': 'item', 'label': 'Dashboard Investor', 'url': '/investor/dashboard/', 'icon': 'fa-solid fa-building-columns', 'perm': 'investor.dashboard'},
     {'type': 'item', 'label': 'Prakiraan Cuaca', 'url': '/weather/', 'icon': 'fa-solid fa-cloud-sun', 'perm': 'weather.view'},
+    {'type': 'group', 'label': 'AI TAMBAK'},
+    {'type': 'item', 'label': 'AI Analisa Kolam', 'url': '/chat-ai/pond-analysis/', 'icon': 'fa-solid fa-wand-magic-sparkles', 'perm': 'chat.view'},
+    {'type': 'item', 'label': 'AI Rekomendasi Pakan', 'url': '/chat-ai/feed-recommendation/', 'icon': 'fa-solid fa-bowl-food', 'perm': 'chat.view'},
+    {'type': 'item', 'label': 'AI Early Warning', 'url': '/chat-ai/siphon-warning/', 'icon': 'fa-solid fa-triangle-exclamation', 'perm': 'chat.view'},
+    {'type': 'item', 'label': 'AI Prediksi Panen', 'url': '/chat-ai/harvest-prediction/', 'icon': 'fa-solid fa-calendar-check', 'perm': 'chat.view'},
+    {'type': 'item', 'label': 'AI Ringkasan Harian', 'url': '/chat-ai/daily-summary/', 'icon': 'fa-solid fa-file-lines', 'perm': 'chat.view'},
     {'type': 'item', 'label': 'Chat AI (Ollama)', 'url': '/chat-ai/', 'icon': 'fa-solid fa-robot', 'perm': 'chat.view'},
     {'type': 'group', 'label': 'PENGATURAN'},
     {'type': 'item', 'label': 'Pengguna & Hak Akses', 'url': '/accounts/users/', 'icon': 'fa-solid fa-user-shield', 'perm': 'accounts.users'},

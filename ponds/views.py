@@ -3,9 +3,13 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from accounts.rbac import permission_required
 from .models import Pond
+from core.pagination import paginate_queryset
 @login_required
 @permission_required('ponds.view')
-def list_ponds(request): return render(request,'ponds/list.html',{'ponds':Pond.objects.all()})
+def list_ponds(request):
+    ponds = Pond.objects.all().order_by('code')
+    page_obj = paginate_queryset(request, ponds, per_page=9)
+    return render(request,'ponds/list.html',{'ponds':page_obj, 'page_obj': page_obj})
 @login_required
 @permission_required('ponds.view')
 def add_pond(request):

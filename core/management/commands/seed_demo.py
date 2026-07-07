@@ -23,7 +23,7 @@ from finance.models import OperationalExpense
 
 
 class Command(BaseCommand):
-    help = 'Isi data dummy SMART SHRIMP FARM. Contoh: python manage.py seed_demo --count 50 --reset'
+    help = 'Isi data dummy SMART SHRIMP FARM termasuk 50 sampling, 50 siphon, dan 50 panen jika --count 50.'
 
     def add_arguments(self, parser):
         parser.add_argument('--count', type=int, default=20, help='Jumlah data dummy per modul utama, contoh: --count 50')
@@ -178,6 +178,7 @@ class Command(BaseCommand):
                 defaults={
                     'technician': admin,
                     'doc': 29 + (i % 40),
+                    'water_level_cm': Decimal('75.00') + Decimal(i % 36),
                     'temperature': Decimal('28.00') + Decimal(i % 12) / Decimal('10'),
                     'ph_morning': Decimal('7.40') + Decimal(i % 5) / Decimal('10'),
                     'ph_evening': Decimal('7.70') + Decimal(i % 4) / Decimal('10'),
@@ -269,7 +270,7 @@ class Command(BaseCommand):
                         'daily_feed_kg': daily_feed,
                         'fr_percent': fr,
                         'population_index': int(stocking * Decimal('0.78')),
-                        'index_value': Decimal('0.500'),
+                        'index_score': Decimal('0.500'),
                         'notes': 'Sampling dummy sesuai struktur Excel',
                     },
                 )
@@ -296,7 +297,7 @@ class Command(BaseCommand):
 
     def _seed_harvests(self, ponds, base_date, count):
         harvests = []
-        for i in range(max(5, count // 4)):
+        for i in range(count):
             pond = ponds[i % 5]
             tanggal = base_date - timedelta(days=i * 3)
             h, _ = Harvest.objects.update_or_create(
