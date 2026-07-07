@@ -1,5 +1,13 @@
 from pathlib import Path
 import os
+try:
+    from decouple import config
+except Exception:
+    def config(name, default=None, cast=None):
+        value = os.environ.get(name, default)
+        if cast is bool:
+            return str(value).lower() in {'1', 'true', 'yes', 'on'}
+        return value
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY','django-insecure-smart-shrimp-farm-dev')
 DEBUG = os.environ.get('DEBUG','True') == 'True'
@@ -27,3 +35,12 @@ OLLAMA_URL=os.environ.get('OLLAMA_URL','http://localhost:11434')
 OLLAMA_MODEL=os.environ.get('OLLAMA_MODEL','gemma2:2b')
 FARM_LAT=float(os.environ.get('FARM_LAT','-5.98'))
 FARM_LON=float(os.environ.get('FARM_LON','107.02'))
+
+# Midtrans payment gateway
+# Gunakan Sandbox dulu. Isi key lewat environment/.env, jangan commit secret production ke Git.
+MIDTRANS_IS_PRODUCTION = config('MIDTRANS_IS_PRODUCTION', default=False, cast=bool)
+MIDTRANS_SERVER_KEY = config('MIDTRANS_SERVER_KEY', default='')
+MIDTRANS_CLIENT_KEY = config('MIDTRANS_CLIENT_KEY', default='')
+MIDTRANS_MERCHANT_ID = config('MIDTRANS_MERCHANT_ID', default='')
+# APP_BASE_URL diperlukan agar callback dan webhook memakai domain publik, contoh: https://namadomain.com
+APP_BASE_URL = config('APP_BASE_URL', default='')

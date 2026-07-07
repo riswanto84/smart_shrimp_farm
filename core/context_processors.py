@@ -52,17 +52,17 @@ def app_notifications(request):
         pass
 
     try:
-        from operations.models import DailyParameter
+        from operations.models import DailyPondRecord
         today = timezone.localdate()
-        if not DailyParameter.objects.filter(date=today).exists():
+        if not DailyPondRecord.objects.filter(date=today).exists():
             attention_count += 1
             items.append({
                 'level': 'warning',
                 'icon': 'fa-flask-vial',
                 'title': 'Parameter hari ini belum diinput',
-                'text': 'Input suhu, pH, DO, salinitas, dan kecerahan kolam.',
+                'text': 'Input data harian pakan, cuaca, treatment, dan catatan teknisi.',
                 'meta': 'Operasional harian',
-                'url': '/operations/parameters/add/',
+                'url': '/operations/daily-records/add/',
                 'requires_attention': True,
             })
     except Exception:

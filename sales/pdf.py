@@ -99,9 +99,11 @@ def build_invoice_pdf(sale):
     path.parent.mkdir(parents=True, exist_ok=True)
 
     items = list(sale.items.all())
+    item_subtotal = sum((it.subtotal for it in items), 0)
+    extra_rows = sum(1 for value in [sale.shipping_cost, sale.packing_cost, sale.other_cost] if value)
     width = 80 * mm
     # tinggi dinamis agar nota tidak terpotong; minimal 220 mm
-    height = max(220 * mm, (188 + len(items) * 19) * mm)
+    height = max(220 * mm, (196 + len(items) * 19 + extra_rows * 6) * mm)
     margin = 6 * mm
     right = width - margin
     y = height - 8 * mm
@@ -193,7 +195,22 @@ def build_invoice_pdf(sale):
     y -= 7 * mm
 
     c.setFont('Courier', 8)
-    c.drawRightString(margin + 47 * mm, y, 'TOTAL KG')
+    c.drawString(margin, y, 'Subtotal Udang')
+    c.drawRightString(right, y, _money_plain(item_subtotal))
+    y -= 5 * mm
+
+    optional_costs = [
+        ('Ongkos Kirim', sale.shipping_cost),
+        ('Pengepakan', sale.packing_cost),
+        ('Biaya Lainnya', sale.other_cost),
+    ]
+    for label, value in optional_costs:
+        if value:
+            c.drawString(margin, y, label)
+            c.drawRightString(right, y, _money_plain(value))
+            y -= 5 * mm
+
+    c.drawString(margin, y, 'Total Kg')
     c.drawRightString(right, y, f'{sale.total_kg} kg')
     y -= 6 * mm
 

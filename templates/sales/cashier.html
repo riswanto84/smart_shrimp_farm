@@ -1,5 +1,69 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="page-head"><div><h1>Kasir Penjualan</h1><p>Input penjualan udang fresh mentah, size manual, nota PDF, WhatsApp, email, dan cetak manual.</p></div></div>
-<div class="row g-3"><div class="col-lg-7"><div class="cardx"><form method="post" class="row g-3">{% csrf_token %}<div class="col-md-6"><label class="form-label">Pelanggan</label><select class="form-select" name="customer"><option value="">Pilih Pelanggan</option>{% for c in customers %}<option value="{{c.id}}">{{c.name}} - {{c.phone}}</option>{% endfor %}</select></div><div class="col-md-6"><label class="form-label">Sumber Panen</label><select class="form-select" name="harvest"><option value="">Tanpa sumber panen</option>{% for h in harvests %}<option value="{{h.id}}">{{h.pond.name}} - {{h.date}} - {{h.total_kg}} kg</option>{% endfor %}</select></div><div class="col-12"><label class="form-label">Size Udang (ekor/kg)</label><input class="form-control" name="size_text" placeholder="Contoh: 50 / 40-50 / Campur" required><div class="mt-2 d-flex gap-2 flex-wrap"><span class="badge-soft">30</span><span class="badge-soft">40</span><span class="badge-soft">50</span><span class="badge-soft">60</span><span class="badge-soft">70</span><span class="badge-soft">80</span><span class="badge-soft">100</span></div></div><div class="col-md-6"><label class="form-label">Berat (Kg)</label><input class="form-control" name="weight_kg" step="0.01" required></div><div class="col-md-6"><label class="form-label">Harga / Kg</label><input class="form-control" name="price_per_kg" inputmode="numeric" data-rupiah-input placeholder="Contoh: 70.000" required><div class="form-text">Format otomatis Rupiah, contoh Rp 70.000/kg.</div></div><div class="col-md-6"><label class="form-label">Metode Pembayaran</label><select class="form-select" name="payment_method"><option>Cash</option><option>Transfer</option><option>QRIS</option><option>Tempo</option></select></div><div class="col-md-6"><label class="form-label">Status</label><select class="form-select" name="status"><option>Lunas</option><option>Belum Lunas</option></select></div><div class="col-12"><label class="form-label">Catatan</label><textarea class="form-control" name="notes" rows="3"></textarea></div><div class="col-12"><button class="btn btn-primary btn-lg w-100">Simpan & Buat Nota</button></div></form></div></div><div class="col-lg-5"><div class="panel"><h2>Alur Nota Digital</h2><div class="activity-list"><div><i class="fa-solid fa-file-pdf"></i><p><b>Nota PDF otomatis</b><small>Format rapi untuk pelanggan.</small></p></div><div><i class="fa-brands fa-whatsapp"></i><p><b>Kirim via WhatsApp</b><small>Link otomatis ke nomor pelanggan.</small></p></div><div><i class="fa-solid fa-print"></i><p><b>Cetak manual</b><small>Tetap bisa diberikan bila pelanggan minta fisik.</small></p></div></div></div></div></div>
+<div class="form-page-pro">
+  <div class="form-hero-pro">
+    <div class="form-title-wrap">
+      <div class="form-title-icon"><i class="fa-solid fa-cash-register"></i></div>
+      <div>
+        <h1>Kasir Penjualan</h1>
+        <p>Input penjualan udang fresh mentah, biaya opsional, nota PDF, WhatsApp, dan pembayaran online.</p>
+      </div>
+    </div>
+    <div class="form-breadcrumb-pro"><i class="fa-solid fa-house"></i><span>/</span><b>Kasir Penjualan</b></div>
+  </div>
+
+  <div class="form-shell-pro">
+    <form method="post" class="form-pro" id="saleFormPro">{% csrf_token %}
+      <section class="form-section-pro">
+        <div class="section-head-pro"><i class="fa-solid fa-user-tag"></i><div><h2>Informasi Pelanggan & Panen</h2><p>Pilih pelanggan dan sumber panen bila transaksi terhubung dengan data panen.</p></div></div>
+        <div class="form-grid-pro two">
+          <div class="field-pro"><label>Pelanggan</label><div class="input-icon-pro"><i class="fa-solid fa-users"></i><select class="form-select" name="customer"><option value="">Pilih Pelanggan</option>{% for c in customers %}<option value="{{c.id}}">{{c.name}} - {{c.phone}}</option>{% endfor %}</select></div></div>
+          <div class="field-pro"><label>Sumber Panen</label><div class="input-icon-pro"><i class="fa-solid fa-water"></i><select class="form-select" name="harvest"><option value="">Tanpa sumber panen</option>{% for h in harvests %}<option value="{{h.id}}">{{h.pond.name}} - {{h.date}} - {{h.total_kg}} kg</option>{% endfor %}</select></div></div>
+        </div>
+      </section>
+
+      <section class="form-section-pro">
+        <div class="section-head-pro"><i class="fa-solid fa-cube"></i><div><h2>Informasi Produk</h2><p>Masukkan ukuran, berat, dan harga jual per kilogram.</p></div></div>
+        <div class="field-pro size-field-pro"><label>Ukuran Udang (ekor/kg)</label><input class="form-control" name="size_text" id="sizeInputPro" placeholder="Contoh: 50 / 40-50 / Campur" required><div class="size-pills-pro" data-target="sizeInputPro"><button type="button">30</button><button type="button">40</button><button type="button">50</button><button type="button">60</button><button type="button">70</button><button type="button">80</button><button type="button">100</button></div></div>
+        <div class="form-grid-pro two">
+          <div class="field-pro"><label>Berat (Kg)</label><div class="input-icon-pro"><i class="fa-solid fa-scale-balanced"></i><input class="form-control" name="weight_kg" id="weightInputPro" step="0.01" required></div></div>
+          <div class="field-pro"><label>Harga / Kg (Rp)</label><div class="input-icon-pro prefix"><span>Rp</span><input class="form-control" name="price_per_kg" id="priceInputPro" inputmode="numeric" data-rupiah-input placeholder="70.000" required></div><small>Format otomatis Rupiah, contoh Rp 70.000/kg.</small></div>
+        </div>
+      </section>
+
+      <section class="form-section-pro soft">
+        <div class="section-head-pro"><i class="fa-solid fa-circle-plus"></i><div><h2>Biaya Tambahan Opsional</h2><p>Kosongkan bila tidak ada. Nilai ini akan ditambahkan ke total akhir nota.</p></div></div>
+        <div class="form-grid-pro three">
+          <div class="field-pro"><label>Ongkos Kirim (Rp)</label><div class="input-icon-pro"><i class="fa-solid fa-truck-fast"></i><input class="form-control" name="shipping_cost" inputmode="numeric" data-rupiah-input placeholder="0"></div></div>
+          <div class="field-pro"><label>Pengepakan (Rp)</label><div class="input-icon-pro"><i class="fa-solid fa-box-open"></i><input class="form-control" name="packing_cost" inputmode="numeric" data-rupiah-input placeholder="0"></div></div>
+          <div class="field-pro"><label>Biaya Lainnya (Rp)</label><div class="input-icon-pro"><i class="fa-solid fa-ellipsis"></i><input class="form-control" name="other_cost" inputmode="numeric" data-rupiah-input placeholder="0"></div></div>
+        </div>
+      </section>
+
+      <section class="form-section-pro">
+        <div class="section-head-pro"><i class="fa-solid fa-credit-card"></i><div><h2>Pembayaran & Catatan</h2><p>Pilih metode pembayaran dan status nota saat transaksi dibuat.</p></div></div>
+        <div class="form-grid-pro two">
+          <div class="field-pro"><label>Metode Pembayaran</label><div class="input-icon-pro"><i class="fa-regular fa-credit-card"></i><select class="form-select" name="payment_method"><option>Cash</option><option>Transfer</option><option>QRIS</option><option>Tempo</option><option>Midtrans</option></select></div></div>
+          <div class="field-pro"><label>Status</label><div class="input-icon-pro"><i class="fa-solid fa-hourglass-half"></i><select class="form-select" name="status"><option>Lunas</option><option>Belum Lunas</option><option>Menunggu Pembayaran</option></select></div></div>
+        </div>
+        <div class="field-pro"><label>Catatan</label><textarea class="form-control" name="notes" rows="4" placeholder="Tulis catatan tambahan (opsional)..."></textarea></div>
+      </section>
+
+      <div class="form-actions-pro"><button class="btn btn-primary btn-lg"><i class="fa-solid fa-floppy-disk"></i> Simpan & Buat Nota</button></div>
+    </form>
+
+    <aside class="form-side-pro">
+      <div class="side-card-pro total-card-pro"><span>Estimasi Total</span><strong id="grandTotalPreview">Rp 0</strong><small>Berat × harga/kg + biaya tambahan.</small></div>
+      <div class="side-card-pro"><h3>Alur Nota Digital</h3><div class="side-list-pro"><div><i class="fa-solid fa-file-pdf"></i><p><b>Nota PDF otomatis</b><small>Format thermal untuk pelanggan.</small></p></div><div><i class="fa-solid fa-truck-fast"></i><p><b>Biaya opsional</b><small>Ongkos kirim, pengepakan, dan biaya lainnya bisa ditambahkan.</small></p></div><div><i class="fa-solid fa-credit-card"></i><p><b>Midtrans Snap</b><small>Nota bisa dibayar online melalui QRIS, VA, e-wallet, dan kanal Midtrans lain.</small></p></div><div><i class="fa-brands fa-whatsapp"></i><p><b>Kirim PDF via WhatsApp</b><small>Nota PDF bisa dibagikan ke pelanggan.</small></p></div></div></div>
+    </aside>
+  </div>
+</div>
+<script>
+(function(){
+  function digits(v){return String(v||'').replace(/[^0-9]/g,'')||'0'}
+  function money(n){return 'Rp ' + Number(n||0).toLocaleString('id-ID')}
+  function recalc(){const weight=parseFloat(String(document.getElementById('weightInputPro')?.value||'0').replace(',','.'))||0;const price=Number(digits(document.getElementById('priceInputPro')?.value));const ship=Number(digits(document.querySelector('[name="shipping_cost"]')?.value));const pack=Number(digits(document.querySelector('[name="packing_cost"]')?.value));const other=Number(digits(document.querySelector('[name="other_cost"]')?.value));const out=document.getElementById('grandTotalPreview');if(out)out.textContent=money(weight*price+ship+pack+other)}
+  document.querySelectorAll('#saleFormPro input, #saleFormPro select').forEach(el=>el.addEventListener('input',recalc));document.querySelectorAll('.size-pills-pro button').forEach(btn=>btn.addEventListener('click',function(){const target=document.getElementById(this.parentElement.dataset.target);if(target){target.value=this.textContent.trim();target.dispatchEvent(new Event('input'))}}));recalc();
+})();
+</script>
 {% endblock %}

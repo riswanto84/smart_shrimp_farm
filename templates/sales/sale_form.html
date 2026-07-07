@@ -1,106 +1,144 @@
 {% extends 'base.html' %}
 {% load currency %}
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>{% if mode == 'edit' %}Edit Nota Penjualan{% else %}Kasir Penjualan{% endif %}</h1>
-    <p>{% if mode == 'edit' %}Ubah data nota, pelanggan, size, berat, harga, status pembayaran, dan catatan.{% else %}Input penjualan udang fresh mentah.{% endif %}</p>
-  </div>
-  {% if mode == 'edit' %}
-  <div class="d-flex gap-2 flex-wrap">
-    <a class="btn btn-outline-primary" href="{% url 'sales:invoice' sale.id %}"><i class="fa-solid fa-receipt"></i> Lihat Nota</a>
-    <a class="btn btn-light" href="{% url 'sales:invoices' %}"><i class="fa-solid fa-arrow-left"></i> Kembali</a>
-  </div>
-  {% endif %}
-</div>
-
-{% if messages %}
-  {% for message in messages %}
-    <div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>
-  {% endfor %}
-{% endif %}
-
-<div class="row g-3">
-  <div class="col-lg-7">
-    <div class="cardx">
-      <form method="post" class="row g-3">{% csrf_token %}
-        {% if mode == 'edit' %}
-        <div class="col-md-6">
-          <label class="form-label">Nomor Nota</label>
-          <input class="form-control" name="invoice_no" value="{{ sale.invoice_no }}" required>
-          <div class="form-text">Nomor nota boleh diubah, tetapi tidak boleh sama dengan nota lain.</div>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">Tanggal Nota</label>
-          <input class="form-control" value="{{ sale.date|date:'d/m/Y H:i' }}" disabled>
-          <div class="form-text">Tanggal mengikuti waktu pembuatan transaksi.</div>
-        </div>
-        {% endif %}
-
-        <div class="col-md-6">
-          <label class="form-label">Pelanggan</label>
-          <select class="form-select" name="customer">
-            <option value="">Pilih Pelanggan</option>
-            {% for c in customers %}
-              <option value="{{ c.id }}" {% if sale.customer_id == c.id %}selected{% endif %}>{{ c.name }} - {{ c.phone }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">Sumber Panen</label>
-          <select class="form-select" name="harvest">
-            <option value="">Tanpa sumber panen</option>
-            {% for h in harvests %}
-              <option value="{{ h.id }}" {% if item and item.harvest_id == h.id %}selected{% endif %}>{{ h.pond.name }} - {{ h.date }} - {{ h.total_kg }} kg</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-12">
-          <label class="form-label">Size Udang (ekor/kg)</label>
-          <input class="form-control" name="size_text" value="{{ item.size_text|default:'' }}" placeholder="Contoh: 50 / 40-50 / Campur" required>
-          <div class="mt-2 d-flex gap-2 flex-wrap"><span class="badge-soft">30</span><span class="badge-soft">40</span><span class="badge-soft">50</span><span class="badge-soft">60</span><span class="badge-soft">70</span><span class="badge-soft">80</span><span class="badge-soft">100</span></div>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">Berat (Kg)</label>
-          <input class="form-control" name="weight_kg" step="0.01" value="{{ item.weight_kg|default:sale.total_kg }}" required>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">Harga / Kg</label>
-          <input class="form-control" name="price_per_kg" inputmode="numeric" data-rupiah-input value="{{ item.price_per_kg|floatformat:0|default:'' }}" placeholder="Contoh: 70.000" required>
-          <div class="form-text">Format otomatis Rupiah, contoh Rp 70.000/kg.</div>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">Metode Pembayaran</label>
-          <select class="form-select" name="payment_method">
-            {% for value,label in sale.PAYMENT %}<option value="{{ value }}" {% if sale.payment_method == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">Status</label>
-          <select class="form-select" name="status">
-            {% for value,label in sale.STATUS %}<option value="{{ value }}" {% if sale.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="col-12">
-          <label class="form-label">Catatan</label>
-          <textarea class="form-control" name="notes" rows="3">{{ sale.notes }}</textarea>
-        </div>
-        <div class="col-12 d-flex gap-2 flex-wrap">
-          <button class="btn btn-primary btn-lg"><i class="fa-solid fa-floppy-disk"></i> {% if mode == 'edit' %}Simpan Perubahan{% else %}Simpan & Buat Nota{% endif %}</button>
-          {% if mode == 'edit' %}<a class="btn btn-outline-secondary btn-lg" href="{% url 'sales:invoice' sale.id %}">Batal</a>{% endif %}
-        </div>
-      </form>
-    </div>
-  </div>
-  <div class="col-lg-5">
-    <div class="panel">
-      <h2>Data yang Bisa Diubah</h2>
-      <div class="activity-list">
-        <div><i class="fa-solid fa-user"></i><p><b>Pelanggan</b><small>Ubah pelanggan dan nomor HP berdasarkan master pelanggan.</small></p></div>
-        <div><i class="fa-solid fa-weight-scale"></i><p><b>Size, berat, dan harga</b><small>Total nota otomatis dihitung ulang dari berat × harga.</small></p></div>
-        <div><i class="fa-solid fa-money-check"></i><p><b>Pembayaran</b><small>Ubah metode bayar, status lunas, dan catatan nota.</small></p></div>
+<div class="form-page-pro">
+  <div class="form-hero-pro">
+    <div class="form-title-wrap">
+      <div class="form-title-icon"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+      <div>
+        <h1>{% if mode == 'edit' %}Edit Nota Penjualan{% else %}Kasir Penjualan{% endif %}</h1>
+        <p>{% if mode == 'edit' %}Perbarui detail nota penjualan sesuai kebutuhan.{% else %}Input penjualan udang fresh mentah dengan biaya opsional dan pembayaran online.{% endif %}</p>
       </div>
     </div>
+    <div class="form-breadcrumb-pro">
+      <i class="fa-solid fa-house"></i><span>/</span><a href="{% url 'sales:invoices' %}">Nota</a><span>/</span><b>{% if mode == 'edit' %}Edit Nota Penjualan{% else %}Kasir Penjualan{% endif %}</b>
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags|default:'info' }} form-alert-pro">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="form-shell-pro">
+    <form method="post" class="form-pro" id="saleFormPro">{% csrf_token %}
+      {% if mode == 'edit' %}
+      <section class="form-section-pro">
+        <div class="section-head-pro"><i class="fa-solid fa-receipt"></i><div><h2>Informasi Nota</h2><p>Nomor nota dapat diubah selama belum digunakan nota lain.</p></div></div>
+        <div class="form-grid-pro two">
+          <div class="field-pro">
+            <label>Nomor Nota</label>
+            <div class="input-icon-pro"><i class="fa-solid fa-hashtag"></i><input class="form-control" name="invoice_no" value="{{ sale.invoice_no }}" required></div>
+            <small>Nomor nota tidak boleh sama dengan nota lain.</small>
+          </div>
+          <div class="field-pro">
+            <label>Tanggal Nota</label>
+            <div class="input-icon-pro muted"><i class="fa-regular fa-calendar"></i><input class="form-control" value="{{ sale.date|date:'d/m/Y H:i' }}" disabled></div>
+            <small>Tanggal mengikuti waktu pembuatan transaksi.</small>
+          </div>
+        </div>
+      </section>
+      {% endif %}
+
+      <section class="form-section-pro">
+        <div class="section-head-pro"><i class="fa-solid fa-user-tag"></i><div><h2>Informasi Pelanggan & Panen</h2><p>Pilih pelanggan dan sumber panen bila transaksi terhubung dengan data panen.</p></div></div>
+        <div class="form-grid-pro two">
+          <div class="field-pro">
+            <label>Pelanggan</label>
+            <div class="input-icon-pro"><i class="fa-solid fa-users"></i><select class="form-select" name="customer"><option value="">Pilih Pelanggan</option>{% for c in customers %}<option value="{{ c.id }}" {% if sale.customer_id == c.id %}selected{% endif %}>{{ c.name }} - {{ c.phone }}</option>{% endfor %}</select></div>
+          </div>
+          <div class="field-pro">
+            <label>Sumber Panen</label>
+            <div class="input-icon-pro"><i class="fa-solid fa-water"></i><select class="form-select" name="harvest"><option value="">Tanpa sumber panen</option>{% for h in harvests %}<option value="{{ h.id }}" {% if item and item.harvest_id == h.id %}selected{% endif %}>{{ h.pond.name }} - {{ h.date }} - {{ h.total_kg }} kg</option>{% endfor %}</select></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="form-section-pro">
+        <div class="section-head-pro"><i class="fa-solid fa-cube"></i><div><h2>Informasi Produk</h2><p>Masukkan ukuran, berat, dan harga jual per kilogram.</p></div></div>
+        <div class="field-pro size-field-pro">
+          <label>Ukuran Udang (ekor/kg)</label>
+          <input class="form-control" name="size_text" id="sizeInputPro" value="{{ item.size_text|default:'' }}" placeholder="Contoh: 50 / 40-50 / Campur" required>
+          <div class="size-pills-pro" data-target="sizeInputPro"><button type="button">30</button><button type="button">40</button><button type="button">50</button><button type="button">60</button><button type="button">70</button><button type="button">80</button><button type="button">100</button></div>
+        </div>
+        <div class="form-grid-pro two">
+          <div class="field-pro">
+            <label>Berat (Kg)</label>
+            <div class="input-icon-pro"><i class="fa-solid fa-scale-balanced"></i><input class="form-control" name="weight_kg" id="weightInputPro" step="0.01" value="{{ item.weight_kg|default:sale.total_kg }}" required></div>
+          </div>
+          <div class="field-pro">
+            <label>Harga / Kg (Rp)</label>
+            <div class="input-icon-pro prefix"><span>Rp</span><input class="form-control" name="price_per_kg" id="priceInputPro" inputmode="numeric" data-rupiah-input value="{{ item.price_per_kg|floatformat:0|default:'' }}" placeholder="70.000" required></div>
+            <small>Format otomatis Rupiah, contoh Rp 70.000/kg.</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="form-section-pro soft">
+        <div class="section-head-pro"><i class="fa-solid fa-circle-plus"></i><div><h2>Biaya Tambahan Opsional</h2><p>Kosongkan bila tidak ada. Nilai ini akan ditambahkan ke total akhir nota.</p></div></div>
+        <div class="form-grid-pro three">
+          <div class="field-pro"><label>Ongkos Kirim (Rp)</label><div class="input-icon-pro"><i class="fa-solid fa-truck-fast"></i><input class="form-control" name="shipping_cost" inputmode="numeric" data-rupiah-input value="{{ sale.shipping_cost|floatformat:0 }}" placeholder="0"></div></div>
+          <div class="field-pro"><label>Pengepakan (Rp)</label><div class="input-icon-pro"><i class="fa-solid fa-box-open"></i><input class="form-control" name="packing_cost" inputmode="numeric" data-rupiah-input value="{{ sale.packing_cost|floatformat:0 }}" placeholder="0"></div></div>
+          <div class="field-pro"><label>Biaya Lainnya (Rp)</label><div class="input-icon-pro"><i class="fa-solid fa-ellipsis"></i><input class="form-control" name="other_cost" inputmode="numeric" data-rupiah-input value="{{ sale.other_cost|floatformat:0 }}" placeholder="0"></div></div>
+        </div>
+      </section>
+
+      <section class="form-section-pro">
+        <div class="section-head-pro"><i class="fa-solid fa-credit-card"></i><div><h2>Pembayaran & Catatan</h2><p>Atur metode pembayaran, status nota, dan catatan untuk pelanggan.</p></div></div>
+        <div class="form-grid-pro two">
+          <div class="field-pro"><label>Metode Pembayaran</label><div class="input-icon-pro"><i class="fa-regular fa-credit-card"></i><select class="form-select" name="payment_method">{% for value,label in sale.PAYMENT %}<option value="{{ value }}" {% if sale.payment_method == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div></div>
+          <div class="field-pro"><label>Status</label><div class="input-icon-pro"><i class="fa-solid fa-hourglass-half"></i><select class="form-select" name="status">{% for value,label in sale.STATUS %}<option value="{{ value }}" {% if sale.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div></div>
+        </div>
+        <div class="field-pro"><label>Catatan</label><textarea class="form-control" name="notes" rows="4" placeholder="Tulis catatan tambahan (opsional)...">{{ sale.notes }}</textarea></div>
+      </section>
+
+      <div class="form-actions-pro">
+        <button class="btn btn-primary btn-lg"><i class="fa-solid fa-floppy-disk"></i> {% if mode == 'edit' %}Simpan Perubahan{% else %}Simpan & Buat Nota{% endif %}</button>
+        {% if mode == 'edit' %}<a class="btn btn-outline-secondary btn-lg" href="{% url 'sales:invoice' sale.id %}"><i class="fa-solid fa-xmark"></i> Batal</a>{% endif %}
+      </div>
+    </form>
+
+    <aside class="form-side-pro">
+      <div class="side-card-pro total-card-pro">
+        <span>Estimasi Total</span>
+        <strong id="grandTotalPreview">Rp 0</strong>
+        <small>Berat × harga/kg + biaya tambahan.</small>
+      </div>
+      <div class="side-card-pro">
+        <h3>Ringkasan Perubahan</h3>
+        <div class="side-list-pro">
+          <div><i class="fa-solid fa-user"></i><p><b>Pelanggan</b><small>Ubah pelanggan dan nomor HP berdasarkan master pelanggan.</small></p></div>
+          <div><i class="fa-solid fa-weight-scale"></i><p><b>Size, berat, dan harga</b><small>Subtotal udang otomatis dihitung dari berat × harga.</small></p></div>
+          <div><i class="fa-solid fa-truck-fast"></i><p><b>Biaya opsional</b><small>Ongkos kirim, pengepakan, dan biaya lainnya ikut masuk ke total.</small></p></div>
+          <div><i class="fa-solid fa-money-check"></i><p><b>Pembayaran</b><small>Ubah metode bayar, status pembayaran, dan catatan nota.</small></p></div>
+        </div>
+      </div>
+      {% if mode == 'edit' %}
+      <div class="side-actions-pro">
+        <a class="btn btn-outline-primary w-100" href="{% url 'sales:invoice' sale.id %}"><i class="fa-solid fa-receipt"></i> Lihat Nota Thermal</a>
+        <a class="btn btn-light w-100" href="{% url 'sales:invoices' %}"><i class="fa-solid fa-arrow-left"></i> Kembali ke Daftar Nota</a>
+      </div>
+      {% endif %}
+    </aside>
   </div>
 </div>
+<script>
+(function(){
+  function digits(v){return String(v||'').replace(/[^0-9]/g,'')||'0'}
+  function money(n){return 'Rp ' + Number(n||0).toLocaleString('id-ID')}
+  function recalc(){
+    const weight = parseFloat(String(document.getElementById('weightInputPro')?.value||'0').replace(',','.')) || 0;
+    const price = Number(digits(document.getElementById('priceInputPro')?.value));
+    const ship = Number(digits(document.querySelector('[name="shipping_cost"]')?.value));
+    const pack = Number(digits(document.querySelector('[name="packing_cost"]')?.value));
+    const other = Number(digits(document.querySelector('[name="other_cost"]')?.value));
+    const total = weight * price + ship + pack + other;
+    const out = document.getElementById('grandTotalPreview'); if(out) out.textContent = money(total);
+  }
+  document.querySelectorAll('#saleFormPro input, #saleFormPro select').forEach(el => el.addEventListener('input', recalc));
+  document.querySelectorAll('.size-pills-pro button').forEach(btn => btn.addEventListener('click', function(){ const target=document.getElementById(this.parentElement.dataset.target); if(target){ target.value=this.textContent.trim(); target.dispatchEvent(new Event('input')); }}));
+  recalc();
+})();
+</script>
 {% endblock %}

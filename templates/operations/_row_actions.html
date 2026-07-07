@@ -1,0 +1,7 @@
+<div class="d-flex gap-2 flex-wrap justify-content-end">
+  <a class="btn btn-sm btn-warning text-dark" href="{{ edit_url }}"><i class="fa-solid fa-pen-to-square"></i> Edit</a>
+  <form method="post" action="{{ delete_url }}" onsubmit="return confirm('Hapus data ini? Tindakan ini tidak dapat dibatalkan.');">
+    {% csrf_token %}
+    <button class="btn btn-sm btn-outline-danger" type="submit"><i class="fa-solid fa-trash"></i> Hapus</button>
+  </form>
+</div>

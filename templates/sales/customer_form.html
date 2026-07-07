@@ -1,21 +1,5 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>Tambah Pelanggan</h1>
-    <p>Lengkapi data pelanggan agar nota dapat dikirim melalui WhatsApp atau email.</p>
-  </div>
-</div>
-<div class="cardx">
-  <form method="post" class="row g-3">{% csrf_token %}
-    <div class="col-md-6"><label class="form-label fw-bold">Nama Pelanggan</label><input class="form-control" name="name" required placeholder="Contoh: PT Sumber Laut"></div>
-    <div class="col-md-6"><label class="form-label fw-bold">Nomor HP / WhatsApp</label><input class="form-control" name="phone" placeholder="Contoh: 0812xxxxxxx"></div>
-    <div class="col-md-6"><label class="form-label fw-bold">Email</label><input class="form-control" type="email" name="email" placeholder="email@pelanggan.com"></div>
-    <div class="col-12"><label class="form-label fw-bold">Alamat</label><textarea class="form-control" name="address" rows="4" placeholder="Alamat pengiriman / domisili pelanggan"></textarea></div>
-    <div class="col-12 d-grid d-md-flex gap-2">
-      <button class="btn btn-primary"><i class="fa-solid fa-save"></i> Simpan Pelanggan</button>
-      <a class="btn btn-outline-primary" href="{% url 'sales:customers' %}">Kembali</a>
-    </div>
-  </form>
-</div>
+<div class="page-head"><div><h1>{% if mode == 'edit' %}Edit{% else %}Tambah{% endif %} Pelanggan</h1><p>Lengkapi data pelanggan agar nota dapat dikirim melalui WhatsApp atau email.</p></div></div>
+<div class="cardx"><form method="post" class="row g-3">{% csrf_token %}<div class="col-md-6"><label class="form-label fw-bold">Nama Pelanggan</label><input class="form-control" name="name" value="{{ obj.name|default:'' }}" required placeholder="Contoh: PT Sumber Laut"></div><div class="col-md-6"><label class="form-label fw-bold">Nomor HP / WhatsApp</label><input class="form-control" name="phone" value="{{ obj.phone|default:'' }}" placeholder="Contoh: 0812xxxxxxx"></div><div class="col-md-6"><label class="form-label fw-bold">Email</label><input class="form-control" type="email" name="email" value="{{ obj.email|default:'' }}" placeholder="email@pelanggan.com"></div><div class="col-12"><label class="form-label fw-bold">Alamat</label><textarea class="form-control" name="address" rows="4" placeholder="Alamat pengiriman / domisili pelanggan">{{ obj.address|default:'' }}</textarea></div><div class="col-12 d-grid d-md-flex gap-2"><button class="btn btn-primary"><i class="fa-solid fa-save"></i> Simpan Pelanggan</button><a class="btn btn-outline-primary" href="{% url 'sales:customers' %}">Kembali</a></div></form></div>
 {% endblock %}

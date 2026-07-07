@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+{% load currency %}
+{% block title %}Laporan Keuangan Periodik - SMART SHRIMP FARM{% endblock %}
+{% block content %}
+<div class="periodic-report">
+  <div class="page-head report-head-pro">
+    <div>
+      <h1>{% if period_type == 'daily' %}Laporan Harian{% elif period_type == 'weekly' %}Laporan Mingguan{% elif period_type == 'monthly' %}Laporan Bulanan{% elif period_type == 'cycle' %}Laporan Per Siklus{% else %}Laporan Piutang{% endif %}</h1>
+      <p>Pantau performa keuangan tambak berdasarkan omzet, pengeluaran, laba bersih, dan piutang pelanggan.</p>
+    </div>
+    <div class="report-actions">
+      <a class="btn btn-success" href="{% url 'finance:export_periodic_report_excel' %}?{{ request.GET.urlencode }}"><i class="fa-solid fa-file-excel"></i> Export Excel</a>
+      <a class="btn btn-primary-dark" href="{% url 'finance:export_periodic_report_pdf' %}?{{ request.GET.urlencode }}"><i class="fa-solid fa-file-pdf"></i> Export PDF</a>
+    </div>
+  </div>
+
+  <div class="report-tabs">
+    <a class="{% if period_type == 'daily' %}active{% endif %}" href="?type=daily">Harian</a>
+    <a class="{% if period_type == 'weekly' %}active{% endif %}" href="?type=weekly">Mingguan</a>
+    <a class="{% if period_type == 'monthly' %}active{% endif %}" href="?type=monthly">Bulanan</a>
+    <a class="{% if period_type == 'cycle' %}active{% endif %}" href="?type=cycle">Per Siklus</a>
+    <a class="{% if period_type == 'receivable' %}active{% endif %}" href="?type=receivable">Piutang</a>
+  </div>
+
+  <section class="report-filter-card">
+    <form method="get" class="report-filter-grid">
+      <input type="hidden" name="type" value="{{ period_type }}">
+      <div>
+        <label>Rentang Tanggal</label>
+        <div class="filter-inline">
+          <input class="form-control" type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
+          <input class="form-control" type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
+        </div>
+      </div>
+      <div>
+        <label>Kolam</label>
+        <select class="form-select" name="pond">
+          <option value="">Semua Kolam</option>
+          {% for p in ponds %}<option value="{{ p.id }}" {% if pond_id == p.id|stringformat:'s' %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Metode Pembayaran</label>
+        <select class="form-select" name="payment_method">
+          <option value="">Semua Metode</option>
+          {% for value,label in payment_methods %}<option value="{{ value }}" {% if payment_method == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Status</label>
+        <select class="form-select" name="status">
+          <option value="">Semua Status</option>
+          {% for value,label in statuses %}<option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="d-grid align-self-end"><button class="btn btn-outline-primary"><i class="fa-solid fa-filter"></i> Terapkan Filter</button></div>
+    </form>
+  </section>
+
+  <section class="report-kpis">
+    <div class="report-kpi-card blue"><span><i class="fa-solid fa-chart-line"></i></span><div><small>Total Omzet</small><strong>{{ revenue|rupiah }}</strong><em>{{ total_kg|ribuan }} kg terjual</em></div></div>
+    <div class="report-kpi-card orange"><span><i class="fa-solid fa-wallet"></i></span><div><small>Total Pengeluaran</small><strong>{{ expense_total|rupiah }}</strong><em>Biaya operasional</em></div></div>
+    <div class="report-kpi-card green"><span><i class="fa-solid fa-square-poll-vertical"></i></span><div><small>Laba Bersih</small><strong>{{ profit|rupiah }}</strong><em>Omzet - pengeluaran</em></div></div>
+    <div class="report-kpi-card purple"><span><i class="fa-solid fa-credit-card"></i></span><div><small>Piutang Belum Lunas</small><strong>{{ receivable_total|rupiah }}</strong><em>{{ total_transactions }} transaksi periode ini</em></div></div>
+  </section>
+
+  {% if period_type == 'receivable' %}
+  <section class="report-grid two-col">
+    <div class="report-panel">
+      <div class="panel-title"><h3>Aging Piutang</h3><small>Komposisi umur tagihan pelanggan</small></div>
+      <canvas id="agingChart" height="130"></canvas>
+      <div class="aging-summary">
+        {% for row in aging_rows %}
+          <div><b>{{ row.label }}</b><span>{{ row.amount|rupiah }}</span><small>{{ row.percent|floatformat:1 }}%</small></div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="report-panel insight-panel">
+      <div class="panel-title"><h3>Insight & Sorotan</h3><small>Prioritas penagihan</small></div>
+      {% if receivable_rows %}
+        <div class="insight-card purple-soft"><i class="fa-solid fa-user-clock"></i><div><b>Pelanggan prioritas</b><p>{{ receivable_rows.0.sale.customer.name|default:'Pelanggan' }} memiliki piutang {{ receivable_rows.0.sale.total_amount|rupiah }}.</p></div></div>
+      {% endif %}
+      <div class="insight-card green-soft"><i class="fa-solid fa-shield-check"></i><div><b>Collection Rate</b><p>Pantau tagihan belum lunas dan cek status Midtrans secara berkala.</p></div></div>
+    </div>
+  </section>
+  <section class="report-panel mt-3">
+    <div class="panel-title"><h3>Daftar Piutang Pelanggan</h3><small>Menampilkan tagihan belum lunas berdasarkan tanggal nota</small></div>
+    <div class="table-responsive"><table class="table app-table align-middle report-table"><thead><tr><th>Pelanggan</th><th>No Nota</th><th>Tanggal</th><th>Nilai Piutang</th><th>Umur</th><th>Status Tagihan</th><th>Aksi</th></tr></thead><tbody>{% for row in receivable_rows %}<tr><td>{{ row.sale.customer.name|default:'-' }}</td><td><b>{{ row.sale.invoice_no }}</b></td><td>{{ row.sale.date|date:'d/m/Y H:i' }}</td><td>{{ row.sale.total_amount|rupiah }}</td><td>{{ row.age }} hari</td><td><span class="badge-soft warning">{{ row.badge }}</span></td><td><a class="btn btn-sm btn-outline-primary" href="{% url 'sales:invoice' row.sale.id %}"><i class="fa-solid fa-eye"></i> Lihat</a></td></tr>{% empty %}<tr><td colspan="7" class="text-center text-muted">Tidak ada piutang pada filter ini.</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+  {% else %}
+  <section class="report-grid main-charts">
+    <div class="report-panel chart-wide">
+      <div class="panel-title"><h3>Perbandingan Omzet vs Pengeluaran</h3><small>Tren performa keuangan periode terpilih</small></div>
+      <canvas id="financeChart" height="120"></canvas>
+    </div>
+    <div class="report-panel">
+      <div class="panel-title"><h3>Komposisi Biaya</h3><small>Proporsi pengeluaran operasional</small></div>
+      <canvas id="expenseChart" height="170"></canvas>
+      <div class="composition-list">
+        {% for item in composition %}
+          <div><span>{{ item.label }}</span><b>{{ item.amount|rupiah }}</b><small>{{ item.percent|floatformat:1 }}%</small></div>
+        {% empty %}<p class="text-muted mb-0">Belum ada data pengeluaran.</p>{% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section class="report-grid lower-grid">
+    <div class="report-panel table-panel">
+      <div class="panel-title"><h3>Ringkasan Laporan</h3><small>Rekap periode berdasarkan filter aktif</small></div>
+      <div class="table-responsive"><table class="table app-table align-middle report-table"><thead><tr><th>Periode</th><th>Omzet</th><th>Pengeluaran</th><th>Laba Bersih</th><th>Piutang</th></tr></thead><tbody>{% for row in table_rows %}<tr><td><b>{{ row.label }}</b></td><td>{{ row.revenue|rupiah }}</td><td>{{ row.expense|rupiah }}</td><td class="text-success fw-bold">{{ row.profit|rupiah }}</td><td>{{ row.receivable|rupiah }}</td></tr>{% empty %}<tr><td colspan="5" class="text-center text-muted">Belum ada data pada periode ini.</td></tr>{% endfor %}</tbody><tfoot><tr><th>Total</th><th>{{ revenue|rupiah }}</th><th>{{ expense_total|rupiah }}</th><th>{{ profit|rupiah }}</th><th>{{ receivable_total|rupiah }}</th></tr></tfoot></table></div>
+    </div>
+    <div class="report-panel insight-panel">
+      <div class="panel-title"><h3>Highlight Keuangan</h3><small>Ringkasan otomatis</small></div>
+      <div class="insight-card green-soft"><i class="fa-solid fa-trophy"></i><div><b>Periode Terbaik</b><p>{% if best_period %}{{ best_period.label }} dengan laba {{ best_period.amount|rupiah }}{% else %}Belum ada data laba periode ini.{% endif %}</p></div></div>
+      <div class="insight-card orange-soft"><i class="fa-solid fa-circle-exclamation"></i><div><b>Biaya Tertinggi</b><p>{{ top_expense.label }} sebesar {{ top_expense.amount|rupiah }}.</p></div></div>
+      <div class="insight-card blue-soft"><i class="fa-solid fa-file-invoice-dollar"></i><div><b>Nota Tertinggi</b><p>{% if top_sale %}{{ top_sale.invoice_no }} senilai {{ top_sale.total_amount|rupiah }}{% else %}Belum ada transaksi penjualan.{% endif %}</p></div></div>
+    </div>
+  </section>
+  {% endif %}
+</div>
+
+{{ series_json|json_script:'series-data' }}
+{{ expense_chart_json|json_script:'expense-data' }}
+{{ payment_chart_json|json_script:'payment-data' }}
+{{ aging_chart_json|json_script:'aging-data' }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function(){
+  function readJson(id){ const el=document.getElementById(id); return el ? JSON.parse(el.textContent) : {labels:[],values:[]}; }
+  const money = (v) => 'Rp ' + Math.round(v || 0).toLocaleString('id-ID');
+  const series = readJson('series-data');
+  const expense = readJson('expense-data');
+  const aging = readJson('aging-data');
+  const financeCanvas = document.getElementById('financeChart');
+  if(financeCanvas){
+    new Chart(financeCanvas, {type:'bar', data:{labels:series.labels, datasets:[{label:'Omzet', data:series.revenue, borderRadius:8},{label:'Pengeluaran', data:series.expense, type:'line', tension:.35, pointRadius:4},{label:'Laba', data:series.profit, type:'line', tension:.35, pointRadius:4}]}, options:{responsive:true, plugins:{legend:{position:'top'}, tooltip:{callbacks:{label:(ctx)=>ctx.dataset.label+': '+money(ctx.parsed.y)}}}, scales:{y:{ticks:{callback:money}}}}});
+  }
+  const expenseCanvas = document.getElementById('expenseChart');
+  if(expenseCanvas){
+    new Chart(expenseCanvas, {type:'doughnut', data:{labels:expense.labels, datasets:[{data:expense.values, borderWidth:2}]}, options:{plugins:{legend:{position:'bottom'}, tooltip:{callbacks:{label:(ctx)=>ctx.label+': '+money(ctx.parsed)}}}, cutout:'62%'}});
+  }
+  const agingCanvas = document.getElementById('agingChart');
+  if(agingCanvas){
+    new Chart(agingCanvas, {type:'bar', data:{labels:aging.labels, datasets:[{label:'Piutang', data:aging.values, borderRadius:10}]}, options:{indexAxis:'y', plugins:{legend:{display:false}, tooltip:{callbacks:{label:(ctx)=>money(ctx.parsed.x)}}}, scales:{x:{ticks:{callback:money}}}}});
+  }
+})();
+</script>
+{% endblock %}

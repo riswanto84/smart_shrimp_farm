@@ -2,14 +2,32 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from accounts.rbac import permission_required
-from django.http import FileResponse
+from django.http import FileResponse, JsonResponse, HttpResponseBadRequest, HttpResponse
 from django.db.models import Sum
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+import json
 from .models import Customer, Sale, SaleItem
 from operations.models import Harvest
 from .pdf import build_invoice_pdf, safe_invoice_filename
+from .midtrans import (
+    MidtransError, create_snap_transaction, verify_notification_signature,
+    apply_midtrans_status, get_transaction_status,
+)
 from django.utils import timezone
 from core.reporting import get_date_range, filter_by_date_range, format_date_range, export_excel, export_pdf, rupiah
 from core.utils import parse_rupiah
+
+
+def _get_sale_amounts_from_request(request):
+    weight = parse_rupiah(request.POST.get('weight_kg'))
+    price = parse_rupiah(request.POST.get('price_per_kg'))
+    subtotal = weight * price
+    shipping_cost = parse_rupiah(request.POST.get('shipping_cost'))
+    packing_cost = parse_rupiah(request.POST.get('packing_cost'))
+    other_cost = parse_rupiah(request.POST.get('other_cost'))
+    total_amount = subtotal + shipping_cost + packing_cost + other_cost
+    return weight, price, subtotal, shipping_cost, packing_cost, other_cost, total_amount
 
 
 @login_required
@@ -33,8 +51,20 @@ def cashier(request):
     customers = Customer.objects.all(); harvests = Harvest.objects.order_by('-date')[:20]
     if request.method == 'POST':
         inv = 'INV' + timezone.now().strftime('%Y%m%d%H%M%S')
-        weight = parse_rupiah(request.POST.get('weight_kg')); price = parse_rupiah(request.POST.get('price_per_kg')); subtotal = weight * price
-        sale = Sale.objects.create(invoice_no=inv, customer_id=request.POST.get('customer') or None, total_kg=weight, total_amount=subtotal, payment_method=request.POST.get('payment_method', 'Cash'), status=request.POST.get('status', 'Lunas'), cashier=request.user, notes=request.POST.get('notes', ''))
+        weight, price, subtotal, shipping_cost, packing_cost, other_cost, total_amount = _get_sale_amounts_from_request(request)
+        sale = Sale.objects.create(
+            invoice_no=inv,
+            customer_id=request.POST.get('customer') or None,
+            total_kg=weight,
+            total_amount=total_amount,
+            shipping_cost=shipping_cost,
+            packing_cost=packing_cost,
+            other_cost=other_cost,
+            payment_method=request.POST.get('payment_method', 'Cash'),
+            status=request.POST.get('status', 'Lunas'),
+            cashier=request.user,
+            notes=request.POST.get('notes', ''),
+        )
         SaleItem.objects.create(sale=sale, harvest_id=request.POST.get('harvest') or None, size_text=request.POST.get('size_text', ''), weight_kg=weight, price_per_kg=price, subtotal=subtotal)
         return redirect('sales:invoice', pk=sale.pk)
     return render(request, 'sales/cashier.html', {'customers': customers, 'harvests': harvests})
@@ -55,17 +85,26 @@ def edit_sale(request, pk):
             messages.error(request, 'Nomor nota sudah digunakan. Silakan gunakan nomor nota lain.')
             return render(request, 'sales/sale_form.html', {'sale': sale, 'item': item, 'customers': customers, 'harvests': harvests, 'mode': 'edit'})
 
-        weight = parse_rupiah(request.POST.get('weight_kg'))
-        price = parse_rupiah(request.POST.get('price_per_kg'))
-        subtotal = weight * price
+        weight, price, subtotal, shipping_cost, packing_cost, other_cost, total_amount = _get_sale_amounts_from_request(request)
+        old_total_amount = sale.total_amount
 
         sale.invoice_no = invoice_no
         sale.customer_id = request.POST.get('customer') or None
         sale.total_kg = weight
-        sale.total_amount = subtotal
+        sale.total_amount = total_amount
+        sale.shipping_cost = shipping_cost
+        sale.packing_cost = packing_cost
+        sale.other_cost = other_cost
         sale.payment_method = request.POST.get('payment_method', 'Cash')
         sale.status = request.POST.get('status', 'Lunas')
         sale.notes = request.POST.get('notes', '')
+        if old_total_amount != total_amount and sale.status != 'Lunas':
+            # Jika total nota berubah, link Snap lama tidak lagi sesuai nominal baru.
+            sale.midtrans_order_id = ''
+            sale.midtrans_snap_token = ''
+            sale.midtrans_payment_url = ''
+            sale.midtrans_status = ''
+            sale.midtrans_transaction_id = ''
         sale.save()
 
         if item is None:
@@ -164,3 +203,93 @@ def invoice_pdf(request, pk):
     sale = get_object_or_404(Sale, pk=pk)
     path = build_invoice_pdf(sale)
     return FileResponse(open(path, 'rb'), as_attachment=True, filename=f'{safe_invoice_filename(sale.invoice_no)}.pdf')
+
+
+@login_required
+@permission_required('sales.invoices')
+@require_POST
+def create_midtrans_payment(request, pk):
+    sale = get_object_or_404(Sale.objects.select_related('customer').prefetch_related('items'), pk=pk)
+    if sale.status == 'Lunas':
+        messages.info(request, 'Nota ini sudah berstatus Lunas. Pembayaran Midtrans tidak dibuat ulang.')
+        return redirect('sales:invoice', pk=sale.pk)
+
+    if sale.midtrans_payment_url and sale.status == 'Menunggu Pembayaran':
+        return redirect(sale.midtrans_payment_url)
+
+    if sale.status in {'Expired', 'Gagal', 'Dibatalkan'}:
+        # Buat order_id baru untuk percobaan bayar ulang setelah transaksi lama gagal/expired.
+        sale.midtrans_order_id = ''
+        sale.midtrans_snap_token = ''
+        sale.midtrans_payment_url = ''
+        sale.midtrans_status = ''
+        sale.midtrans_transaction_id = ''
+        sale.save(update_fields=[
+            'midtrans_order_id', 'midtrans_snap_token', 'midtrans_payment_url',
+            'midtrans_status', 'midtrans_transaction_id'
+        ])
+
+    try:
+        data = create_snap_transaction(sale, request)
+        messages.success(request, 'Link pembayaran Midtrans berhasil dibuat. Pelanggan dapat melanjutkan pembayaran.')
+        redirect_url = data.get('redirect_url') or sale.midtrans_payment_url
+        if redirect_url:
+            return redirect(redirect_url)
+    except MidtransError as exc:
+        messages.error(request, str(exc))
+    return redirect('sales:invoice', pk=sale.pk)
+
+
+@login_required
+@permission_required('sales.invoices')
+@require_POST
+def check_midtrans_payment(request, pk):
+    sale = get_object_or_404(Sale, pk=pk)
+    try:
+        payload = get_transaction_status(sale)
+        apply_midtrans_status(sale, payload)
+        messages.success(request, f'Status Midtrans diperbarui: {sale.status}.')
+    except MidtransError as exc:
+        messages.error(request, str(exc))
+    return redirect('sales:invoice', pk=sale.pk)
+
+
+@csrf_exempt
+@require_POST
+def midtrans_notification(request):
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return HttpResponseBadRequest('Invalid JSON')
+
+    if not verify_notification_signature(payload):
+        return HttpResponseBadRequest('Invalid signature')
+
+    order_id = payload.get('order_id')
+    sale = Sale.objects.filter(midtrans_order_id=order_id).first()
+    if not sale:
+        return HttpResponseBadRequest('Order ID not found')
+
+    apply_midtrans_status(sale, payload)
+    return JsonResponse({'ok': True, 'invoice_no': sale.invoice_no, 'status': sale.status})
+
+
+@login_required
+@permission_required('sales.customers')
+def edit_customer(request, pk):
+    obj = get_object_or_404(Customer, pk=pk)
+    if request.method == 'POST':
+        obj.name = request.POST['name']
+        obj.phone = request.POST.get('phone','')
+        obj.email = request.POST.get('email','')
+        obj.address = request.POST.get('address','')
+        obj.save()
+        return redirect('sales:customers')
+    return render(request, 'sales/customer_form.html', {'obj': obj, 'mode': 'edit'})
+
+@login_required
+@permission_required('sales.customers')
+@require_POST
+def delete_customer(request, pk):
+    get_object_or_404(Customer, pk=pk).delete()
+    return redirect('sales:customers')

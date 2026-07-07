@@ -1,0 +1,196 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{% if mode == 'edit' %}Edit{% else %}Input{% endif %} Data Sampling</h1>
+    <p>Form disesuaikan dengan format Excel: kolom input hanya data dasar, sedangkan ABW, Size, ADG, SR, Biomassa, FCR, Populasi, dan estimasi dihitung otomatis.</p>
+  </div>
+</div>
+
+{{ pond_meta|json_script:"pond-meta" }}
+
+<form method="post" id="samplingForm" class="sampling-excel-form">{% csrf_token %}
+  <div class="ops-form-layout">
+    <section class="cardx ops-form-card">
+      <div class="ops-section-title">
+        <i class="fa-solid fa-table-cells-large"></i>
+        <div><b>Data Utama Sampling</b><small>Kolom dasar sesuai Excel: Kolam, Tanggal, DOC, SHRIMP Berat, dan Jumlah.</small></div>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label">Tanggal Sampling</label>
+          <input class="form-control calc-input" type="date" name="date" id="date" value="{% if obj %}{{ obj.date|date:'Y-m-d' }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Kolam</label>
+          <select class="form-select calc-input" name="pond" id="pond" required>
+            {% for p in ponds %}<option value="{{p.id}}" {% if obj.pond_id == p.id %}selected{% endif %}>{{p.name}}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">DOC</label>
+          <input class="form-control calc-input" type="number" name="doc" id="doc" value="{{ obj.doc|default:0 }}" min="0">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Berat SHRIMP (gr)</label>
+          <input class="form-control calc-input" type="number" name="sample_weight_g" id="sample_weight_g" step="0.01" value="{{ obj.sample_weight_g|default:0 }}" min="0">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Jumlah SHRIMP (ekor)</label>
+          <input class="form-control calc-input" type="number" name="sample_count" id="sample_count" value="{{ obj.sample_count|default:0 }}" min="0">
+        </div>
+      </div>
+
+      <div class="ops-section-title mt-4">
+        <i class="fa-solid fa-bullseye"></i>
+        <div><b>Parameter Input Excel</b><small>Diisi dari data lapangan/pakan. Field lain akan dihitung otomatis oleh sistem.</small></div>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label">ADG Weekly Target</label>
+          <input class="form-control calc-input" type="number" name="adg_weekly_target" id="adg_weekly_target" step="0.001" value="{{ obj.adg_weekly_target|default:'0.250' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Pakan Kumulatif (Kg)</label>
+          <input class="form-control calc-input" type="number" name="cumulative_feed_kg" id="cumulative_feed_kg" step="0.01" value="{{ obj.cumulative_feed_kg|default:0 }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Tebar</label>
+          <input class="form-control calc-input" type="number" name="stocking_count" id="stocking_count" value="{{ obj.stocking_count|default:0 }}" min="0">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">F/D - Pakan Harian</label>
+          <input class="form-control calc-input" type="number" name="daily_feed_kg" id="daily_feed_kg" step="0.01" value="{{ obj.daily_feed_kg|default:0 }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">FR (%)</label>
+          <input class="form-control calc-input" type="number" name="fr_percent" id="fr_percent" step="0.01" value="{{ obj.fr_percent|default:'0.50' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Populasi Index</label>
+          <input class="form-control calc-input" type="number" name="population_index" id="population_index" value="{{ obj.population_index|default:0 }}" min="0">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Index</label>
+          <input class="form-control calc-input" type="number" name="index_score" id="index_score" step="0.001" value="{{ obj.index_score|default:'0.500' }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Estimasi Panen Manual</label>
+          <input class="form-control" name="harvest_estimation" id="harvest_estimation" value="{{ obj.harvest_estimation|default:'' }}" placeholder="Opsional, kosongkan untuk otomatis">
+        </div>
+      </div>
+
+      <div class="ops-section-title mt-4">
+        <i class="fa-solid fa-calculator"></i>
+        <div><b>Hasil Perhitungan Otomatis</b><small>Sesuai rumus pada Excel. Nilai ini tidak perlu diinput manual.</small></div>
+      </div>
+      <div class="sampling-result-grid">
+        <div class="result-box"><span>ABW Last</span><b id="out_abw_last">0.00</b><small>gr</small></div>
+        <div class="result-box primary"><span>ABW Today</span><b id="out_abw_today">0.00</b><small>gr</small></div>
+        <div class="result-box"><span>ABW Target</span><b id="out_abw_target">0.00</b><small>gr</small></div>
+        <div class="result-box"><span>Size</span><b id="out_size">0.00</b><small>pcs/kg</small></div>
+        <div class="result-box"><span>Target Size</span><b id="out_target_size">0.00</b><small>pcs/kg</small></div>
+        <div class="result-box"><span>ADG Actual</span><b id="out_adg_actual">0.000</b><small>gr/day</small></div>
+        <div class="result-box"><span>ADG Accum</span><b id="out_adg_accum">0.000</b><small>gr/day</small></div>
+        <div class="result-box"><span>SR FR</span><b id="out_sr_fr">0.00</b><small>%</small></div>
+        <div class="result-box"><span>SR Index</span><b id="out_sr_index">0.00</b><small>%</small></div>
+        <div class="result-box"><span>Biomassa FR</span><b id="out_biomass_fr">0.00</b><small>kg</small></div>
+        <div class="result-box"><span>Biomassa Index</span><b id="out_biomass_index">0.00</b><small>kg</small></div>
+        <div class="result-box"><span>FCR</span><b id="out_fcr">0.000</b><small>ratio</small></div>
+        <div class="result-box"><span>Populasi FR</span><b id="out_population_fr">0</b><small>ekor</small></div>
+        <div class="result-box"><span>Interval Sampling</span><b id="out_interval">0</b><small>hari</small></div>
+      </div>
+
+      <div class="mt-4">
+        <label class="form-label">Catatan Teknisi</label>
+        <textarea class="form-control" name="notes" rows="4" placeholder="Catatan kondisi sampling, kondisi udang, atau tindak lanjut...">{{ obj.notes|default:'' }}</textarea>
+      </div>
+
+      <div class="d-flex gap-2 mt-4 flex-wrap">
+        <button class="btn btn-primary"><i class="fa-solid fa-save"></i> Simpan Data Sampling</button>
+        <a class="btn btn-outline-secondary" href="{% url 'operations:sampling_records' %}">Batal</a>
+      </div>
+    </section>
+
+    <aside class="cardx ops-help sampling-help">
+      <h3>Mapping Rumus Excel</h3>
+      <p><b>ABW Today</b> = Berat SHRIMP / Jumlah SHRIMP.</p>
+      <p><b>Size</b> = 1000 / ABW Today.</p>
+      <p><b>ADG Actual</b> = (ABW Today - ABW Last) / interval hari.</p>
+      <p><b>ADG Accum</b> = ABW Today / DOC.</p>
+      <p><b>Biomassa FR</b> = F/D / FR × 100.</p>
+      <p><b>Populasi FR</b> = Biomassa FR × Size.</p>
+      <p><b>SR FR</b> = Populasi FR / Tebar × 100.</p>
+      <p><b>Biomassa Index</b> = Populasi Index / Size.</p>
+      <p><b>FCR</b> = Pakan Kumulatif / Biomassa FR.</p>
+      <div class="alert alert-info small mb-0"><b>Catatan:</b> ABW Last, F/D, Pakan Kumulatif, dan Tebar akan otomatis diisi dari data sebelumnya jika tersedia.</div>
+    </aside>
+  </div>
+</form>
+
+<script>
+(function(){
+  const meta = JSON.parse(document.getElementById('pond-meta').textContent || '{}');
+  const $ = id => document.getElementById(id);
+  const num = id => parseFloat(($(id)?.value || '0').toString().replace(',', '.')) || 0;
+  const set = (id, val, digits=2) => { const el = $(id); if(el) el.textContent = Number.isFinite(val) ? val.toLocaleString('id-ID', {minimumFractionDigits: digits, maximumFractionDigits: digits}) : '0'; };
+  const setInt = (id, val) => { const el = $(id); if(el) el.textContent = Number.isFinite(val) ? Math.round(val).toLocaleString('id-ID') : '0'; };
+  function daysBetween(a, b){
+    if(!a || !b) return 0;
+    const da = new Date(a+'T00:00:00'); const db = new Date(b+'T00:00:00');
+    return Math.max(Math.round((da-db)/(1000*60*60*24)), 1);
+  }
+  function applyPondDefaults(){
+    const m = meta[$('pond').value] || {};
+    if(num('doc') === 0 && m.latest_doc) $('doc').value = m.latest_doc;
+    if(num('stocking_count') === 0 && m.stocking_count) $('stocking_count').value = m.stocking_count;
+    if(num('daily_feed_kg') === 0 && m.daily_feed_kg) $('daily_feed_kg').value = m.daily_feed_kg;
+    if(num('cumulative_feed_kg') === 0 && m.cumulative_feed_kg) $('cumulative_feed_kg').value = m.cumulative_feed_kg;
+  }
+  function calc(){
+    const m = meta[$('pond').value] || {};
+    const weight = num('sample_weight_g');
+    const count = num('sample_count');
+    const doc = num('doc');
+    const adgTarget = num('adg_weekly_target');
+    const feedCum = num('cumulative_feed_kg');
+    const stocking = num('stocking_count');
+    const fd = num('daily_feed_kg');
+    const fr = num('fr_percent');
+    let popIndex = num('population_index');
+    const abwLast = parseFloat(m.last_abw || 0) || 0;
+    const interval = daysBetween($('date').value, m.last_date) || 7;
+    const abwToday = count > 0 ? weight / count : 0;
+    const abwTarget = abwLast > 0 ? abwLast + (adgTarget * interval) : 0;
+    const size = abwToday > 0 ? 1000 / abwToday : 0;
+    const targetSize = abwTarget > 0 ? 1000 / abwTarget : 0;
+    const adgActual = abwLast > 0 ? (abwToday - abwLast) / interval : 0;
+    const adgAccum = doc > 0 ? abwToday / doc : 0;
+    const biomassFR = (fd > 0 && fr > 0) ? fd / fr * 100 : 0;
+    const populationFR = biomassFR * size;
+    if(popIndex === 0) popIndex = populationFR;
+    const srFR = stocking > 0 ? populationFR / stocking * 100 : 0;
+    const biomassIndex = size > 0 ? popIndex / size : 0;
+    const srIndex = stocking > 0 ? popIndex / stocking * 100 : 0;
+    const fcr = biomassFR > 0 ? feedCum / biomassFR : 0;
+    set('out_abw_last', abwLast, 2);
+    set('out_abw_today', abwToday, 2);
+    set('out_abw_target', abwTarget, 2);
+    set('out_size', size, 2);
+    set('out_target_size', targetSize, 2);
+    set('out_adg_actual', adgActual, 3);
+    set('out_adg_accum', adgAccum, 3);
+    set('out_sr_fr', srFR, 2);
+    set('out_sr_index', srIndex, 2);
+    set('out_biomass_fr', biomassFR, 2);
+    set('out_biomass_index', biomassIndex, 2);
+    set('out_fcr', fcr, 3);
+    setInt('out_population_fr', populationFR);
+    setInt('out_interval', interval);
+  }
+  document.querySelectorAll('.calc-input').forEach(el => el.addEventListener('input', calc));
+  $('pond').addEventListener('change', () => { applyPondDefaults(); calc(); });
+  applyPondDefaults(); calc();
+})();
+</script>
+{% endblock %}

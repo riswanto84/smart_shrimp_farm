@@ -10,14 +10,15 @@ ROLE_PERMISSIONS = {
     'admin tambak': {'all'},
     'super admin': {'all'},
     'teknisi': {
-        'dashboard', 'ponds.view', 'operations.parameters', 'operations.harvests',
-        'weather.view', 'chat.view'
+        'dashboard', 'ponds.view', 'operations.production_dashboard', 'operations.daily_records',
+        'operations.anco', 'operations.sampling', 'operations.siphon', 'operations.parameters',
+        'operations.harvests', 'weather.view', 'chat.view'
     },
     'kasir': {
         'dashboard', 'sales.cashier', 'sales.invoices', 'sales.customers'
     },
     'akuntan': {
-        'dashboard', 'sales.invoices', 'finance.expenses', 'finance.profit_loss'
+        'dashboard', 'sales.invoices', 'finance.expenses', 'finance.profit_loss', 'finance.periodic_report'
     },
     'investor': {
         'dashboard', 'investor.dashboard'
@@ -28,6 +29,11 @@ MENU_DEFINITIONS = [
     {'type': 'item', 'label': 'Dashboard', 'url': '/dashboard/', 'icon': 'fa-solid fa-house', 'perm': 'dashboard'},
     {'type': 'group', 'label': 'OPERASIONAL'},
     {'type': 'item', 'label': 'Master Kolam', 'url': '/ponds/', 'icon': 'fa-solid fa-water', 'perm': 'ponds.view'},
+    {'type': 'item', 'label': 'Dashboard Produksi', 'url': '/operations/production-dashboard/', 'icon': 'fa-solid fa-chart-line', 'perm': 'operations.production_dashboard'},
+    {'type': 'item', 'label': 'Data Harian Kolam', 'url': '/operations/daily-records/', 'icon': 'fa-solid fa-clipboard-list', 'perm': 'operations.daily_records'},
+    {'type': 'item', 'label': 'Cek Anco Harian', 'url': '/operations/anco/', 'icon': 'fa-solid fa-clipboard-check', 'perm': 'operations.anco'},
+    {'type': 'item', 'label': 'Data Sampling', 'url': '/operations/sampling/', 'icon': 'fa-solid fa-weight-scale', 'perm': 'operations.sampling'},
+    {'type': 'item', 'label': 'Data Siphon', 'url': '/operations/siphon/', 'icon': 'fa-solid fa-water-ladder', 'perm': 'operations.siphon'},
     {'type': 'item', 'label': 'Parameter Harian', 'url': '/operations/parameters/', 'icon': 'fa-solid fa-flask-vial', 'perm': 'operations.parameters'},
     {'type': 'item', 'label': 'Panen', 'url': '/operations/harvests/', 'icon': 'fa-solid fa-shrimp', 'perm': 'operations.harvests'},
     {'type': 'group', 'label': 'PENJUALAN'},
@@ -37,6 +43,7 @@ MENU_DEFINITIONS = [
     {'type': 'group', 'label': 'KEUANGAN'},
     {'type': 'item', 'label': 'Pengeluaran Operasional', 'url': '/finance/expenses/', 'icon': 'fa-solid fa-wallet', 'perm': 'finance.expenses'},
     {'type': 'item', 'label': 'Laba Rugi', 'url': '/finance/profit-loss/', 'icon': 'fa-solid fa-chart-line', 'perm': 'finance.profit_loss'},
+    {'type': 'item', 'label': 'Laporan Keuangan Periodik', 'url': '/finance/periodic-report/', 'icon': 'fa-solid fa-chart-column', 'perm': 'finance.periodic_report'},
     {'type': 'group', 'label': 'LAINNYA'},
     {'type': 'item', 'label': 'Dashboard Investor', 'url': '/investor/dashboard/', 'icon': 'fa-solid fa-building-columns', 'perm': 'investor.dashboard'},
     {'type': 'item', 'label': 'Prakiraan Cuaca', 'url': '/weather/', 'icon': 'fa-solid fa-cloud-sun', 'perm': 'weather.view'},
@@ -48,7 +55,7 @@ MENU_DEFINITIONS = [
 
 BOTTOM_MENU_DEFINITIONS = [
     {'label': 'Dashboard', 'url': '/dashboard/', 'icon': 'fa-solid fa-gauge-high', 'perm': 'dashboard'},
-    {'label': 'Param', 'url': '/operations/parameters/', 'icon': 'fa-solid fa-flask', 'perm': 'operations.parameters'},
+    {'label': 'Produksi', 'url': '/operations/production-dashboard/', 'icon': 'fa-solid fa-chart-line', 'perm': 'operations.production_dashboard'},
     {'label': 'Kasir', 'url': '/sales/cashier/', 'icon': 'fa-solid fa-receipt', 'perm': 'sales.cashier'},
     {'label': 'Pelanggan', 'url': '/sales/customers/', 'icon': 'fa-solid fa-users', 'perm': 'sales.customers'},
     {'label': 'Investor', 'url': '/investor/dashboard/', 'icon': 'fa-solid fa-building-columns', 'perm': 'investor.dashboard'},
