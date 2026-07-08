@@ -11,10 +11,21 @@ except Exception:
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY','django-insecure-smart-shrimp-farm-dev')
 DEBUG = os.environ.get('DEBUG','True') == 'True'
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+    ".ngrok-free.app",
+    ".ngrok.io",
+]
+
 CSRF_TRUSTED_ORIGINS = [
-    'https://*.ngrok-free.app',
-    'https://*.ngrok.io',
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "https://*.ngrok-free.app",
+    "https://*.ngrok.io",
 ]
 INSTALLED_APPS = [
  'django.contrib.admin','django.contrib.auth','django.contrib.contenttypes','django.contrib.sessions','django.contrib.messages','django.contrib.staticfiles',
@@ -26,8 +37,15 @@ TEMPLATES = [{'BACKEND':'django.template.backends.django.DjangoTemplates','DIRS'
 WSGI_APPLICATION = 'smart_shrimp_farm.wsgi.application'
 DATABASES = {'default': {'ENGINE':'django.db.backends.sqlite3','NAME': BASE_DIR/'db.sqlite3'}}
 LANGUAGE_CODE='id-id'; TIME_ZONE='Asia/Jakarta'; USE_I18N=True; USE_TZ=True
-STATIC_URL='static/'; STATICFILES_DIRS=[BASE_DIR/'static']
-MEDIA_URL='media/'; MEDIA_ROOT=BASE_DIR/'media'
+STATIC_URL='static/'; 
+
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+
+
+STATICFILES_DIRS=[BASE_DIR/'static']
+MEDIA_URL='/media/'; 
+MEDIA_ROOT=BASE_DIR/'media'
 DEFAULT_AUTO_FIELD='django.db.models.BigAutoField'
 LOGIN_URL='/accounts/login/'; LOGIN_REDIRECT_URL='/dashboard/'; LOGOUT_REDIRECT_URL='/'
 EMAIL_BACKEND='django.core.mail.backends.console.EmailBackend'
