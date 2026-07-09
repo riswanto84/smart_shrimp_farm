@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load l10n %}
 {% block content %}
 <div class="page-head">
   <div>
@@ -36,7 +37,7 @@
           </div>
           <div class="col-md-2">
             <label class="form-label">DOC</label>
-            <input class="form-control numeric-int" name="doc" type="text" inputmode="numeric" pattern="[0-9]*" value="{{ obj.doc|default:0 }}" autocomplete="off">
+            <input class="form-control numeric-int" name="doc" type="text" inputmode="numeric" pattern="[0-9]*" value="{{ obj.doc|default:0|unlocalize }}" autocomplete="off">
             <small class="text-muted">Bilangan bulat.</small>
           </div>
           <div class="col-md-2">
@@ -45,7 +46,7 @@
           </div>
           <div class="col-md-2">
             <label class="form-label">Air Masuk (cm)</label>
-            <input class="form-control numeric-decimal" name="water_in_cm" type="text" inputmode="decimal" value="{{ obj.water_in_cm|default:'' }}" autocomplete="off">
+            <input class="form-control numeric-decimal" name="water_in_cm" type="text" inputmode="decimal" value="{{ obj.water_in_cm|default:''|unlocalize }}" autocomplete="off">
           </div>
           <div class="col-md-2">
             <label class="form-label">Cuaca</label>
@@ -56,11 +57,11 @@
           </div>
           <div class="col-md-3">
             <label class="form-label">Tinggi Air Pagi (cm)</label>
-            <input class="form-control numeric-decimal" name="water_level_morning_cm" type="text" inputmode="decimal" value="{{ obj.water_level_morning_cm|default:'' }}" autocomplete="off">
+            <input class="form-control numeric-decimal" name="water_level_morning_cm" type="text" inputmode="decimal" value="{{ obj.water_level_morning_cm|default:''|unlocalize }}" autocomplete="off">
           </div>
           <div class="col-md-3">
             <label class="form-label">Tinggi Air Sore (cm)</label>
-            <input class="form-control numeric-decimal" name="water_level_evening_cm" type="text" inputmode="decimal" value="{{ obj.water_level_evening_cm|default:'' }}" autocomplete="off">
+            <input class="form-control numeric-decimal" name="water_level_evening_cm" type="text" inputmode="decimal" value="{{ obj.water_level_evening_cm|default:''|unlocalize }}" autocomplete="off">
           </div>
         </div>
       </div>
@@ -68,21 +69,21 @@
       <div class="cardx mb-3">
         <div class="section-mini"><i class="fa-solid fa-vial-circle-check"></i><div><b>Kualitas Air</b><small>Gunakan angka sesuai tipe data. Desimal memakai titik, contoh 7.6 atau 28.5.</small></div></div>
         <div class="row g-3 mt-1">
-          <div class="col-md-3"><label class="form-label">Suhu Air (°C)</label><input class="form-control numeric-decimal" name="temperature" type="text" inputmode="decimal" value="{{ obj.temperature|default:'' }}" autocomplete="off"></div>
-          <div class="col-md-3"><label class="form-label">pH Pagi</label><input class="form-control numeric-decimal" name="ph_morning" type="text" inputmode="decimal" value="{{ obj.ph_morning|default:'' }}" autocomplete="off"></div>
-          <div class="col-md-3"><label class="form-label">pH Sore</label><input class="form-control numeric-decimal" name="ph_evening" type="text" inputmode="decimal" value="{{ obj.ph_evening|default:'' }}" autocomplete="off"></div>
-          <div class="col-md-3"><label class="form-label">Salinitas (ppt)</label><input class="form-control numeric-decimal" name="salinity" type="text" inputmode="decimal" value="{{ obj.salinity|default:'' }}" autocomplete="off"></div>
-          <div class="col-md-3"><label class="form-label">DO Pagi</label><input class="form-control numeric-decimal" name="do_morning" type="text" inputmode="decimal" value="{{ obj.do_morning|default:'' }}" autocomplete="off"></div>
-          <div class="col-md-3"><label class="form-label">DO Malam</label><input class="form-control numeric-decimal" name="do_night" type="text" inputmode="decimal" value="{{ obj.do_night|default:'' }}" autocomplete="off"></div>
-          <div class="col-md-3"><label class="form-label">Alkalinitas</label><input class="form-control numeric-decimal" name="alkalinity" type="text" inputmode="decimal" value="{{ obj.alkalinity|default:'' }}" autocomplete="off"></div>
+          <div class="col-md-3"><label class="form-label">Suhu Air (°C)</label><input class="form-control numeric-decimal" name="temperature" type="text" inputmode="decimal" value="{{ obj.temperature|default:''|unlocalize }}" autocomplete="off"></div>
+          <div class="col-md-3"><label class="form-label">pH Pagi</label><input class="form-control numeric-decimal" name="ph_morning" type="text" inputmode="decimal" value="{{ obj.ph_morning|default:''|unlocalize }}" autocomplete="off"></div>
+          <div class="col-md-3"><label class="form-label">pH Sore</label><input class="form-control numeric-decimal" name="ph_evening" type="text" inputmode="decimal" value="{{ obj.ph_evening|default:''|unlocalize }}" autocomplete="off"></div>
+          <div class="col-md-3"><label class="form-label">Salinitas (ppt)</label><input class="form-control numeric-decimal" name="salinity" type="text" inputmode="decimal" value="{{ obj.salinity|default:''|unlocalize }}" autocomplete="off"></div>
+          <div class="col-md-3"><label class="form-label">DO Pagi</label><input class="form-control numeric-decimal" name="do_morning" type="text" inputmode="decimal" value="{{ obj.do_morning|default:''|unlocalize }}" autocomplete="off"></div>
+          <div class="col-md-3"><label class="form-label">DO Malam</label><input class="form-control numeric-decimal" name="do_night" type="text" inputmode="decimal" value="{{ obj.do_night|default:''|unlocalize }}" autocomplete="off"></div>
+          <div class="col-md-3"><label class="form-label">Alkalinitas</label><input class="form-control numeric-decimal" name="alkalinity" type="text" inputmode="decimal" value="{{ obj.alkalinity|default:''|unlocalize }}" autocomplete="off"></div>
         </div>
       </div>
 
       <div class="cardx mb-3">
         <div class="section-mini"><i class="fa-solid fa-eye"></i><div><b>Visual Air Pagi & Sore</b><small>Kecerahan dan warna air dicatat terpisah antara pagi dan sore.</small></div></div>
         <div class="row g-3 mt-1">
-          <div class="col-md-3"><label class="form-label">Kecerahan Pagi (cm)</label><input class="form-control numeric-decimal" name="transparency_morning" type="text" inputmode="decimal" value="{{ obj.transparency_morning|default:'' }}" autocomplete="off"></div>
-          <div class="col-md-3"><label class="form-label">Kecerahan Sore (cm)</label><input class="form-control numeric-decimal" name="transparency_evening" type="text" inputmode="decimal" value="{{ obj.transparency_evening|default:'' }}" autocomplete="off"></div>
+          <div class="col-md-3"><label class="form-label">Kecerahan Pagi (cm)</label><input class="form-control numeric-decimal" name="transparency_morning" type="text" inputmode="decimal" value="{{ obj.transparency_morning|default:''|unlocalize }}" autocomplete="off"></div>
+          <div class="col-md-3"><label class="form-label">Kecerahan Sore (cm)</label><input class="form-control numeric-decimal" name="transparency_evening" type="text" inputmode="decimal" value="{{ obj.transparency_evening|default:''|unlocalize }}" autocomplete="off"></div>
           <div class="col-md-3"><label class="form-label">Warna Air Pagi</label><input class="form-control" name="water_color_morning" maxlength="80" value="{{ obj.water_color_morning|default:'' }}"></div>
           <div class="col-md-3"><label class="form-label">Warna Air Sore</label><input class="form-control" name="water_color_evening" maxlength="80" value="{{ obj.water_color_evening|default:'' }}"></div>
         </div>
@@ -91,8 +92,8 @@
       <div class="cardx mb-3">
         <div class="section-mini"><i class="fa-solid fa-clipboard-list"></i><div><b>Operasional & Catatan</b><small>Pakan harian dalam kg, mortalitas, dan catatan teknisi.</small></div></div>
         <div class="row g-3 mt-1">
-          <div class="col-md-4"><label class="form-label">Pakan Harian (kg)</label><input class="form-control numeric-decimal" name="feed_kg" type="text" inputmode="decimal" value="{{ obj.feed_kg|default:0 }}" autocomplete="off"></div>
-          <div class="col-md-4"><label class="form-label">Mortalitas</label><input class="form-control numeric-int" name="mortality" type="text" inputmode="numeric" pattern="[0-9]*" value="{{ obj.mortality|default:0 }}" autocomplete="off"></div>
+          <div class="col-md-4"><label class="form-label">Pakan Harian (kg)</label><input class="form-control numeric-decimal" name="feed_kg" type="text" inputmode="decimal" value="{{ obj.feed_kg|default:0|unlocalize }}" autocomplete="off"></div>
+          <div class="col-md-4"><label class="form-label">Mortalitas</label><input class="form-control numeric-int" name="mortality" type="text" inputmode="numeric" pattern="[0-9]*" value="{{ obj.mortality|default:0|unlocalize }}" autocomplete="off"></div>
           <div class="col-12"><label class="form-label">Catatan</label><textarea class="form-control" name="notes" rows="4">{{ obj.notes|default:'' }}</textarea></div>
         </div>
       </div>

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load l10n %}
 {% block content %}
 <div class="page-head">
   <div>
@@ -33,18 +34,18 @@
       </div>
       <div class="col-md-4">
         <label class="form-label">DOC</label>
-        <input class="form-control numeric-int" type="text" inputmode="numeric" name="doc" value="{{ obj.doc|default:0 }}">
+        <input class="form-control numeric-int" type="text" inputmode="numeric" name="doc" value="{{ obj.doc|default:0|unlocalize }}">
         <small class="text-muted">Bilangan bulat, tanpa koma/desimal.</small>
       </div>
 
       <div class="ops-section-title mt-2"><i class="fa-solid fa-shrimp"></i><div><b>Jumlah Siphon Harian</b><small>Isi hanya angka bulat. Sistem menghitung total harian dan akumulasi otomatis.</small></div></div>
       <div class="col-md-6">
         <label class="form-label">Udang Mati</label>
-        <input class="form-control numeric-int" type="text" inputmode="numeric" name="dead_count" value="{{ obj.dead_count|default:0 }}">
+        <input class="form-control numeric-int" type="text" inputmode="numeric" name="dead_count" value="{{ obj.dead_count|default:0|unlocalize }}">
       </div>
       <div class="col-md-6">
         <label class="form-label">Udang Hidup Ikut Tersiphon</label>
-        <input class="form-control numeric-int" type="text" inputmode="numeric" name="live_count" value="{{ obj.live_count|default:0 }}">
+        <input class="form-control numeric-int" type="text" inputmode="numeric" name="live_count" value="{{ obj.live_count|default:0|unlocalize }}">
       </div>
       <div class="col-12">
         <label class="form-label">Catatan</label>

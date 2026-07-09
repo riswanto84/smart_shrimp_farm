@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load l10n %}
 {% block content %}
 <div class="page-head">
   <div>
@@ -31,15 +32,15 @@
         </div>
         <div class="col-md-2">
           <label class="form-label">DOC</label>
-          <input class="form-control calc-input numeric-int" type="text" inputmode="numeric" name="doc" id="doc" value="{{ obj.doc|default:0 }}">
+          <input class="form-control calc-input numeric-int" type="text" inputmode="numeric" name="doc" id="doc" value="{{ obj.doc|default:0|unlocalize }}">
         </div>
         <div class="col-md-2">
           <label class="form-label">Berat SHRIMP (gr)</label>
-          <input class="form-control calc-input numeric-decimal" type="text" inputmode="decimal" name="sample_weight_g" id="sample_weight_g" value="{{ obj.sample_weight_g|default:0 }}">
+          <input class="form-control calc-input numeric-decimal" type="text" inputmode="decimal" name="sample_weight_g" id="sample_weight_g" value="{{ obj.sample_weight_g|default:0|unlocalize }}">
         </div>
         <div class="col-md-2">
           <label class="form-label">Jumlah SHRIMP (ekor)</label>
-          <input class="form-control calc-input numeric-int" type="text" inputmode="numeric" name="sample_count" id="sample_count" value="{{ obj.sample_count|default:0 }}">
+          <input class="form-control calc-input numeric-int" type="text" inputmode="numeric" name="sample_count" id="sample_count" value="{{ obj.sample_count|default:0|unlocalize }}">
         </div>
       </div>
 
@@ -50,31 +51,31 @@
       <div class="row g-3">
         <div class="col-md-3">
           <label class="form-label">ADG Weekly Target</label>
-          <input class="form-control calc-input numeric-decimal" type="text" inputmode="decimal" name="adg_weekly_target" id="adg_weekly_target" value="{{ obj.adg_weekly_target|default:'0.250' }}">
+          <input class="form-control calc-input numeric-decimal" type="text" inputmode="decimal" name="adg_weekly_target" id="adg_weekly_target" value="{{ obj.adg_weekly_target|default:'0.250'|unlocalize }}">
         </div>
         <div class="col-md-3">
           <label class="form-label">Pakan Kumulatif (Kg)</label>
-          <input class="form-control calc-input numeric-decimal" type="text" inputmode="decimal" name="cumulative_feed_kg" id="cumulative_feed_kg" value="{{ obj.cumulative_feed_kg|default:0 }}">
+          <input class="form-control calc-input numeric-decimal" type="text" inputmode="decimal" name="cumulative_feed_kg" id="cumulative_feed_kg" value="{{ obj.cumulative_feed_kg|default:0|unlocalize }}">
         </div>
         <div class="col-md-3">
           <label class="form-label">Tebar</label>
-          <input class="form-control calc-input numeric-int" type="text" inputmode="numeric" name="stocking_count" id="stocking_count" value="{{ obj.stocking_count|default:0 }}">
+          <input class="form-control calc-input numeric-int" type="text" inputmode="numeric" name="stocking_count" id="stocking_count" value="{{ obj.stocking_count|default:0|unlocalize }}">
         </div>
         <div class="col-md-3">
           <label class="form-label">F/D - Pakan Harian</label>
-          <input class="form-control calc-input numeric-decimal" type="text" inputmode="decimal" name="daily_feed_kg" id="daily_feed_kg" value="{{ obj.daily_feed_kg|default:0 }}">
+          <input class="form-control calc-input numeric-decimal" type="text" inputmode="decimal" name="daily_feed_kg" id="daily_feed_kg" value="{{ obj.daily_feed_kg|default:0|unlocalize }}">
         </div>
         <div class="col-md-3">
           <label class="form-label">FR (%)</label>
-          <input class="form-control calc-input numeric-decimal" type="text" inputmode="decimal" name="fr_percent" id="fr_percent" value="{{ obj.fr_percent|default:'0.50' }}">
+          <input class="form-control calc-input numeric-decimal" type="text" inputmode="decimal" name="fr_percent" id="fr_percent" value="{{ obj.fr_percent|default:'0.50'|unlocalize }}">
         </div>
         <div class="col-md-3">
           <label class="form-label">Populasi Index</label>
-          <input class="form-control calc-input numeric-int" type="text" inputmode="numeric" name="population_index" id="population_index" value="{{ obj.population_index|default:0 }}">
+          <input class="form-control calc-input numeric-int" type="text" inputmode="numeric" name="population_index" id="population_index" value="{{ obj.population_index|default:0|unlocalize }}">
         </div>
         <div class="col-md-3">
           <label class="form-label">Index</label>
-          <input class="form-control calc-input numeric-decimal" type="text" inputmode="decimal" name="index_score" id="index_score" value="{{ obj.index_score|default:'0.500' }}">
+          <input class="form-control calc-input numeric-decimal" type="text" inputmode="decimal" name="index_score" id="index_score" value="{{ obj.index_score|default:'0.500'|unlocalize }}">
         </div>
         <div class="col-md-3">
           <label class="form-label">Estimasi Panen Manual</label>

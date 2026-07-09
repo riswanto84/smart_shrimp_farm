@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load l10n %}
 {% block content %}
 <div class="page-head">
   <div>
@@ -44,7 +45,7 @@
       </div>
       <div class="col-md-6">
         <label class="form-label">Total Kg <span class="text-danger">*</span></label>
-        <input class="form-control numeric-decimal" type="text" inputmode="decimal" name="total_kg" value="{{ obj.total_kg|default:'' }}" required>
+        <input class="form-control numeric-decimal" type="text" inputmode="decimal" name="total_kg" value="{{ obj.total_kg|default:''|unlocalize }}" required>
         <small class="text-muted">Bisa pakai titik atau koma desimal. Sistem otomatis menormalkan nilainya.</small>
       </div>
       <div class="col-12">
