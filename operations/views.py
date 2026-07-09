@@ -152,23 +152,173 @@ def _parameter_ai_prompt(obj):
     )
 
 
+
+
+def _anco_payload(request):
+    errors = {}
+    valid_statuses = [choice[0] for choice in AncoCheck.STATUS_CHOICES]
+    data = {
+        'pond_id': request.POST.get('pond'),
+        'date': request.POST.get('date'),
+        'doc': _parse_int_input(request.POST.get('doc'), 'DOC', errors, min_value=0),
+        'feed_code': request.POST.get('feed_code', '').strip(),
+        'daily_feed_kg': _parse_decimal_input(request.POST.get('daily_feed_kg') or '0', 'P/H - Pakan Harian', errors, min_value=0) or Decimal('0'),
+        'water_in_cm': _parse_decimal_input(request.POST.get('water_in_cm'), 'Air Masuk', errors, min_value=0),
+        'weather': request.POST.get('weather', '').strip(),
+        'treatment': request.POST.get('treatment', '').strip(),
+        'anco1_morning': request.POST.get('anco1_morning', '-'),
+        'anco2_morning': request.POST.get('anco2_morning', '-'),
+        'anco1_noon': request.POST.get('anco1_noon', '-'),
+        'anco2_noon': request.POST.get('anco2_noon', '-'),
+        'anco1_evening': request.POST.get('anco1_evening', '-'),
+        'anco2_evening': request.POST.get('anco2_evening', '-'),
+        'notes': request.POST.get('notes', '').strip(),
+    }
+    if not data['pond_id']:
+        errors['Kolam'] = 'Kolam wajib dipilih.'
+    if not data['date']:
+        errors['Tanggal'] = 'Tanggal wajib diisi.'
+    if data.get('feed_code') and len(data['feed_code']) > 80:
+        errors['Kode Pakan'] = 'Kode pakan maksimal 80 karakter.'
+    if data.get('weather') and data['weather'] not in [choice[0] for choice in DailyPondRecord.WEATHER_CHOICES]:
+        errors['Cuaca'] = 'Cuaca harus dipilih dari daftar yang tersedia.'
+    for key in ['anco1_morning','anco2_morning','anco1_noon','anco2_noon','anco1_evening','anco2_evening']:
+        if data[key] not in valid_statuses:
+            errors[key] = 'Status anco harus H, S, SS, atau Tidak Dicek.'
+    return data, errors
+
+
+def _daily_record_payload(request):
+    errors = {}
+    data = {
+        'pond_id': request.POST.get('pond'),
+        'date': request.POST.get('date'),
+        'doc': _parse_int_input(request.POST.get('doc') or '0', 'DOC', errors, min_value=0),
+        'feed_code': request.POST.get('feed_code', '').strip(),
+        'daily_feed_kg': _parse_decimal_input(request.POST.get('daily_feed_kg') or '0', 'Pakan Harian', errors, min_value=0) or Decimal('0'),
+        'water_in_cm': _parse_decimal_input(request.POST.get('water_in_cm'), 'Air Masuk', errors, min_value=0),
+        'weather': request.POST.get('weather', '').strip(),
+        'treatment': request.POST.get('treatment', '').strip(),
+        'notes': request.POST.get('notes', '').strip(),
+    }
+    if not data['pond_id']:
+        errors['Kolam'] = 'Kolam wajib dipilih.'
+    if not data['date']:
+        errors['Tanggal'] = 'Tanggal wajib diisi.'
+    if data.get('feed_code') and len(data['feed_code']) > 80:
+        errors['Kode Pakan'] = 'Kode pakan maksimal 80 karakter.'
+    if data.get('weather') and data['weather'] not in [choice[0] for choice in DailyPondRecord.WEATHER_CHOICES]:
+        errors['Cuaca'] = 'Cuaca harus dipilih dari daftar yang tersedia.'
+    return data, errors
+
+
+def _siphon_payload(request):
+    errors = {}
+    data = {
+        'pond_id': request.POST.get('pond'),
+        'date': request.POST.get('date'),
+        'doc': _parse_int_input(request.POST.get('doc') or '0', 'DOC', errors, min_value=0),
+        'dead_count': _parse_int_input(request.POST.get('dead_count') or '0', 'Udang Mati', errors, min_value=0),
+        'live_count': _parse_int_input(request.POST.get('live_count') or '0', 'Udang Hidup Ikut Tersiphon', errors, min_value=0),
+        'notes': request.POST.get('notes', '').strip(),
+    }
+    if not data['pond_id']:
+        errors['Kolam'] = 'Kolam wajib dipilih.'
+    if not data['date']:
+        errors['Tanggal'] = 'Tanggal wajib diisi.'
+    return data, errors
+
+
+def _harvest_payload(request):
+    errors = {}
+    data = {
+        'pond_id': request.POST.get('pond'),
+        'date': request.POST.get('date'),
+        'harvest_type': request.POST.get('harvest_type', 'Parsial').strip() or 'Parsial',
+        'size_text': request.POST.get('size_text', '').strip(),
+        'total_kg': _parse_decimal_input(request.POST.get('total_kg'), 'Total Kg', errors, required=True, min_value=0),
+        'notes': request.POST.get('notes', '').strip(),
+    }
+    if not data['pond_id']:
+        errors['Kolam'] = 'Kolam wajib dipilih.'
+    if not data['date']:
+        errors['Tanggal'] = 'Tanggal wajib diisi.'
+    if data['harvest_type'] not in ['Parsial', 'Total']:
+        errors['Jenis Panen'] = 'Jenis panen harus Parsial atau Total.'
+    if not data['size_text']:
+        errors['Size Udang'] = 'Size udang wajib diisi.'
+    if data['size_text'] and len(data['size_text']) > 50:
+        errors['Size Udang'] = 'Size udang maksimal 50 karakter.'
+    if data['total_kg'] is None:
+        data['total_kg'] = Decimal('0')
+    return data, errors
+
+
+def _parameter_risk(obj):
+    risk = []
+    try:
+        if obj.do_morning is not None and obj.do_morning < Decimal('4'):
+            risk.append('DO pagi rendah')
+        if obj.do_night is not None and obj.do_night < Decimal('4'):
+            risk.append('DO malam rendah')
+        if obj.ph_morning is not None and (obj.ph_morning < Decimal('7.2') or obj.ph_morning > Decimal('8.5')):
+            risk.append('pH pagi di luar ideal')
+        if obj.ph_evening is not None and (obj.ph_evening < Decimal('7.2') or obj.ph_evening > Decimal('8.8')):
+            risk.append('pH sore di luar ideal')
+        if obj.salinity is not None and (obj.salinity < Decimal('10') or obj.salinity > Decimal('35')):
+            risk.append('Salinitas perlu dicek')
+        if obj.mortality and obj.mortality > 20:
+            risk.append('Mortalitas meningkat')
+    except Exception:
+        pass
+    if len(risk) >= 2:
+        return 'Waspada', ', '.join(risk)
+    if len(risk) == 1:
+        return 'Perhatian', risk[0]
+    return 'Baik', 'Parameter utama dalam rentang aman.'
+
 def _sampling_pond_meta():
     today = timezone.localdate()
     meta = {}
     for pond in Pond.objects.all():
         latest_sample = SamplingRecord.objects.filter(pond=pond).order_by('-date').first()
         stocking = Stocking.objects.filter(pond=pond).order_by('-date').first()
-        latest_daily = DailyParameter.objects.filter(pond=pond).order_by('-date', '-created_at').first()
-        feed_total = DailyParameter.objects.filter(pond=pond, date__lte=today).aggregate(s=Sum('feed_kg'))['s'] or Decimal('0')
+        latest_daily = DailyPondRecord.objects.filter(pond=pond).order_by('-date').first()
+        feed_total = DailyPondRecord.objects.filter(pond=pond, date__lte=today).aggregate(s=Sum('daily_feed_kg'))['s'] or Decimal('0')
         meta[str(pond.id)] = {
             'last_abw': _float(latest_sample.abw_g if latest_sample else 0),
             'last_date': latest_sample.date.isoformat() if latest_sample else '',
             'stocking_count': int(stocking.seed_count) if stocking else 0,
-            'daily_feed_kg': _float(latest_daily.feed_kg if latest_daily else 0),
+            'daily_feed_kg': _float(latest_daily.daily_feed_kg if latest_daily else 0),
             'cumulative_feed_kg': _float(feed_total),
             'latest_doc': int(latest_daily.doc) if latest_daily else int(latest_sample.doc) if latest_sample else 0,
         }
     return meta
+
+
+def _sampling_payload(request):
+    errors = {}
+    data = {
+        'pond_id': request.POST.get('pond'),
+        'date': request.POST.get('date'),
+        'doc': _parse_int_input(request.POST.get('doc') or '0', 'DOC', errors, min_value=0),
+        'sample_weight_g': _parse_decimal_input(request.POST.get('sample_weight_g') or '0', 'Berat SHRIMP', errors, min_value=0) or Decimal('0'),
+        'sample_count': _parse_int_input(request.POST.get('sample_count') or '0', 'Jumlah SHRIMP', errors, min_value=0),
+        'adg_weekly_target': _parse_decimal_input(request.POST.get('adg_weekly_target') or '0', 'ADG Weekly Target', errors, min_value=0) or Decimal('0'),
+        'cumulative_feed_kg': _parse_decimal_input(request.POST.get('cumulative_feed_kg') or '0', 'Pakan Kumulatif', errors, min_value=0) or Decimal('0'),
+        'stocking_count': _parse_int_input(request.POST.get('stocking_count') or '0', 'Tebar', errors, min_value=0),
+        'daily_feed_kg': _parse_decimal_input(request.POST.get('daily_feed_kg') or '0', 'F/D - Pakan Harian', errors, min_value=0) or Decimal('0'),
+        'fr_percent': _parse_decimal_input(request.POST.get('fr_percent') or '0', 'FR (%)', errors, min_value=0) or Decimal('0'),
+        'population_index': _parse_int_input(request.POST.get('population_index') or '0', 'Populasi Index', errors, min_value=0),
+        'index_score': _parse_decimal_input(request.POST.get('index_score') or '0', 'Index', errors, min_value=0) or Decimal('0'),
+        'harvest_estimation': request.POST.get('harvest_estimation', '').strip(),
+        'notes': request.POST.get('notes', '').strip(),
+    }
+    if not data['pond_id']:
+        errors['Kolam'] = 'Kolam wajib dipilih.'
+    if not data['date']:
+        errors['Tanggal'] = 'Tanggal sampling wajib diisi.'
+    return data, errors
 
 
 @login_required
@@ -176,8 +326,8 @@ def _sampling_pond_meta():
 def production_dashboard(request):
     ponds = Pond.objects.all().order_by('name')
     today = timezone.localdate()
-    daily_today = DailyParameter.objects.filter(date=today)
-    feed_today = daily_today.aggregate(s=Sum('feed_kg'))['s'] or Decimal('0')
+    daily_today = DailyPondRecord.objects.filter(date=today)
+    feed_today = daily_today.aggregate(s=Sum('daily_feed_kg'))['s'] or Decimal('0')
     latest_sampling = SamplingRecord.objects.select_related('pond').order_by('pond_id', '-date')
     sampling_map = {}
     for s in latest_sampling:
@@ -195,7 +345,7 @@ def production_dashboard(request):
         sample = sampling_map.get(p.id)
         siphon = SiphonRecord.objects.filter(pond=p).order_by('-date').first()
         anco = AncoCheck.objects.filter(pond=p).order_by('-date').first()
-        daily = DailyParameter.objects.filter(pond=p).order_by('-date', '-created_at').first()
+        daily = DailyPondRecord.objects.filter(pond=p).order_by('-date').first()
         pond_cards.append({'pond': p, 'sample': sample, 'siphon': siphon, 'anco': anco, 'daily': daily})
 
     context = {
@@ -248,86 +398,36 @@ def _parameter_rows(items):
 @login_required
 @permission_required('operations.parameter_dashboard')
 def parameter_dashboard(request):
-    """Dashboard manajemen parameter harian kolam.
-    Menggantikan menu Data Harian Kolam agar operasional harian terpusat di Parameter Harian.
-    """
-    ponds = Pond.objects.all().order_by('name')
     items, date_from, date_to = _parameter_queryset(request)
     today = timezone.localdate()
-    today_items = DailyParameter.objects.select_related('pond').filter(date=today)
-    latest_items = DailyParameter.objects.select_related('pond').order_by('pond_id', '-date', '-created_at')
-    latest_by_pond = {}
-    for row in latest_items:
-        if row.pond_id not in latest_by_pond:
-            latest_by_pond[row.pond_id] = row
+    latest_qs = DailyParameter.objects.select_related('pond').order_by('pond_id', '-date', '-id')
+    latest_map = {}
+    for obj in latest_qs:
+        if obj.pond_id not in latest_map:
+            latest_map[obj.pond_id] = obj
+    latest_items = list(latest_map.values())
+    ponds = Pond.objects.all().order_by('name')
+    input_today = DailyParameter.objects.filter(date=today).values('pond_id').distinct().count()
     total_ponds = ponds.count()
-    input_today = today_items.values('pond_id').distinct().count()
-    missing_today = max(total_ponds - input_today, 0)
-    total_feed = items.aggregate(s=Sum('feed_kg'))['s'] or Decimal('0')
-    total_water_in = items.aggregate(s=Sum('water_in_cm'))['s'] or Decimal('0')
-    avg_ph_morning = items.aggregate(a=Avg('ph_morning'))['a'] or 0
-    avg_ph_evening = items.aggregate(a=Avg('ph_evening'))['a'] or 0
-    avg_do_morning = items.aggregate(a=Avg('do_morning'))['a'] or 0
-    avg_do_night = items.aggregate(a=Avg('do_night'))['a'] or 0
-    avg_salinity = items.aggregate(a=Avg('salinity'))['a'] or 0
-    avg_transparency_morning = items.aggregate(a=Avg('transparency_morning'))['a'] or 0
-    avg_transparency_evening = items.aggregate(a=Avg('transparency_evening'))['a'] or 0
-
-    pond_status = []
-    risk_count = 0
-    for p in ponds:
-        obj = latest_by_pond.get(p.id)
-        status = 'Belum ada data'
-        risk = 'muted'
-        notes = 'Parameter belum tercatat.'
-        if obj:
-            risk_flags = []
-            if obj.do_morning is not None and obj.do_morning < Decimal('4'):
-                risk_flags.append('DO pagi rendah')
-            if obj.do_night is not None and obj.do_night < Decimal('4'):
-                risk_flags.append('DO malam rendah')
-            if obj.ph_morning is not None and (obj.ph_morning < Decimal('7.2') or obj.ph_morning > Decimal('8.5')):
-                risk_flags.append('pH pagi di luar rentang')
-            if obj.ph_evening is not None and (obj.ph_evening < Decimal('7.2') or obj.ph_evening > Decimal('8.7')):
-                risk_flags.append('pH sore di luar rentang')
-            if obj.mortality and obj.mortality > 0:
-                risk_flags.append('ada mortalitas')
-            if risk_flags:
-                status = 'Perlu Perhatian'
-                risk = 'warning'
-                risk_count += 1
-                notes = ', '.join(risk_flags[:3])
-            else:
-                status = 'Stabil'
-                risk = 'success'
-                notes = 'Parameter terakhir relatif aman.'
-        pond_status.append({'pond': p, 'obj': obj, 'status': status, 'risk': risk, 'notes': notes})
-
-    weather_summary = today_items.values('weather').annotate(c=Count('id')).order_by('-c')[:5]
-    recent = paginate_queryset(request, items, per_page=8)
-    ctx = {
-        'ponds': ponds,
-        'items': recent,
-        'page_obj': recent,
-        'date_from': date_from,
-        'date_to': date_to,
-        'total_ponds': total_ponds,
-        'input_today': input_today,
-        'missing_today': missing_today,
-        'total_feed': total_feed,
-        'total_water_in': total_water_in,
-        'avg_ph_morning': avg_ph_morning,
-        'avg_ph_evening': avg_ph_evening,
-        'avg_do_morning': avg_do_morning,
-        'avg_do_night': avg_do_night,
-        'avg_salinity': avg_salinity,
-        'avg_transparency_morning': avg_transparency_morning,
-        'avg_transparency_evening': avg_transparency_evening,
-        'risk_count': risk_count,
-        'pond_status': pond_status,
-        'weather_summary': weather_summary,
+    not_input_count = max(total_ponds - input_today, 0)
+    avg = items.aggregate(
+        ph_pagi=Avg('ph_morning'), ph_sore=Avg('ph_evening'),
+        do_pagi=Avg('do_morning'), do_malam=Avg('do_night'),
+        salinity=Avg('salinity'), transparency=Avg('transparency_morning'),
+        feed=Sum('feed_kg'), water_in=Sum('water_in_cm'), mortality=Sum('mortality')
+    )
+    weather_rows = items.values('weather').annotate(total=Count('id')).order_by('-total')[:5]
+    risk_cards = []
+    for obj in latest_items[:12]:
+        status, reason = _parameter_risk(obj)
+        risk_cards.append({'obj': obj, 'status': status, 'reason': reason})
+    context = {
+        'items': items[:20], 'ponds': ponds, 'date_from': date_from, 'date_to': date_to,
+        'input_today': input_today, 'total_ponds': total_ponds, 'not_input_count': not_input_count,
+        'avg': avg, 'weather_rows': weather_rows, 'risk_cards': risk_cards,
     }
-    return render(request, 'operations/parameter_dashboard.html', ctx)
+    return render(request, 'operations/parameter_dashboard.html', context)
+
 
 @login_required
 @permission_required('operations.parameters')
@@ -398,14 +498,6 @@ def add_parameter(request):
 
 
 # ---------------------------------------------------------------------
-# Fitur Data Harian Kolam dinonaktifkan. Data harian dipusatkan di Parameter Harian.
-# ---------------------------------------------------------------------
-@login_required
-def daily_records_redirect(request):
-    messages.info(request, 'Fitur Data Harian Kolam sudah digabung ke Parameter Harian. Gunakan Dashboard Parameter Harian Kolam.')
-    return redirect('operations:parameter_dashboard')
-
-# ---------------------------------------------------------------------
 # Operational Core Modules requested for Smart Shrimp Farm.
 # ---------------------------------------------------------------------
 def _daily_rows(items):
@@ -427,17 +519,24 @@ def daily_records(request):
 def add_daily_record(request):
     ponds = Pond.objects.all().order_by('name')
     if request.method == 'POST':
+        payload, errors = _daily_record_payload(request)
+        if errors:
+            for msg in errors.values():
+                messages.error(request, msg)
+            return render(request, 'operations/daily_record_form.html', {
+                'ponds': ponds, 'weather_choices': DailyPondRecord.WEATHER_CHOICES, 'obj': payload, 'errors': errors
+            })
         DailyPondRecord.objects.update_or_create(
-            pond_id=request.POST['pond'], date=request.POST['date'],
+            pond_id=payload['pond_id'], date=payload['date'],
             defaults={
                 'technician': request.user,
-                'doc': request.POST.get('doc') or 0,
-                'feed_code': request.POST.get('feed_code',''),
-                'daily_feed_kg': request.POST.get('daily_feed_kg') or 0,
-                'water_in_cm': request.POST.get('water_in_cm') or None,
-                'weather': request.POST.get('weather',''),
-                'treatment': request.POST.get('treatment',''),
-                'notes': request.POST.get('notes',''),
+                'doc': payload['doc'],
+                'feed_code': payload['feed_code'],
+                'daily_feed_kg': payload['daily_feed_kg'],
+                'water_in_cm': payload['water_in_cm'],
+                'weather': payload['weather'],
+                'treatment': payload['treatment'],
+                'notes': payload['notes'],
             }
         )
         messages.success(request, 'Data harian kolam berhasil disimpan.')
@@ -452,41 +551,6 @@ def export_daily_records_excel(request):
     items, date_from, date_to, pond = _apply_common_filters(request, items)
     return export_excel('laporan_data_harian_kolam', 'Laporan Data Harian Kolam', f'Periode: {format_date_range(date_from, date_to)}', ['Tanggal','Kolam','DOC','Kode Pakan','Pakan Kg','Air Masuk','Cuaca','Treatment','Teknisi'], _daily_rows(items))
 
-
-
-
-def _anco_payload(request):
-    errors = {}
-    valid_status = {c[0] for c in AncoCheck.STATUS_CHOICES}
-    data = {
-        'pond_id': request.POST.get('pond'),
-        'date': request.POST.get('date'),
-        'doc': _parse_int_input(request.POST.get('doc'), 'DOC', errors, min_value=0),
-        'feed_code': request.POST.get('feed_code','').strip(),
-        'daily_feed_kg': _parse_decimal_input(request.POST.get('daily_feed_kg') or '0', 'P/H Pakan Harian', errors, min_value=0) or Decimal('0'),
-        'water_in_cm': _parse_decimal_input(request.POST.get('water_in_cm'), 'Air Masuk', errors, min_value=0),
-        'weather': request.POST.get('weather','').strip(),
-        'treatment': request.POST.get('treatment','').strip(),
-        'anco1_morning': request.POST.get('anco1_morning','-'),
-        'anco2_morning': request.POST.get('anco2_morning','-'),
-        'anco1_noon': request.POST.get('anco1_noon','-'),
-        'anco2_noon': request.POST.get('anco2_noon','-'),
-        'anco1_evening': request.POST.get('anco1_evening','-'),
-        'anco2_evening': request.POST.get('anco2_evening','-'),
-        'notes': request.POST.get('notes','').strip(),
-    }
-    if not data['pond_id']:
-        errors['Kolam'] = 'Kolam wajib dipilih.'
-    if not data['date']:
-        errors['Tanggal'] = 'Tanggal wajib diisi.'
-    if data.get('feed_code') and len(data['feed_code']) > 80:
-        errors['Kode Pakan'] = 'Kode pakan maksimal 80 karakter.'
-    if data.get('weather') and data['weather'] not in [c[0] for c in DailyParameter.WEATHER_CHOICES]:
-        errors['Cuaca'] = 'Cuaca harus dipilih dari daftar.'
-    for key in ['anco1_morning','anco2_morning','anco1_noon','anco2_noon','anco1_evening','anco2_evening']:
-        if data[key] not in valid_status:
-            errors[key] = 'Status anco harus H, S, SS, atau Tidak Dicek.'
-    return data, errors
 
 @login_required
 @permission_required('operations.anco')
@@ -507,7 +571,10 @@ def add_anco_check(request):
         if errors:
             for msg in errors.values():
                 messages.error(request, msg)
-            return render(request, 'operations/anco_form.html', {'ponds': ponds, 'weather_choices': DailyParameter.WEATHER_CHOICES, 'status_choices': AncoCheck.STATUS_CHOICES, 'obj': payload, 'errors': errors})
+            return render(request, 'operations/anco_form.html', {
+                'ponds': ponds, 'status_choices': AncoCheck.STATUS_CHOICES,
+                'weather_choices': DailyPondRecord.WEATHER_CHOICES, 'obj': payload, 'errors': errors, 'mode': 'add'
+            })
         AncoCheck.objects.update_or_create(
             pond_id=payload['pond_id'], date=payload['date'],
             defaults={
@@ -527,9 +594,11 @@ def add_anco_check(request):
                 'notes': payload['notes'],
             }
         )
-        messages.success(request, 'Cek anco berhasil disimpan dan dianalisa otomatis.')
+        messages.success(request, 'Cek anco harian berhasil disimpan sesuai format tabel lapangan.')
         return redirect('operations:anco_checks')
-    return render(request, 'operations/anco_form.html', {'ponds': ponds, 'weather_choices': DailyParameter.WEATHER_CHOICES, 'status_choices': AncoCheck.STATUS_CHOICES})
+    return render(request, 'operations/anco_form.html', {
+        'ponds': ponds, 'status_choices': AncoCheck.STATUS_CHOICES, 'weather_choices': DailyPondRecord.WEATHER_CHOICES, 'mode': 'add'
+    })
 
 
 @login_required
@@ -537,8 +606,15 @@ def add_anco_check(request):
 def export_anco_excel(request):
     items = AncoCheck.objects.select_related('pond','technician').order_by('-date')
     items, date_from, date_to, pond = _apply_common_filters(request, items)
-    rows = [[i.date.strftime('%d/%m/%Y'), i.pond.name, i.feed_code, i.doc, i.daily_feed_kg, i.anco1_morning, i.anco2_morning, i.anco1_noon, i.anco2_noon, i.anco1_evening, i.anco2_evening, i.water_in_cm or '', i.weather, i.treatment, i.appetite_status, i.recommendation] for i in items]
-    return export_excel('laporan_cek_anco', 'Laporan Cek Anco Harian', f'Periode: {format_date_range(date_from, date_to)}', ['Tanggal','Kolam','Kode Pakan','DOC','P/H','A1 Pagi','A2 Pagi','A1 Siang','A2 Siang','A1 Sore','A2 Sore','Air Masuk Cm','Cuaca','Treatment','Status','Rekomendasi'], rows)
+    rows = [[
+        i.date.strftime('%d/%m/%Y'), i.pond.name, i.feed_code, i.doc, i.daily_feed_kg,
+        i.anco1_morning, i.anco2_morning, i.anco1_noon, i.anco2_noon, i.anco1_evening, i.anco2_evening,
+        i.water_in_cm, i.weather, i.treatment, i.appetite_status, i.recommendation
+    ] for i in items]
+    return export_excel(
+        'laporan_cek_anco', 'Laporan Cek Anco Harian', f'Periode: {format_date_range(date_from, date_to)}',
+        ['Tanggal','Kolam','Kode Pakan','DOC','P/H','A1 Pagi','A2 Pagi','A1 Siang','A2 Siang','A1 Sore','A2 Sore','Air Masuk Cm','Cuaca','Treatment','Status','Rekomendasi'], rows
+    )
 
 
 def _sampling_rows(items):
@@ -576,21 +652,31 @@ def sampling_records(request):
 def add_sampling_record(request):
     ponds = Pond.objects.all().order_by('name')
     if request.method == 'POST':
+        payload, errors = _sampling_payload(request)
+        if errors:
+            for msg in errors.values():
+                messages.error(request, msg)
+            return render(request, 'operations/sampling_form.html', {
+                'ponds': ponds,
+                'today': timezone.localdate(),
+                'pond_meta': _sampling_pond_meta(),
+                'errors': errors,
+            })
         SamplingRecord.objects.create(
-            pond_id=request.POST['pond'],
-            date=request.POST['date'],
-            doc=request.POST.get('doc') or 0,
-            sample_weight_g=request.POST.get('sample_weight_g') or 0,
-            sample_count=request.POST.get('sample_count') or 0,
-            adg_weekly_target=request.POST.get('adg_weekly_target') or 0,
-            cumulative_feed_kg=request.POST.get('cumulative_feed_kg') or 0,
-            stocking_count=request.POST.get('stocking_count') or 0,
-            daily_feed_kg=request.POST.get('daily_feed_kg') or 0,
-            fr_percent=request.POST.get('fr_percent') or 0,
-            population_index=request.POST.get('population_index') or 0,
-            index_score=request.POST.get('index_score') or 0,
-            harvest_estimation=request.POST.get('harvest_estimation',''),
-            notes=request.POST.get('notes',''),
+            pond_id=payload['pond_id'],
+            date=payload['date'],
+            doc=payload['doc'],
+            sample_weight_g=payload['sample_weight_g'],
+            sample_count=payload['sample_count'],
+            adg_weekly_target=payload['adg_weekly_target'],
+            cumulative_feed_kg=payload['cumulative_feed_kg'],
+            stocking_count=payload['stocking_count'],
+            daily_feed_kg=payload['daily_feed_kg'],
+            fr_percent=payload['fr_percent'],
+            population_index=payload['population_index'],
+            index_score=payload['index_score'],
+            harvest_estimation=payload['harvest_estimation'],
+            notes=payload['notes'],
         )
         messages.success(request, 'Data sampling berhasil disimpan. Semua parameter turunan dari format Excel dihitung otomatis oleh sistem.')
         return redirect('operations:sampling_records')
@@ -639,14 +725,21 @@ def siphon_records(request):
 def add_siphon_record(request):
     ponds = Pond.objects.all().order_by('name')
     if request.method == 'POST':
+        payload, errors = _siphon_payload(request)
+        if errors:
+            for msg in errors.values():
+                messages.error(request, msg)
+            return render(request, 'operations/siphon_form.html', {
+                'ponds': ponds, 'obj': payload, 'errors': errors
+            })
         SiphonRecord.objects.update_or_create(
-            pond_id=request.POST['pond'], date=request.POST['date'],
+            pond_id=payload['pond_id'], date=payload['date'],
             defaults={
                 'technician': request.user,
-                'doc': request.POST.get('doc') or 0,
-                'dead_count': request.POST.get('dead_count') or 0,
-                'live_count': request.POST.get('live_count') or 0,
-                'notes': request.POST.get('notes',''),
+                'doc': payload['doc'],
+                'dead_count': payload['dead_count'],
+                'live_count': payload['live_count'],
+                'notes': payload['notes'],
             }
         )
         messages.success(request, 'Data siphon berhasil disimpan dan indikator kesehatan diperbarui.')
@@ -722,7 +815,16 @@ def export_harvests_pdf(request):
 def add_harvest(request):
     ponds = Pond.objects.all()
     if request.method == 'POST':
-        Harvest.objects.create(pond_id=request.POST['pond'], date=request.POST['date'], harvest_type=request.POST.get('harvest_type', 'Parsial'), size_text=request.POST.get('size_text', ''), total_kg=request.POST.get('total_kg') or 0, notes=request.POST.get('notes', ''))
+        payload, errors = _harvest_payload(request)
+        if errors:
+            for msg in errors.values():
+                messages.error(request, msg)
+            return render(request, 'operations/harvest_form.html', {'ponds': ponds, 'obj': payload, 'errors': errors})
+        Harvest.objects.create(
+            pond_id=payload['pond_id'], date=payload['date'], harvest_type=payload['harvest_type'],
+            size_text=payload['size_text'], total_kg=payload['total_kg'], notes=payload['notes']
+        )
+        messages.success(request, 'Data panen berhasil disimpan.')
         return redirect('operations:harvests')
     return render(request, 'operations/harvest_form.html', {'ponds': ponds})
 
@@ -736,16 +838,23 @@ def edit_daily_record(request, pk):
     obj = get_object_or_404(DailyPondRecord, pk=pk)
     ponds = Pond.objects.all().order_by('name')
     if request.method == 'POST':
-        obj.pond_id = request.POST['pond']
-        obj.date = request.POST['date']
+        payload, errors = _daily_record_payload(request)
+        if errors:
+            for msg in errors.values():
+                messages.error(request, msg)
+            return render(request, 'operations/daily_record_form.html', {
+                'ponds': ponds, 'weather_choices': DailyPondRecord.WEATHER_CHOICES, 'obj': payload, 'errors': errors, 'mode': 'edit'
+            })
+        obj.pond_id = payload['pond_id']
+        obj.date = payload['date']
         obj.technician = request.user
-        obj.doc = request.POST.get('doc') or 0
-        obj.feed_code = request.POST.get('feed_code','')
-        obj.daily_feed_kg = _post_decimal(request.POST.get('daily_feed_kg') or 0)
-        obj.water_in_cm = _post_decimal(request.POST.get('water_in_cm')) if request.POST.get('water_in_cm') else None
-        obj.weather = request.POST.get('weather','')
-        obj.treatment = request.POST.get('treatment','')
-        obj.notes = request.POST.get('notes','')
+        obj.doc = payload['doc']
+        obj.feed_code = payload['feed_code']
+        obj.daily_feed_kg = payload['daily_feed_kg']
+        obj.water_in_cm = payload['water_in_cm']
+        obj.weather = payload['weather']
+        obj.treatment = payload['treatment']
+        obj.notes = payload['notes']
         obj.save()
         messages.success(request, 'Data harian kolam berhasil diperbarui.')
         return redirect('operations:daily_records')
@@ -769,16 +878,33 @@ def edit_anco_check(request, pk):
         if errors:
             for msg in errors.values():
                 messages.error(request, msg)
-            return render(request, 'operations/anco_form.html', {'ponds': ponds, 'weather_choices': DailyParameter.WEATHER_CHOICES, 'status_choices': AncoCheck.STATUS_CHOICES, 'obj': payload, 'errors': errors, 'mode': 'edit'})
+            return render(request, 'operations/anco_form.html', {
+                'ponds': ponds, 'status_choices': AncoCheck.STATUS_CHOICES,
+                'weather_choices': DailyPondRecord.WEATHER_CHOICES, 'obj': obj, 'errors': errors, 'mode': 'edit'
+            })
         obj.pond_id = payload['pond_id']
         obj.date = payload['date']
         obj.technician = request.user
-        for field in ['doc','feed_code','daily_feed_kg','water_in_cm','weather','treatment','anco1_morning','anco2_morning','anco1_noon','anco2_noon','anco1_evening','anco2_evening','notes']:
-            setattr(obj, field, payload[field])
+        obj.doc = payload['doc']
+        obj.feed_code = payload['feed_code']
+        obj.daily_feed_kg = payload['daily_feed_kg']
+        obj.water_in_cm = payload['water_in_cm']
+        obj.weather = payload['weather']
+        obj.treatment = payload['treatment']
+        obj.anco1_morning = payload['anco1_morning']
+        obj.anco2_morning = payload['anco2_morning']
+        obj.anco1_noon = payload['anco1_noon']
+        obj.anco2_noon = payload['anco2_noon']
+        obj.anco1_evening = payload['anco1_evening']
+        obj.anco2_evening = payload['anco2_evening']
+        obj.notes = payload['notes']
         obj.save()
-        messages.success(request, 'Cek anco berhasil diperbarui dan dianalisa ulang.')
+        messages.success(request, 'Cek anco berhasil diperbarui sesuai format tabel lapangan.')
         return redirect('operations:anco_checks')
-    return render(request, 'operations/anco_form.html', {'ponds': ponds, 'weather_choices': DailyParameter.WEATHER_CHOICES, 'status_choices': AncoCheck.STATUS_CHOICES, 'obj': obj, 'mode': 'edit'})
+    return render(request, 'operations/anco_form.html', {
+        'ponds': ponds, 'status_choices': AncoCheck.STATUS_CHOICES,
+        'weather_choices': DailyPondRecord.WEATHER_CHOICES, 'obj': obj, 'mode': 'edit'
+    })
 
 @login_required
 @permission_required('operations.anco')
@@ -794,24 +920,33 @@ def edit_sampling_record(request, pk):
     obj = get_object_or_404(SamplingRecord, pk=pk)
     ponds = Pond.objects.all().order_by('name')
     if request.method == 'POST':
-        obj.pond_id = request.POST['pond']
-        obj.date = request.POST['date']
-        obj.doc = request.POST.get('doc') or 0
-        obj.sample_weight_g = _post_decimal(request.POST.get('sample_weight_g') or 0)
-        obj.sample_count = request.POST.get('sample_count') or 0
-        obj.adg_weekly_target = _post_decimal(request.POST.get('adg_weekly_target') or 0)
-        obj.cumulative_feed_kg = _post_decimal(request.POST.get('cumulative_feed_kg') or 0)
-        obj.stocking_count = request.POST.get('stocking_count') or 0
-        obj.daily_feed_kg = _post_decimal(request.POST.get('daily_feed_kg') or 0)
-        obj.fr_percent = _post_decimal(request.POST.get('fr_percent') or 0)
-        obj.population_index = int(float(_post_decimal(request.POST.get('population_index') or 0)))
-        obj.index_score = _post_decimal(request.POST.get('index_score') or 0)
-        obj.harvest_estimation = request.POST.get('harvest_estimation','')
-        obj.notes = request.POST.get('notes','')
+        payload, errors = _sampling_payload(request)
+        if errors:
+            for msg in errors.values():
+                messages.error(request, msg)
+            return render(request, 'operations/sampling_form.html', {
+                'ponds': ponds, 'today': timezone.localdate(), 'pond_meta': _sampling_pond_meta(),
+                'obj': obj, 'mode': 'edit', 'errors': errors
+            })
+        obj.pond_id = payload['pond_id']
+        obj.date = payload['date']
+        obj.doc = payload['doc']
+        obj.sample_weight_g = payload['sample_weight_g']
+        obj.sample_count = payload['sample_count']
+        obj.adg_weekly_target = payload['adg_weekly_target']
+        obj.cumulative_feed_kg = payload['cumulative_feed_kg']
+        obj.stocking_count = payload['stocking_count']
+        obj.daily_feed_kg = payload['daily_feed_kg']
+        obj.fr_percent = payload['fr_percent']
+        obj.population_index = payload['population_index']
+        obj.index_score = payload['index_score']
+        obj.harvest_estimation = payload['harvest_estimation']
+        obj.notes = payload['notes']
         obj.save()
         messages.success(request, 'Data sampling berhasil diperbarui dan dihitung ulang otomatis.')
         return redirect('operations:sampling_records')
     return render(request, 'operations/sampling_form.html', {'ponds': ponds, 'today': timezone.localdate(), 'pond_meta': _sampling_pond_meta(), 'obj': obj, 'mode': 'edit'})
+
 
 @login_required
 @permission_required('operations.sampling')
@@ -827,13 +962,20 @@ def edit_siphon_record(request, pk):
     obj = get_object_or_404(SiphonRecord, pk=pk)
     ponds = Pond.objects.all().order_by('name')
     if request.method == 'POST':
-        obj.pond_id = request.POST['pond']
-        obj.date = request.POST['date']
+        payload, errors = _siphon_payload(request)
+        if errors:
+            for msg in errors.values():
+                messages.error(request, msg)
+            return render(request, 'operations/siphon_form.html', {
+                'ponds': ponds, 'obj': payload, 'errors': errors, 'mode': 'edit'
+            })
+        obj.pond_id = payload['pond_id']
+        obj.date = payload['date']
         obj.technician = request.user
-        obj.doc = request.POST.get('doc') or 0
-        obj.dead_count = request.POST.get('dead_count') or 0
-        obj.live_count = request.POST.get('live_count') or 0
-        obj.notes = request.POST.get('notes','')
+        obj.doc = payload['doc']
+        obj.dead_count = payload['dead_count']
+        obj.live_count = payload['live_count']
+        obj.notes = payload['notes']
         obj.save()
         messages.success(request, 'Data siphon berhasil diperbarui dan indikator kesehatan dihitung ulang.')
         return redirect('operations:siphon_records')
@@ -894,12 +1036,19 @@ def edit_harvest(request, pk):
     obj = get_object_or_404(Harvest, pk=pk)
     ponds = Pond.objects.all()
     if request.method == 'POST':
-        obj.pond_id = request.POST['pond']
-        obj.date = request.POST['date']
-        obj.harvest_type = request.POST.get('harvest_type', 'Parsial')
-        obj.size_text = request.POST.get('size_text', '')
-        obj.total_kg = _post_decimal(request.POST.get('total_kg') or 0)
-        obj.notes = request.POST.get('notes', '')
+        payload, errors = _harvest_payload(request)
+        if errors:
+            for msg in errors.values():
+                messages.error(request, msg)
+            return render(request, 'operations/harvest_form.html', {
+                'ponds': ponds, 'obj': payload, 'errors': errors, 'mode': 'edit'
+            })
+        obj.pond_id = payload['pond_id']
+        obj.date = payload['date']
+        obj.harvest_type = payload['harvest_type']
+        obj.size_text = payload['size_text']
+        obj.total_kg = payload['total_kg']
+        obj.notes = payload['notes']
         obj.save()
         messages.success(request, 'Data panen berhasil diperbarui.')
         return redirect('operations:harvests')

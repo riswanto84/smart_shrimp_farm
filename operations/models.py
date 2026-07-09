@@ -142,9 +142,9 @@ class AncoCheck(models.Model):
     date = models.DateField(default=timezone.localdate)
     doc = models.PositiveIntegerField(default=0)
     feed_code = models.CharField(max_length=80, blank=True)
-    daily_feed_kg = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    daily_feed_kg = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # P/H pada format lapangan
     water_in_cm = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
-    weather = models.CharField(max_length=30, choices=DailyParameter.WEATHER_CHOICES, blank=True)
+    weather = models.CharField(max_length=30, choices=DailyPondRecord.WEATHER_CHOICES, blank=True)
     treatment = models.TextField(blank=True)
     anco1_morning = models.CharField(max_length=2, choices=STATUS_CHOICES, default='-')
     anco2_morning = models.CharField(max_length=2, choices=STATUS_CHOICES, default='-')
@@ -262,11 +262,11 @@ class SamplingRecord(models.Model):
             self.stocking_count = stocking.seed_count
 
         if not self.cumulative_feed_kg:
-            feed_total = DailyParameter.objects.filter(pond=self.pond, date__lte=self.date).aggregate(s=models.Sum('feed_kg'))['s'] or Decimal('0')
+            feed_total = DailyPondRecord.objects.filter(pond=self.pond, date__lte=self.date).aggregate(s=models.Sum('daily_feed_kg'))['s'] or Decimal('0')
             self.cumulative_feed_kg = feed_total
-        latest_feed = DailyParameter.objects.filter(pond=self.pond, date__lte=self.date).order_by('-date').first()
+        latest_feed = DailyPondRecord.objects.filter(pond=self.pond, date__lte=self.date).order_by('-date').first()
         if latest_feed and not self.daily_feed_kg:
-            self.daily_feed_kg = latest_feed.feed_kg or Decimal('0')
+            self.daily_feed_kg = latest_feed.daily_feed_kg or Decimal('0')
 
         fd = _d(self.daily_feed_kg)
         fr = _d(self.fr_percent)

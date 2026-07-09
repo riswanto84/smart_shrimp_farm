@@ -1,2 +1,95 @@
 {% extends 'base.html' %}
-{% block content %}<div class="page-head"><div><h1>{% if mode == 'edit' %}Edit{% else %}Tambah{% endif %} Data Panen</h1><p>Catat hasil timbang panen parsial atau total.</p></div></div><div class="cardx"><form method="post" class="row g-3">{% csrf_token %}<div class="col-md-4"><label class="form-label">Tanggal</label><input class="form-control" type="date" name="date" value="{{ obj.date|date:'Y-m-d' }}" required></div><div class="col-md-4"><label class="form-label">Kolam</label><select class="form-select" name="pond">{% for p in ponds %}<option value="{{p.id}}" {% if obj.pond_id == p.id %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></div><div class="col-md-4"><label class="form-label">Jenis Panen</label><select class="form-select" name="harvest_type"><option {% if obj.harvest_type == 'Parsial' %}selected{% endif %}>Parsial</option><option {% if obj.harvest_type == 'Total' %}selected{% endif %}>Total</option></select></div><div class="col-md-6"><label class="form-label">Size Udang / Keterangan Size</label><input class="form-control" name="size_text" value="{{ obj.size_text|default:'' }}" placeholder="50 / 40-50 / Campur" required></div><div class="col-md-6"><label class="form-label">Total Kg</label><input class="form-control" name="total_kg" step="0.01" value="{{ obj.total_kg|default:'' }}" required></div><div class="col-12"><label class="form-label">Catatan</label><textarea class="form-control" name="notes" rows="4">{{ obj.notes|default:'' }}</textarea></div><div class="col-12 d-flex gap-2"><button class="btn btn-primary">Simpan Panen</button><a class="btn btn-outline-secondary" href="{% url 'operations:harvests' %}">Batal</a></div></form></div>{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <span class="badge rounded-pill bg-success-subtle text-success mb-2"><i class="fa-solid fa-basket-shopping"></i> PANEN</span>
+    <h1>{% if mode == 'edit' %}Edit{% else %}Tambah{% endif %} Data Panen</h1>
+    <p>Catat hasil timbang panen parsial atau total. Input kg dibuat mudah untuk angka desimal seperti form parameter harian.</p>
+  </div>
+  <a class="btn btn-outline-primary" href="{% url 'operations:harvests' %}"><i class="fa-solid fa-arrow-left"></i> Kembali</a>
+</div>
+
+{% if errors %}
+<div class="alert alert-danger border-0 shadow-sm">
+  <b>Data belum bisa disimpan.</b>
+  <ul class="mb-0">{% for k,e in errors.items %}<li>{{ e }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<div class="ops-form-layout">
+  <section class="cardx ops-form-card">
+    <form method="post" id="harvestForm" class="row g-3">{% csrf_token %}
+      <div class="ops-section-title"><i class="fa-solid fa-id-card"></i><div><b>Informasi Panen</b><small>Pilih tanggal, kolam, jenis panen, size, dan total kg hasil timbang.</small></div></div>
+      <div class="col-md-4">
+        <label class="form-label">Tanggal <span class="text-danger">*</span></label>
+        <input class="form-control" type="date" name="date" value="{% if obj.date|date:'Y-m-d' %}{{ obj.date|date:'Y-m-d' }}{% else %}{{ obj.date|default:'' }}{% endif %}" required>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Kolam <span class="text-danger">*</span></label>
+        <select class="form-select" name="pond" required>
+          <option value="">Pilih kolam</option>
+          {% for p in ponds %}<option value="{{p.id}}" {% if obj.pond_id|stringformat:'s' == p.id|stringformat:'s' %}selected{% endif %}>{{p.name}}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Jenis Panen</label>
+        <select class="form-select" name="harvest_type">
+          <option value="Parsial" {% if obj.harvest_type == 'Parsial' %}selected{% endif %}>Parsial</option>
+          <option value="Total" {% if obj.harvest_type == 'Total' %}selected{% endif %}>Total</option>
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Size Udang / Keterangan Size <span class="text-danger">*</span></label>
+        <input class="form-control" name="size_text" value="{{ obj.size_text|default:'' }}" placeholder="Contoh: 50 / 40-50 / Campur" maxlength="50" required>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Total Kg <span class="text-danger">*</span></label>
+        <input class="form-control numeric-decimal" type="text" inputmode="decimal" name="total_kg" value="{{ obj.total_kg|default:'' }}" placeholder="Contoh: 450.5 atau 450,5" required>
+        <small class="text-muted">Bisa pakai titik atau koma desimal. Sistem otomatis menormalkan nilainya.</small>
+      </div>
+      <div class="col-12">
+        <label class="form-label">Catatan</label>
+        <textarea class="form-control" name="notes" rows="4" placeholder="Contoh: panen parsial size 60, buyer lokal, kondisi udang bagus.">{{ obj.notes|default:'' }}</textarea>
+      </div>
+      <div class="col-12 d-flex gap-2">
+        <button class="btn btn-primary"><i class="fa-solid fa-save"></i> Simpan Panen</button>
+        <a class="btn btn-outline-secondary" href="{% url 'operations:harvests' %}">Batal</a>
+      </div>
+    </form>
+  </section>
+  <aside class="cardx ops-help">
+    <h3>Panduan Validasi</h3>
+    <ul>
+      <li>Total Kg harus angka desimal valid.</li>
+      <li>Contoh benar: <b>450</b>, <b>450.5</b>, atau <b>450,5</b>.</li>
+      <li>Jangan gunakan huruf, simbol, atau titik ribuan.</li>
+      <li>Size wajib diisi untuk laporan panen dan nota penjualan.</li>
+    </ul>
+  </aside>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  const form = document.getElementById('harvestForm');
+  const decimalInputs = form.querySelectorAll('.numeric-decimal');
+  decimalInputs.forEach(function(input){
+    input.addEventListener('input', function(){
+      input.value = input.value.replace(',', '.').replace(/[^0-9.]/g,'');
+      const parts = input.value.split('.');
+      if(parts.length > 2) input.value = parts.shift() + '.' + parts.join('');
+    });
+  });
+  form.addEventListener('submit', function(event){
+    const messages = [];
+    decimalInputs.forEach(function(input){
+      const value = input.value.trim();
+      if(!value || !/^\d+(\.\d+)?$/.test(value)){
+        const label = input.closest('[class*="col-"]')?.querySelector('label')?.innerText || input.name;
+        messages.push(label + ' harus angka desimal valid. Contoh: 450.5');
+        input.classList.add('is-invalid');
+      } else { input.classList.remove('is-invalid'); }
+    });
+    if(messages.length){ event.preventDefault(); alert('Periksa kembali input angka:\n- ' + messages.join('\n- ')); }
+  });
+});
+</script>
+{% endblock %}

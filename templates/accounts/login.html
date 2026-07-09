@@ -30,7 +30,7 @@
         <label class="form-label fw-bold">Kode Keamanan</label>
         <div class="captcha-box">{{ captcha_question }}</div>
         <div class="field-icon"><i class="fa-solid fa-shield-halved"></i><input class="form-control" name="captcha" placeholder="Jawaban Anda" inputmode="numeric" required></div>
-        <div class="login-meta"><label><input class="form-check-input me-2" type="checkbox" checked> Ingat saya</label><a href="#">Lupa password?</a></div>
+        <div class="login-meta"><label><input class="form-check-input me-2" type="checkbox" checked> Ingat saya</label><a href="{% url 'accounts:password_reset' %}">Lupa password?</a></div>
         <button class="login-btn">Login</button>
         <div class="secure-note"><i class="fa-solid fa-shield-halved"></i><span><b>Sistem aman &amp; terenkripsi</b><br>Data Anda terlindungi dengan sistem keamanan aplikasi.</span></div>
       </form>

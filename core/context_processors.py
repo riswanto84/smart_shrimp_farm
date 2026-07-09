@@ -59,9 +59,9 @@ def app_notifications(request):
             items.append({
                 'level': 'warning',
                 'icon': 'fa-flask-vial',
-                'title': 'Parameter hari ini belum diinput',
-                'text': 'Input parameter harian kolam: tinggi air, kualitas air, cuaca, pakan, dan visual air.',
-                'meta': 'Operasional harian',
+                'title': 'Parameter harian belum diinput',
+                'text': 'Input parameter kolam, pakan, cuaca, air masuk, dan kualitas air hari ini.',
+                'meta': 'Parameter harian',
                 'url': '/operations/parameters/add/',
                 'requires_attention': True,
             })

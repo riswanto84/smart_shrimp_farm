@@ -1,5 +1,90 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="page-head"><div><h1>{% if mode == 'edit' %}Edit{% else %}Input{% endif %} Data Siphon</h1><p>Catat udang mati dan udang hidup yang ikut tersiphon untuk membaca tren kesehatan kolam.</p></div></div>
-<div class="ops-form-layout"><section class="cardx ops-form-card"><form method="post" class="row g-3">{% csrf_token %}<div class="ops-section-title"><i class="fa-solid fa-water"></i><div><b>Data Siphon Harian</b><small>Sistem menghitung jumlah harian, akumulasi, dan indikator kesehatan otomatis.</small></div></div><div class="col-md-3"><label class="form-label">Tanggal</label><input class="form-control" type="date" name="date" value="{{ obj.date|date:'Y-m-d' }}" required></div><div class="col-md-3"><label class="form-label">Kolam</label><select class="form-select" name="pond" required>{% for p in ponds %}<option value="{{p.id}}" {% if obj.pond_id == p.id %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></div><div class="col-md-3"><label class="form-label">DOC</label><input class="form-control" type="number" name="doc" value="{{ obj.doc|default:0 }}"></div><div class="col-md-3"><label class="form-label">Udang Mati</label><input class="form-control" type="number" name="dead_count" value="{{ obj.dead_count|default:0 }}"></div><div class="col-md-3"><label class="form-label">Udang Hidup Ikut Tersiphon</label><input class="form-control" type="number" name="live_count" value="{{ obj.live_count|default:0 }}"></div><div class="col-12"><label class="form-label">Catatan</label><textarea class="form-control" name="notes" rows="4">{{ obj.notes|default:'' }}</textarea></div><div class="col-12 d-flex gap-2"><button class="btn btn-primary"><i class="fa-solid fa-save"></i> Simpan Siphon</button><a class="btn btn-outline-secondary" href="{% url 'operations:siphon_records' %}">Batal</a></div></form></section><aside class="cardx ops-help"><h3>Interpretasi Cepat</h3><p>Jika udang mati meningkat, cek DO malam, pH, suhu, anco, dan riwayat treatment.</p><p>Data siphon membantu menghitung tren mortalitas dan menjaga survival rate.</p></aside></div>
+<div class="page-head">
+  <div>
+    <span class="badge rounded-pill bg-primary-subtle text-primary mb-2"><i class="fa-solid fa-water"></i> SIPHON</span>
+    <h1>{% if mode == 'edit' %}Edit{% else %}Input{% endif %} Data Siphon</h1>
+    <p>Catat udang mati dan udang hidup yang ikut tersiphon. Input angka dibuat mudah seperti form parameter harian.</p>
+  </div>
+  <a class="btn btn-outline-primary" href="{% url 'operations:siphon_records' %}"><i class="fa-solid fa-arrow-left"></i> Kembali</a>
+</div>
+
+{% if errors %}
+<div class="alert alert-danger border-0 shadow-sm">
+  <b>Data belum bisa disimpan.</b>
+  <ul class="mb-0">{% for k,e in errors.items %}<li>{{ e }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<div class="ops-form-layout">
+  <section class="cardx ops-form-card">
+    <form method="post" id="siphonForm" class="row g-3">{% csrf_token %}
+      <div class="ops-section-title"><i class="fa-solid fa-calendar-check"></i><div><b>Identitas Siphon</b><small>Pilih tanggal, kolam, dan DOC siklus berjalan.</small></div></div>
+      <div class="col-md-4">
+        <label class="form-label">Tanggal <span class="text-danger">*</span></label>
+        <input class="form-control" type="date" name="date" value="{% if obj.date|date:'Y-m-d' %}{{ obj.date|date:'Y-m-d' }}{% else %}{{ obj.date|default:'' }}{% endif %}" required>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Kolam <span class="text-danger">*</span></label>
+        <select class="form-select" name="pond" required>
+          <option value="">Pilih kolam</option>
+          {% for p in ponds %}<option value="{{p.id}}" {% if obj.pond_id|stringformat:'s' == p.id|stringformat:'s' %}selected{% endif %}>{{p.name}}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">DOC</label>
+        <input class="form-control numeric-int" type="text" inputmode="numeric" name="doc" value="{{ obj.doc|default:0 }}" placeholder="Contoh: 52">
+        <small class="text-muted">Bilangan bulat, tanpa koma/desimal.</small>
+      </div>
+
+      <div class="ops-section-title mt-2"><i class="fa-solid fa-shrimp"></i><div><b>Jumlah Siphon Harian</b><small>Isi hanya angka bulat. Sistem menghitung total harian dan akumulasi otomatis.</small></div></div>
+      <div class="col-md-6">
+        <label class="form-label">Udang Mati</label>
+        <input class="form-control numeric-int" type="text" inputmode="numeric" name="dead_count" value="{{ obj.dead_count|default:0 }}" placeholder="Contoh: 15">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Udang Hidup Ikut Tersiphon</label>
+        <input class="form-control numeric-int" type="text" inputmode="numeric" name="live_count" value="{{ obj.live_count|default:0 }}" placeholder="Contoh: 2">
+      </div>
+      <div class="col-12">
+        <label class="form-label">Catatan</label>
+        <textarea class="form-control" name="notes" rows="4" placeholder="Contoh: siphon pagi, kondisi dasar kolam, bau lumpur, indikasi molting, dll.">{{ obj.notes|default:'' }}</textarea>
+      </div>
+      <div class="col-12 d-flex gap-2">
+        <button class="btn btn-primary"><i class="fa-solid fa-save"></i> Simpan Siphon</button>
+        <a class="btn btn-outline-secondary" href="{% url 'operations:siphon_records' %}">Batal</a>
+      </div>
+    </form>
+  </section>
+  <aside class="cardx ops-help">
+    <h3>Panduan Validasi</h3>
+    <ul>
+      <li>DOC, udang mati, dan udang hidup harus angka bulat.</li>
+      <li>Jangan gunakan huruf, simbol, titik ribuan, atau koma.</li>
+      <li>Jika salah input, sistem memberi notifikasi sebelum data disimpan.</li>
+    </ul>
+    <hr>
+    <h3>Interpretasi Cepat</h3>
+    <p>Jika udang mati meningkat, cek DO malam, pH, suhu, anco, dan riwayat treatment.</p>
+  </aside>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  const form = document.getElementById('siphonForm');
+  const intInputs = form.querySelectorAll('.numeric-int');
+  intInputs.forEach(function(input){ input.addEventListener('input', function(){ input.value = input.value.replace(/[^0-9]/g,''); }); });
+  form.addEventListener('submit', function(event){
+    const messages = [];
+    intInputs.forEach(function(input){
+      const value = input.value.trim();
+      if(value && !/^\d+$/.test(value)){
+        const label = input.closest('[class*="col-"]')?.querySelector('label')?.innerText || input.name;
+        messages.push(label + ' harus bilangan bulat. Contoh: 15');
+        input.classList.add('is-invalid');
+      } else { input.classList.remove('is-invalid'); }
+    });
+    if(messages.length){ event.preventDefault(); alert('Periksa kembali input angka:\n- ' + messages.join('\n- ')); }
+  });
+});
+</script>
 {% endblock %}

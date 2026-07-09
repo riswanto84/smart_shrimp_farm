@@ -32,6 +32,8 @@
         {% endif %}
       {% endfor %}
       <p>AKUN</p>
+      <a class="{% if request.path == '/accounts/profile/' %}active{% endif %}" href="/accounts/profile/"><i class="fa-solid fa-user-pen"></i><span>Edit Profil</span></a>
+      <a class="{% if request.path == '/accounts/password/' %}active{% endif %}" href="/accounts/password/"><i class="fa-solid fa-lock"></i><span>Ubah Password</span></a>
       <a href="/accounts/logout/"><i class="fa-solid fa-right-from-bracket"></i><span>Logout</span></a>
     </nav>
     <div class="sidebar-user">

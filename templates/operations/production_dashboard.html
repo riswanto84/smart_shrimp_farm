@@ -4,9 +4,9 @@
   <div class="page-head ops-hero-head">
     <div>
       <h1>Dashboard Produksi</h1>
-      <p>Alur data: Tebar → Data Harian Pakan → Cek Anco → Sampling → Siphon → Estimasi Panen.</p>
+      <p>Alur data: Tebar → Parameter Harian → Cek Anco → Sampling → Siphon → Estimasi Panen.</p>
     </div>
-    <div class="ops-head-actions"><a class="btn btn-primary" href="{% url 'operations:add_parameter' %}"><i class="fa-solid fa-plus"></i> Input Parameter Harian</a></div>
+    <div class="ops-head-actions"><a class="btn btn-primary" href="{% url 'operations:add_parameter' %}"><i class="fa-solid fa-plus"></i> Input Parameter</a></div>
   </div>
 
   <div class="ops-flow cardx mb-3">
@@ -28,7 +28,7 @@
   <div class="ops-grid">
     <section class="panel ops-panel-wide">
       <div class="panel-head"><h2>Kondisi Terbaru Per Kolam</h2><a href="{% url 'operations:sampling_records' %}">Lihat Sampling</a></div>
-      <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>DOC</th><th>Pakan Terakhir</th><th>Anco</th><th>ABW / Size</th><th>FCR</th><th>Siphon</th><th>Estimasi</th></tr></thead><tbody>{% for row in pond_cards %}<tr><td><b>{{ row.pond.name }}</b><br><small class="text-muted">{{ row.pond.status }}</small></td><td>{% if row.daily %}{{ row.daily.doc|ribuan }}{% elif row.sample %}{{ row.sample.doc|ribuan }}{% else %}-{% endif %}</td><td>{% if row.daily %}{{ row.daily.feed_kg|angka:2 }} Kg<br><small>{{ row.daily.date }}</small>{% else %}-{% endif %}</td><td>{% if row.anco %}<span class="badge-soft">{{ row.anco.appetite_status }}</span>{% else %}-{% endif %}</td><td>{% if row.sample %}<b>{{ row.sample.abw_g|angka:2 }} g</b><br><small>Size {{ row.sample.size|angka:2 }}</small>{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.fcr|angka:2 }}{% else %}-{% endif %}</td><td>{% if row.siphon %}{{ row.siphon.dead_count|ribuan }} mati<br><small>{{ row.siphon.health_indicator }}</small>{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.harvest_estimation }}{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="8" class="text-center text-muted">Belum ada data kolam.</td></tr>{% endfor %}</tbody></table></div>
+      <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>DOC</th><th>Pakan Terakhir</th><th>Anco</th><th>ABW / Size</th><th>FCR</th><th>Siphon</th><th>Estimasi</th></tr></thead><tbody>{% for row in pond_cards %}<tr><td><b>{{ row.pond.name }}</b><br><small class="text-muted">{{ row.pond.status }}</small></td><td>{% if row.daily %}{{ row.daily.doc|ribuan }}{% elif row.sample %}{{ row.sample.doc|ribuan }}{% else %}-{% endif %}</td><td>{% if row.daily %}{{ row.daily.daily_feed_kg|angka:2 }} Kg<br><small>{{ row.daily.date }}</small>{% else %}-{% endif %}</td><td>{% if row.anco %}<span class="badge-soft">{{ row.anco.appetite_status }}</span>{% else %}-{% endif %}</td><td>{% if row.sample %}<b>{{ row.sample.abw_g|angka:2 }} g</b><br><small>Size {{ row.sample.size|angka:2 }}</small>{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.fcr|angka:2 }}{% else %}-{% endif %}</td><td>{% if row.siphon %}{{ row.siphon.dead_count|ribuan }} mati<br><small>{{ row.siphon.health_indicator }}</small>{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.harvest_estimation }}{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="8" class="text-center text-muted">Belum ada data kolam.</td></tr>{% endfor %}</tbody></table></div>
     </section>
     <aside class="panel insight-panel">
       <div class="ai-management-box mb-3">

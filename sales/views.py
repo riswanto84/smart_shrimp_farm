@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from accounts.rbac import permission_required
 from django.http import FileResponse, JsonResponse, HttpResponseBadRequest, HttpResponse
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Q
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 import json
@@ -17,19 +17,69 @@ from .midtrans import (
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from datetime import timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from core.reporting import get_date_range, filter_by_date_range, format_date_range, export_excel, export_pdf, rupiah
 from core.utils import parse_rupiah
 from core.pagination import paginate_queryset
 
 
+def _parse_decimal_field(value, label, *, required=True, allow_zero=False):
+    raw = str(value or '').strip()
+    if not raw:
+        if required:
+            raise ValueError(f'{label} wajib diisi dengan angka.')
+        return Decimal('0')
+    # Field berat memakai input number: hanya angka, titik desimal, atau koma desimal.
+    normalized = raw.replace(',', '.')
+    if normalized.count('.') > 1:
+        raise ValueError(f'{label} harus berupa angka desimal yang valid, contoh 120 atau 120.50.')
+    try:
+        number = Decimal(normalized)
+    except (InvalidOperation, ValueError):
+        raise ValueError(f'{label} harus berupa angka, bukan huruf atau simbol.')
+    if number < 0:
+        raise ValueError(f'{label} tidak boleh bernilai negatif.')
+    if not allow_zero and number == 0:
+        raise ValueError(f'{label} harus lebih besar dari 0.')
+    return number
+
+
+def _cashier_context(sale=None, item=None, mode='add'):
+    customers = Customer.objects.all().order_by('name')
+    harvests = Harvest.objects.select_related('pond').order_by('-date')[:200]
+    return {
+        'customers': customers,
+        'harvests': harvests,
+        'sale': sale,
+        'item': item,
+        'mode': mode,
+    }
+
+
+def _selected_fk_or_none(model, value, label):
+    value = (value or '').strip()
+    if not value:
+        return None
+    try:
+        obj_id = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f'{label} tidak valid. Pilih data dari daftar pencarian.')
+    if not model.objects.filter(pk=obj_id).exists():
+        raise ValueError(f'{label} tidak ditemukan. Pilih data dari daftar pencarian.')
+    return obj_id
+
+
 def _get_sale_amounts_from_request(request):
-    weight = parse_rupiah(request.POST.get('weight_kg'))
+    weight = _parse_decimal_field(request.POST.get('weight_kg'), 'Berat (Kg)')
     price = parse_rupiah(request.POST.get('price_per_kg'))
+    if price <= 0:
+        raise ValueError('Harga / Kg wajib diisi dengan angka lebih besar dari 0.')
     subtotal = weight * price
     shipping_cost = parse_rupiah(request.POST.get('shipping_cost'))
     packing_cost = parse_rupiah(request.POST.get('packing_cost'))
     other_cost = parse_rupiah(request.POST.get('other_cost'))
+    if shipping_cost < 0 or packing_cost < 0 or other_cost < 0:
+        raise ValueError('Biaya tambahan tidak boleh bernilai negatif.')
     total_amount = subtotal + shipping_cost + packing_cost + other_cost
     return weight, price, subtotal, shipping_cost, packing_cost, other_cost, total_amount
 
@@ -171,9 +221,14 @@ def sales_dashboard(request):
 @login_required
 @permission_required('sales.customers')
 def customers(request):
+    q = (request.GET.get('q') or '').strip()
     customers = Customer.objects.all().order_by('name')
+    if q:
+        customers = customers.filter(
+            Q(name__icontains=q) | Q(phone__icontains=q) | Q(email__icontains=q) | Q(address__icontains=q)
+        )
     page_obj = paginate_queryset(request, customers, per_page=10)
-    return render(request, 'sales/customers.html', {'customers': page_obj, 'page_obj': page_obj})
+    return render(request, 'sales/customers.html', {'customers': page_obj, 'page_obj': page_obj, 'q': q})
 
 
 @login_required
@@ -188,26 +243,31 @@ def add_customer(request):
 @login_required
 @permission_required('sales.cashier')
 def cashier(request):
-    customers = Customer.objects.all(); harvests = Harvest.objects.order_by('-date')[:20]
     if request.method == 'POST':
-        inv = 'INV' + timezone.now().strftime('%Y%m%d%H%M%S')
-        weight, price, subtotal, shipping_cost, packing_cost, other_cost, total_amount = _get_sale_amounts_from_request(request)
-        sale = Sale.objects.create(
-            invoice_no=inv,
-            customer_id=request.POST.get('customer') or None,
-            total_kg=weight,
-            total_amount=total_amount,
-            shipping_cost=shipping_cost,
-            packing_cost=packing_cost,
-            other_cost=other_cost,
-            payment_method=request.POST.get('payment_method', 'Cash'),
-            status=request.POST.get('status', 'Lunas'),
-            cashier=request.user,
-            notes=request.POST.get('notes', ''),
-        )
-        SaleItem.objects.create(sale=sale, harvest_id=request.POST.get('harvest') or None, size_text=request.POST.get('size_text', ''), weight_kg=weight, price_per_kg=price, subtotal=subtotal)
-        return redirect('sales:invoice', pk=sale.pk)
-    return render(request, 'sales/cashier.html', {'customers': customers, 'harvests': harvests})
+        try:
+            customer_id = _selected_fk_or_none(Customer, request.POST.get('customer'), 'Pelanggan')
+            harvest_id = _selected_fk_or_none(Harvest, request.POST.get('harvest'), 'Sumber panen')
+            inv = 'INV' + timezone.now().strftime('%Y%m%d%H%M%S')
+            weight, price, subtotal, shipping_cost, packing_cost, other_cost, total_amount = _get_sale_amounts_from_request(request)
+            sale = Sale.objects.create(
+                invoice_no=inv,
+                customer_id=customer_id,
+                total_kg=weight,
+                total_amount=total_amount,
+                shipping_cost=shipping_cost,
+                packing_cost=packing_cost,
+                other_cost=other_cost,
+                payment_method=request.POST.get('payment_method', 'Cash'),
+                status=request.POST.get('status', 'Lunas'),
+                cashier=request.user,
+                notes=request.POST.get('notes', ''),
+            )
+            SaleItem.objects.create(sale=sale, harvest_id=harvest_id, size_text=request.POST.get('size_text', ''), weight_kg=weight, price_per_kg=price, subtotal=subtotal)
+            return redirect('sales:invoice', pk=sale.pk)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return render(request, 'sales/cashier.html', _cashier_context())
+    return render(request, 'sales/cashier.html', _cashier_context())
 
 
 
@@ -215,8 +275,8 @@ def cashier(request):
 @permission_required('sales.cashier')
 def edit_sale(request, pk):
     sale = get_object_or_404(Sale.objects.select_related('customer', 'cashier').prefetch_related('items'), pk=pk)
-    customers = Customer.objects.all()
-    harvests = Harvest.objects.order_by('-date')[:30]
+    customers = Customer.objects.all().order_by('name')
+    harvests = Harvest.objects.select_related('pond').order_by('-date')[:200]
     item = sale.items.first()
 
     if request.method == 'POST':
@@ -225,11 +285,17 @@ def edit_sale(request, pk):
             messages.error(request, 'Nomor nota sudah digunakan. Silakan gunakan nomor nota lain.')
             return render(request, 'sales/sale_form.html', {'sale': sale, 'item': item, 'customers': customers, 'harvests': harvests, 'mode': 'edit'})
 
-        weight, price, subtotal, shipping_cost, packing_cost, other_cost, total_amount = _get_sale_amounts_from_request(request)
+        try:
+            customer_id = _selected_fk_or_none(Customer, request.POST.get('customer'), 'Pelanggan')
+            harvest_id = _selected_fk_or_none(Harvest, request.POST.get('harvest'), 'Sumber panen')
+            weight, price, subtotal, shipping_cost, packing_cost, other_cost, total_amount = _get_sale_amounts_from_request(request)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return render(request, 'sales/sale_form.html', {'sale': sale, 'item': item, 'customers': customers, 'harvests': harvests, 'mode': 'edit'})
         old_total_amount = sale.total_amount
 
         sale.invoice_no = invoice_no
-        sale.customer_id = request.POST.get('customer') or None
+        sale.customer_id = customer_id
         sale.total_kg = weight
         sale.total_amount = total_amount
         sale.shipping_cost = shipping_cost
@@ -249,7 +315,7 @@ def edit_sale(request, pk):
 
         if item is None:
             item = SaleItem(sale=sale)
-        item.harvest_id = request.POST.get('harvest') or None
+        item.harvest_id = harvest_id
         item.size_text = request.POST.get('size_text', '')
         item.weight_kg = weight
         item.price_per_kg = price

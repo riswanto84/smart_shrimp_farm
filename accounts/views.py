@@ -135,37 +135,39 @@ def roles(request):
 
 
 @login_required
-def profile(request):
-    """Edit profil pribadi user yang sedang login."""
-    user = request.user
+def edit_profile(request):
+    profile = request.user.userprofile
     if request.method == 'POST':
-        user.first_name = request.POST.get('first_name','').strip()
-        user.last_name = request.POST.get('last_name','').strip()
-        user.email = request.POST.get('email','').strip()
-        user.save()
-        try:
-            user.userprofile.phone = request.POST.get('phone','').strip()
-            user.userprofile.save()
-        except Exception:
-            pass
-        AuditLog.objects.create(user=request.user, action='Mengubah profil pribadi')
+        first_name = request.POST.get('first_name', '').strip()
+        last_name = request.POST.get('last_name', '').strip()
+        email = request.POST.get('email', '').strip()
+        phone = request.POST.get('phone', '').strip()
+        if email and User.objects.exclude(id=request.user.id).filter(email=email).exists():
+            messages.error(request, 'Email sudah digunakan oleh pengguna lain.')
+            return render(request, 'accounts/profile_form.html', {'profile': profile})
+        request.user.first_name = first_name
+        request.user.last_name = last_name
+        request.user.email = email
+        request.user.save()
+        profile.phone = phone
+        profile.save()
+        AuditLog.objects.create(user=request.user, action='Mengubah profil sendiri')
         messages.success(request, 'Profil berhasil diperbarui.')
-        return redirect('accounts:profile')
-    return render(request, 'accounts/profile.html', {'edited_user': user})
+        return redirect('accounts:edit_profile')
+    return render(request, 'accounts/profile_form.html', {'profile': profile})
 
 
 @login_required
 def change_password(request):
-    """Ubah password pribadi menggunakan PasswordChangeForm bawaan Django."""
     if request.method == 'POST':
         form = PasswordChangeForm(request.user, request.POST)
         if form.is_valid():
             user = form.save()
             update_session_auth_hash(request, user)
-            AuditLog.objects.create(user=request.user, action='Mengubah password pribadi')
-            messages.success(request, 'Password berhasil diperbarui.')
-            return redirect('accounts:profile')
-        messages.error(request, 'Password belum bisa diperbarui. Periksa kembali isian form.')
+            AuditLog.objects.create(user=request.user, action='Mengubah password sendiri')
+            messages.success(request, 'Password berhasil diubah.')
+            return redirect('accounts:edit_profile')
+        messages.error(request, 'Password belum bisa diubah. Periksa kembali isian password.')
     else:
         form = PasswordChangeForm(request.user)
     return render(request, 'accounts/change_password.html', {'form': form})

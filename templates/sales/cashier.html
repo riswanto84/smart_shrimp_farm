@@ -17,8 +17,20 @@
       <section class="form-section-pro">
         <div class="section-head-pro"><i class="fa-solid fa-user-tag"></i><div><h2>Informasi Pelanggan & Panen</h2><p>Pilih pelanggan dan sumber panen bila transaksi terhubung dengan data panen.</p></div></div>
         <div class="form-grid-pro two">
-          <div class="field-pro"><label>Pelanggan</label><div class="input-icon-pro"><i class="fa-solid fa-users"></i><select class="form-select" name="customer"><option value="">Pilih Pelanggan</option>{% for c in customers %}<option value="{{c.id}}">{{c.name}} - {{c.phone}}</option>{% endfor %}</select></div></div>
-          <div class="field-pro"><label>Sumber Panen</label><div class="input-icon-pro"><i class="fa-solid fa-water"></i><select class="form-select" name="harvest"><option value="">Tanpa sumber panen</option>{% for h in harvests %}<option value="{{h.id}}">{{h.pond.name}} - {{h.date}} - {{h.total_kg|angka:2}} kg</option>{% endfor %}</select></div></div>
+          <div class="field-pro">
+            <label>Pelanggan</label>
+            <input type="hidden" name="customer" id="customerIdPro">
+            <div class="input-icon-pro"><i class="fa-solid fa-users"></i><input class="form-control" id="customerSearchPro" list="customerListPro" placeholder="Cari nama / no HP pelanggan..." autocomplete="off"></div>
+            <datalist id="customerListPro">{% for c in customers %}<option data-id="{{ c.id }}" value="{{ c.name }}{% if c.phone %} - {{ c.phone }}{% endif %}{% if c.email %} - {{ c.email }}{% endif %}"></option>{% endfor %}</datalist>
+            <small>Ketik nama, nomor HP, atau email pelanggan lalu pilih dari daftar.</small>
+          </div>
+          <div class="field-pro">
+            <label>Sumber Panen</label>
+            <input type="hidden" name="harvest" id="harvestIdPro">
+            <div class="input-icon-pro"><i class="fa-solid fa-water"></i><input class="form-control" id="harvestSearchPro" list="harvestListPro" placeholder="Cari kolam / tanggal panen..." autocomplete="off"></div>
+            <datalist id="harvestListPro"><option data-id="" value="Tanpa sumber panen"></option>{% for h in harvests %}<option data-id="{{ h.id }}" value="{{ h.pond.name }} - {{ h.date|date:'d/m/Y' }} - {{ h.total_kg|angka:2 }} kg"></option>{% endfor %}</datalist>
+            <small>Ketik kolam/tanggal panen. Kosongkan bila transaksi tidak terkait panen.</small>
+          </div>
         </div>
       </section>
 
@@ -26,7 +38,7 @@
         <div class="section-head-pro"><i class="fa-solid fa-cube"></i><div><h2>Informasi Produk</h2><p>Masukkan ukuran, berat, dan harga jual per kilogram.</p></div></div>
         <div class="field-pro size-field-pro"><label>Ukuran Udang (ekor/kg)</label><input class="form-control" name="size_text" id="sizeInputPro" placeholder="Contoh: 50 / 40-50 / Campur" required><div class="size-pills-pro" data-target="sizeInputPro"><button type="button">30</button><button type="button">40</button><button type="button">50</button><button type="button">60</button><button type="button">70</button><button type="button">80</button><button type="button">100</button></div></div>
         <div class="form-grid-pro two">
-          <div class="field-pro"><label>Berat (Kg)</label><div class="input-icon-pro"><i class="fa-solid fa-scale-balanced"></i><input class="form-control" name="weight_kg" id="weightInputPro" step="0.01" required></div></div>
+          <div class="field-pro"><label>Berat (Kg)</label><div class="input-icon-pro"><i class="fa-solid fa-scale-balanced"></i><input class="form-control numeric-decimal" type="text" inputmode="decimal" name="weight_kg" id="weightInputPro" placeholder="Contoh: 120.50" required></div></div>
           <div class="field-pro"><label>Harga / Kg (Rp)</label><div class="input-icon-pro prefix"><span>Rp</span><input class="form-control" name="price_per_kg" id="priceInputPro" inputmode="numeric" data-rupiah-input placeholder="70.000" required></div><small>Format otomatis Rupiah, contoh Rp 70.000/kg.</small></div>
         </div>
       </section>
@@ -62,7 +74,36 @@
 (function(){
   function digits(v){return String(v||'').replace(/[^0-9]/g,'')||'0'}
   function money(n){return 'Rp ' + Number(n||0).toLocaleString('id-ID')}
+  function bindDatalist(inputId, hiddenId, listId){
+    const input=document.getElementById(inputId), hidden=document.getElementById(hiddenId), list=document.getElementById(listId);
+    if(!input||!hidden||!list) return;
+    function sync(){const opt=[...list.options].find(o=>o.value===input.value);hidden.value=opt ? (opt.dataset.id||'') : '';}
+    input.addEventListener('input', sync); input.addEventListener('change', sync); sync();
+  }
+  bindDatalist('customerSearchPro','customerIdPro','customerListPro');
+  bindDatalist('harvestSearchPro','harvestIdPro','harvestListPro');
   function recalc(){const weight=parseFloat(String(document.getElementById('weightInputPro')?.value||'0').replace(',','.'))||0;const price=Number(digits(document.getElementById('priceInputPro')?.value));const ship=Number(digits(document.querySelector('[name="shipping_cost"]')?.value));const pack=Number(digits(document.querySelector('[name="packing_cost"]')?.value));const other=Number(digits(document.querySelector('[name="other_cost"]')?.value));const out=document.getElementById('grandTotalPreview');if(out)out.textContent=money(weight*price+ship+pack+other)}
+
+  // saleDecimalInputsPatched: input desimal dibuat mudah seperti Parameter Harian.
+  document.querySelectorAll('#saleFormPro .numeric-decimal').forEach(function(input){
+    input.addEventListener('input', function(){
+      input.value = input.value.replace(',', '.').replace(/[^0-9.]/g,'');
+      const parts = input.value.split('.');
+      if(parts.length > 2) input.value = parts.shift() + '.' + parts.join('');
+    });
+  });
+  document.getElementById('saleFormPro')?.addEventListener('submit', function(event){
+    const msgs=[];
+    document.querySelectorAll('#saleFormPro .numeric-decimal').forEach(function(input){
+      const value=input.value.trim();
+      if(!value || !/^\d+(\.\d+)?$/.test(value)){
+        const label=input.closest('.field-pro')?.querySelector('label')?.innerText || input.name;
+        msgs.push(label + ' harus angka desimal valid. Contoh: 120.5');
+        input.classList.add('is-invalid');
+      } else { input.classList.remove('is-invalid'); }
+    });
+    if(msgs.length){ event.preventDefault(); alert('Periksa kembali input angka:\n- ' + msgs.join('\n- ')); }
+  });
   document.querySelectorAll('#saleFormPro input, #saleFormPro select').forEach(el=>el.addEventListener('input',recalc));document.querySelectorAll('.size-pills-pro button').forEach(btn=>btn.addEventListener('click',function(){const target=document.getElementById(this.parentElement.dataset.target);if(target){target.value=this.textContent.trim();target.dispatchEvent(new Event('input'))}}));recalc();
 })();
 </script>
