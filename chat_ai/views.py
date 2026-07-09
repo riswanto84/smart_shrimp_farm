@@ -1,5 +1,8 @@
-from django.shortcuts import render, redirect
+from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.shortcuts import get_object_or_404, redirect, render
+
 from accounts.rbac import permission_required
 from ponds.models import Pond
 from operations.models import DailyParameter, DailyPondRecord, AncoCheck, SamplingRecord, SiphonRecord, Harvest
@@ -32,27 +35,95 @@ def _pond_ai_context(pond):
     return ' '.join(parts)
 
 
+def _is_ollama_error(answer):
+    text = (answer or '').lower()
+    return 'ollama belum tersedia' in text or 'gagal dihubungi' in text or 'connection refused' in text or 'timed out' in text
+
+
 @login_required
 @permission_required('chat.view')
 def chat(request):
     ponds = Pond.objects.all()
-    session = ChatSession.objects.filter(user=request.user).order_by('-created_at').first()
+    session = ChatSession.objects.filter(user=request.user).order_by('-updated_at', '-created_at').first()
     if not session:
-        session = ChatSession.objects.create(user=request.user)
+        session = ChatSession.objects.create(
+            user=request.user,
+            model_name=getattr(settings, 'OLLAMA_MODEL', 'gemma2:2b'),
+        )
+
     if request.method == 'POST':
-        msg = request.POST['message']
+        msg = (request.POST.get('message') or '').strip()
         pond_id = request.POST.get('pond')
         if pond_id:
             session.pond_id = pond_id
-            session.save()
-        ChatMessage.objects.create(session=session, role='user', message=msg)
+            session.save(update_fields=['pond'])
+
+        if not msg:
+            messages.warning(request, 'Pertanyaan tidak boleh kosong.')
+            return redirect('chat_ai:chat')
+
         context = _pond_ai_context(session.pond)
+        context_snapshot = {
+            'pond_id': session.pond_id,
+            'pond_name': session.pond.name if session.pond else '',
+            'context_text': context,
+        }
+
+        ChatMessage.objects.create(
+            session=session,
+            role='user',
+            message=msg,
+            context_snapshot=context_snapshot,
+        )
+
         prompt = (
             'Anda adalah asisten manajemen tambak udang vaname untuk aplikasi Smart Shrimp Farm. '
             'Jawab praktis, aman, berbasis data, dan berikan rekomendasi operasional yang bisa dilakukan teknisi. '
             + context + ' Pertanyaan: ' + msg
         )
         answer = ask_ollama(prompt)
-        ChatMessage.objects.create(session=session, role='assistant', message=answer)
+        ChatMessage.objects.create(
+            session=session,
+            role='assistant',
+            message=answer,
+            context_snapshot=context_snapshot,
+        )
+
+        session.model_name = getattr(settings, 'OLLAMA_MODEL', 'gemma2:2b')
+        if _is_ollama_error(answer):
+            session.retention_type = ChatSession.RETENTION_ERROR
+            session.error_message = answer[:1000]
+        elif not session.is_important:
+            session.retention_type = ChatSession.RETENTION_NORMAL
+            session.error_message = ''
+        session.save()
         return redirect('chat_ai:chat')
-    return render(request, 'chat_ai/chat.html', {'session': session, 'ponds': ponds, 'ollama_health': ollama_health()})
+
+    return render(request, 'chat_ai/chat.html', {
+        'session': session,
+        'ponds': ponds,
+        'ollama_health': ollama_health(),
+    })
+
+
+@login_required
+@permission_required('chat.view')
+def mark_important(request, session_id):
+    session = get_object_or_404(ChatSession, id=session_id, user=request.user)
+    session.is_important = True
+    session.retention_type = ChatSession.RETENTION_IMPORTANT
+    session.error_message = ''
+    session.save(update_fields=['is_important', 'retention_type', 'error_message', 'updated_at'])
+    messages.success(request, 'Percakapan ditandai penting dan akan disimpan permanen.')
+    return redirect('chat_ai:chat')
+
+
+@login_required
+@permission_required('chat.view')
+def unmark_important(request, session_id):
+    session = get_object_or_404(ChatSession, id=session_id, user=request.user)
+    session.is_important = False
+    session.retention_type = ChatSession.RETENTION_NORMAL
+    session.save(update_fields=['is_important', 'retention_type', 'updated_at'])
+    messages.success(request, 'Percakapan dikembalikan menjadi percakapan biasa.')
+    return redirect('chat_ai:chat')

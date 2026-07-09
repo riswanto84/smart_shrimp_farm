@@ -22,9 +22,26 @@
       <form method="post">{% csrf_token %}
         <label class="form-label">Kolam</label>
         <select class="form-select mb-3" name="pond">{% for p in ponds %}<option value="{{p.id}}" {% if session.pond_id == p.id %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select>
-        <textarea class="form-control mb-3" name="message" rows="6" placeholder="Contoh: dari data sampling dan siphon terakhir, apakah pakan perlu dinaikkan?"></textarea>
+        <textarea class="form-control mb-3" name="message" rows="6"></textarea>
         <button class="btn btn-primary w-100"><i class="fa-solid fa-paper-plane"></i> Kirim Pertanyaan</button>
       </form>
+    </div>
+    <div class="panel mt-3">
+      <h2>Retensi Percakapan</h2>
+      <p class="text-muted mb-2">Percakapan biasa disimpan 6 bulan, error 30 hari, dan percakapan penting disimpan permanen.</p>
+      <div class="mb-2">
+        <span class="badge-soft">{{ session.get_retention_type_display }}</span>
+      </div>
+      {% if session.is_important %}
+        <form method="post" action="{% url 'chat_ai:unmark_important' session.id %}">{% csrf_token %}
+          <button class="btn btn-outline-secondary w-100" type="submit"><i class="fa-solid fa-bookmark"></i> Jadikan Percakapan Biasa</button>
+        </form>
+      {% else %}
+        <form method="post" action="{% url 'chat_ai:mark_important' session.id %}">{% csrf_token %}
+          <button class="btn btn-warning w-100 text-dark" type="submit"><i class="fa-solid fa-star"></i> Tandai Penting / Simpan Permanen</button>
+        </form>
+      {% endif %}
+      {% if session.error_message %}<div class="small text-danger mt-2">Error terakhir: {{ session.error_message|truncatechars:140 }}</div>{% endif %}
     </div>
   </div>
   <div class="col-lg-8">

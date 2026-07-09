@@ -6,7 +6,7 @@ from reportlab.platypus import Paragraph, Table, TableStyle
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from accounts.rbac import permission_required
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Min, Max
 from django.db.models.functions import TruncDate, TruncWeek, TruncMonth
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -53,13 +53,33 @@ def _expense_rows(items):
 @permission_required('finance.expenses')
 def expenses(request):
     items, date_from, date_to = _expense_queryset(request)
-    total = items.aggregate(s=Sum('amount'))['s'] or 0
+    total = items.aggregate(s=Sum('amount'))['s'] or Decimal('0')
+    span = items.aggregate(min_date=Min('date'), max_date=Max('date'))
+    if date_from and date_to:
+        day_count = max((date_to - date_from).days + 1, 1)
+        average_label = 'Rata-rata periode filter'
+    elif span['min_date'] and span['max_date']:
+        day_count = max((span['max_date'] - span['min_date']).days + 1, 1)
+        average_label = 'Rata-rata dari data aktual'
+    else:
+        day_count = 1
+        average_label = 'Belum ada data'
+    average_per_day = total / Decimal(day_count)
+
+    top_category = items.values('category').annotate(total_amount=Sum('amount')).order_by('-total_amount').first()
+    largest_category = top_category['category'] if top_category else '-'
+    largest_category_amount = top_category['total_amount'] if top_category else Decimal('0')
+
     ponds = Pond.objects.all()
     page_obj = paginate_queryset(request, items, per_page=10)
     return render(request, 'finance/expenses.html', {
         'items': page_obj,
         'page_obj': page_obj,
         'total': total,
+        'average_per_day': average_per_day,
+        'average_label': average_label,
+        'largest_category': largest_category,
+        'largest_category_amount': largest_category_amount,
         'date_from': date_from,
         'date_to': date_to,
         'ponds': ponds,
