@@ -49,9 +49,18 @@ class Stocking(models.Model):
 class DailyParameter(models.Model):
     pond=models.ForeignKey(Pond,on_delete=models.CASCADE)
     technician=models.ForeignKey(User,on_delete=models.SET_NULL,null=True,blank=True)
+    WEATHER_CHOICES = [
+        ('Cerah', 'Cerah'), ('Berawan', 'Berawan'), ('Hujan', 'Hujan'),
+        ('Panas', 'Panas'), ('Angin Kencang', 'Angin Kencang'),
+    ]
     date=models.DateField()
     doc=models.IntegerField(default=0)
-    water_level_cm=models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    feed_code=models.CharField(max_length=80, blank=True)
+    water_in_cm=models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    weather=models.CharField(max_length=30, choices=WEATHER_CHOICES, blank=True)
+    water_level_cm=models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)  # kompatibilitas data lama
+    water_level_morning_cm=models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    water_level_evening_cm=models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     temperature=models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     ph_morning=models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
     ph_evening=models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
@@ -59,13 +68,29 @@ class DailyParameter(models.Model):
     do_night=models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
     salinity=models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     alkalinity=models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
-    transparency=models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    transparency=models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)  # kompatibilitas data lama
+    transparency_morning=models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    transparency_evening=models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     feed_kg=models.DecimalField(max_digits=8, decimal_places=2, default=0)
     mortality=models.IntegerField(default=0)
-    water_color=models.CharField(max_length=80, blank=True)
+    water_color=models.CharField(max_length=80, blank=True)  # kompatibilitas data lama
+    water_color_morning=models.CharField(max_length=80, blank=True)
+    water_color_evening=models.CharField(max_length=80, blank=True)
     notes=models.TextField(blank=True)
     ai_recommendation=models.TextField(blank=True)
     created_at=models.DateTimeField(auto_now_add=True)
+
+    @property
+    def water_level_display(self):
+        pagi = self.water_level_morning_cm if self.water_level_morning_cm is not None else self.water_level_cm
+        sore = self.water_level_evening_cm if self.water_level_evening_cm is not None else self.water_level_cm
+        return pagi, sore
+
+    @property
+    def transparency_display(self):
+        pagi = self.transparency_morning if self.transparency_morning is not None else self.transparency
+        sore = self.transparency_evening if self.transparency_evening is not None else self.transparency
+        return pagi, sore
 
 
 class Treatment(models.Model):
@@ -116,6 +141,11 @@ class AncoCheck(models.Model):
     technician = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     date = models.DateField(default=timezone.localdate)
     doc = models.PositiveIntegerField(default=0)
+    feed_code = models.CharField(max_length=80, blank=True)
+    daily_feed_kg = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    water_in_cm = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    weather = models.CharField(max_length=30, choices=DailyParameter.WEATHER_CHOICES, blank=True)
+    treatment = models.TextField(blank=True)
     anco1_morning = models.CharField(max_length=2, choices=STATUS_CHOICES, default='-')
     anco2_morning = models.CharField(max_length=2, choices=STATUS_CHOICES, default='-')
     anco1_noon = models.CharField(max_length=2, choices=STATUS_CHOICES, default='-')
@@ -232,11 +262,11 @@ class SamplingRecord(models.Model):
             self.stocking_count = stocking.seed_count
 
         if not self.cumulative_feed_kg:
-            feed_total = DailyPondRecord.objects.filter(pond=self.pond, date__lte=self.date).aggregate(s=models.Sum('daily_feed_kg'))['s'] or Decimal('0')
+            feed_total = DailyParameter.objects.filter(pond=self.pond, date__lte=self.date).aggregate(s=models.Sum('feed_kg'))['s'] or Decimal('0')
             self.cumulative_feed_kg = feed_total
-        latest_feed = DailyPondRecord.objects.filter(pond=self.pond, date__lte=self.date).order_by('-date').first()
+        latest_feed = DailyParameter.objects.filter(pond=self.pond, date__lte=self.date).order_by('-date').first()
         if latest_feed and not self.daily_feed_kg:
-            self.daily_feed_kg = latest_feed.daily_feed_kg or Decimal('0')
+            self.daily_feed_kg = latest_feed.feed_kg or Decimal('0')
 
         fd = _d(self.daily_feed_kg)
         fr = _d(self.fr_percent)

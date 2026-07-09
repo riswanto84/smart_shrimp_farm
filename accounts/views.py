@@ -1,8 +1,8 @@
 import random
 from django.contrib import messages
 from django.contrib.auth.views import LoginView, LogoutView
-from django.contrib.auth.forms import AuthenticationForm
-from django.contrib.auth import login as auth_login
+from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
+from django.contrib.auth import login as auth_login, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from accounts.rbac import permission_required, normalized_roles
 from django.shortcuts import render, redirect, get_object_or_404
@@ -132,3 +132,40 @@ def roles(request):
     perms = PermissionItem.objects.all().order_by('group','code')
     page_obj = paginate_queryset(request, perms, per_page=10)
     return render(request,'accounts/roles.html',{'roles':roles,'perms':page_obj,'page_obj':page_obj})
+
+
+@login_required
+def profile(request):
+    """Edit profil pribadi user yang sedang login."""
+    user = request.user
+    if request.method == 'POST':
+        user.first_name = request.POST.get('first_name','').strip()
+        user.last_name = request.POST.get('last_name','').strip()
+        user.email = request.POST.get('email','').strip()
+        user.save()
+        try:
+            user.userprofile.phone = request.POST.get('phone','').strip()
+            user.userprofile.save()
+        except Exception:
+            pass
+        AuditLog.objects.create(user=request.user, action='Mengubah profil pribadi')
+        messages.success(request, 'Profil berhasil diperbarui.')
+        return redirect('accounts:profile')
+    return render(request, 'accounts/profile.html', {'edited_user': user})
+
+
+@login_required
+def change_password(request):
+    """Ubah password pribadi menggunakan PasswordChangeForm bawaan Django."""
+    if request.method == 'POST':
+        form = PasswordChangeForm(request.user, request.POST)
+        if form.is_valid():
+            user = form.save()
+            update_session_auth_hash(request, user)
+            AuditLog.objects.create(user=request.user, action='Mengubah password pribadi')
+            messages.success(request, 'Password berhasil diperbarui.')
+            return redirect('accounts:profile')
+        messages.error(request, 'Password belum bisa diperbarui. Periksa kembali isian form.')
+    else:
+        form = PasswordChangeForm(request.user)
+    return render(request, 'accounts/change_password.html', {'form': form})

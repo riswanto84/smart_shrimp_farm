@@ -1,8 +1,40 @@
 {% extends 'base.html' %}
 {% load currency %}
 {% block content %}
-<div class="page-head"><div><h1>Parameter Harian</h1><p>Catatan kualitas air harian termasuk tinggi air, pH, salinitas, warna air, kecerahan, dan analisa AI Ollama.</p></div><a class="btn btn-primary" href="{% url 'operations:add_parameter' %}"><i class="fa-solid fa-plus"></i> Input Parameter</a></div>
+<div class="page-head">
+  <div><h1>Parameter Harian</h1><p>Catatan parameter harian meliputi kode pakan, air masuk, cuaca, pakan harian, tinggi air pagi/sore, pH, salinitas, warna air pagi/sore, kecerahan pagi/sore, dan analisa AI Ollama.</p></div>
+  <a class="btn btn-primary" href="{% url 'operations:add_parameter' %}"><i class="fa-solid fa-plus"></i> Input Parameter</a>
+</div>
 <div class="cardx mb-3"><form method="get" class="row g-2 align-items-end"><div class="col-md-3"><label class="form-label">Tanggal Mulai</label><input class="form-control" type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"></div><div class="col-md-3"><label class="form-label">Tanggal Selesai</label><input class="form-control" type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></div><div class="col-md-3"><label class="form-label">Kolam</label><select class="form-select" name="pond"><option value="">Semua Kolam</option>{% for p in ponds %}<option value="{{p.id}}" {% if request.GET.pond == p.id|stringformat:'s' %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></div><div class="col-md-3 d-grid"><button class="btn btn-outline-primary"><i class="fa-solid fa-filter"></i> Terapkan Filter</button></div></form><div class="mt-3 d-flex gap-2 flex-wrap"><a class="btn btn-success" href="{% url 'operations:export_parameters_excel' %}?{{ request.GET.urlencode }}"><i class="fa-solid fa-file-excel"></i> Export Excel</a><a class="btn btn-danger" href="{% url 'operations:export_parameters_pdf' %}?{{ request.GET.urlencode }}"><i class="fa-solid fa-file-pdf"></i> Export PDF</a></div></div>
-<div class="cardx table-responsive"><table class="table app-table align-middle"><thead><tr><th>Tanggal</th><th>Kolam</th><th>DOC</th><th>Tinggi Air</th><th>pH</th><th>Salinitas</th><th>Warna Air</th><th>Kecerahan</th><th>DO Malam</th><th>Pakan</th><th>AI</th><th class="text-end">Aksi</th></tr></thead><tbody>{% for i in items %}<tr><td>{{i.date}}</td><td><b>{{i.pond.name}}</b></td><td>{{i.doc|ribuan}}</td><td>{{i.water_level_cm|angka:2}} cm</td><td>{{i.ph_evening|angka:2}}</td><td>{{i.salinity|angka:2}} ppt</td><td>{{i.water_color|default:'-'}}</td><td>{{i.transparency|angka:2}} cm</td><td>{{i.do_night|angka:2}}</td><td>{{i.feed_kg|angka:2}} Kg</td><td>{{i.ai_recommendation|truncatechars:70}}</td><td class="text-end">{% url 'operations:edit_parameter' i.id as edit_url %}{% url 'operations:delete_parameter' i.id as delete_url %}{% include 'operations/_row_actions.html' %}</td></tr>{% empty %}<tr><td colspan="12" class="text-center text-muted">Tidak ada data pada filter ini.</td></tr>{% endfor %}</tbody></table></div>
+<div class="cardx table-responsive">
+  <table class="table app-table align-middle">
+    <thead>
+      <tr>
+        <th>Tanggal</th><th>Kolam</th><th>DOC</th><th>Kode Pakan</th><th>Air Masuk</th><th>Cuaca</th><th>Tinggi Air</th><th>pH</th><th>Salinitas</th><th>Warna Air</th><th>Kecerahan</th><th>DO</th><th>Pakan</th><th>AI</th><th class="text-end">Aksi</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for i in items %}
+      <tr>
+        <td>{{i.date}}</td>
+        <td><b>{{i.pond.name}}</b></td>
+        <td>{{i.doc|ribuan}}</td>
+        <td><span class="badge-soft">{{ i.feed_code|default:"-" }}</span></td>
+        <td>{% if i.water_in_cm %}{{ i.water_in_cm|angka:2 }} cm{% else %}-{% endif %}</td>
+        <td>{{ i.weather|default:"-" }}</td>
+        <td><span class="badge bg-primary-subtle text-primary">P {% if i.water_level_morning_cm %}{{ i.water_level_morning_cm|angka:2 }}{% else %}{{ i.water_level_cm|angka:2 }}{% endif %} cm</span><br><span class="badge bg-info-subtle text-info">S {% if i.water_level_evening_cm %}{{ i.water_level_evening_cm|angka:2 }}{% else %}{{ i.water_level_cm|angka:2 }}{% endif %} cm</span></td>
+        <td><small>Pagi</small> {{i.ph_morning|angka:2}}<br><small>Sore</small> {{i.ph_evening|angka:2}}</td>
+        <td>{{i.salinity|angka:2}} ppt</td>
+        <td><small>Pagi</small> {% if i.water_color_morning %}{{ i.water_color_morning }}{% elif i.water_color %}{{ i.water_color }}{% else %}-{% endif %}<br><small>Sore</small> {% if i.water_color_evening %}{{ i.water_color_evening }}{% elif i.water_color %}{{ i.water_color }}{% else %}-{% endif %}</td>
+        <td><small>Pagi</small> {% if i.transparency_morning %}{{ i.transparency_morning|angka:2 }}{% else %}{{ i.transparency|angka:2 }}{% endif %} cm<br><small>Sore</small> {% if i.transparency_evening %}{{ i.transparency_evening|angka:2 }}{% else %}{{ i.transparency|angka:2 }}{% endif %} cm</td>
+        <td><small>Pagi</small> {{i.do_morning|angka:2}}<br><small>Malam</small> {{i.do_night|angka:2}}</td>
+        <td>{{i.feed_kg|angka:2}} Kg</td>
+        <td>{{i.ai_recommendation|truncatechars:70}}</td>
+        <td class="text-end">{% url 'operations:edit_parameter' i.id as edit_url %}{% url 'operations:delete_parameter' i.id as delete_url %}{% include 'operations/_row_actions.html' %}</td>
+      </tr>
+      {% empty %}<tr><td colspan="15" class="text-center text-muted">Tidak ada data pada filter ini.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
 {% include '_pagination.html' %}
 {% endblock %}

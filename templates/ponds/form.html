@@ -1,5 +1,164 @@
 {% extends 'base.html' %}
+{% load currency l10n %}
 {% block content %}
-<div class="page-head"><div><h1>Form Master Kolam</h1><p>Tambah atau ubah data kolam tambak Udang Emas Nusantara.</p></div></div>
-<div class="cardx"><form method="post" enctype="multipart/form-data" class="row g-3">{% csrf_token %}<div class="col-md-4"><label class="form-label">Kode Kolam</label><input class="form-control" name="code" value="{{pond.code|default:''}}" required></div><div class="col-md-4"><label class="form-label">Nama Kolam</label><input class="form-control" name="name" value="{{pond.name|default:''}}" required></div><div class="col-md-4"><label class="form-label">Status</label><select class="form-select" name="status"><option {% if pond.status == 'Persiapan' %}selected{% endif %}>Persiapan</option><option {% if pond.status == 'Budidaya' %}selected{% endif %}>Budidaya</option><option {% if pond.status == 'Panen' %}selected{% endif %}>Panen</option><option {% if pond.status == 'Kosong' %}selected{% endif %}>Kosong</option><option {% if pond.status == 'Perbaikan' %}selected{% endif %}>Perbaikan</option></select></div><div class="col-md-3"><label class="form-label">Luas (m²)</label><input class="form-control" name="area_m2" value="{{pond.area_m2|default:''}}"></div><div class="col-md-3"><label class="form-label">Kedalaman (m)</label><input class="form-control" name="depth_m" value="{{pond.depth_m|default:''}}"></div><div class="col-md-3"><label class="form-label">Kapasitas Tebar</label><input class="form-control" name="capacity_seed" value="{{pond.capacity_seed|default:''}}"></div><div class="col-md-3"><label class="form-label">Jenis Kolam</label><input class="form-control" name="pond_type" value="{{pond.pond_type|default:'HDPE'}}"></div><div class="col-md-6"><label class="form-label">Lokasi</label><input class="form-control" name="location" value="{{pond.location|default:''}}"></div><div class="col-md-6"><label class="form-label">Foto Kolam</label><input class="form-control" type="file" name="photo"></div><div class="col-12"><label class="form-label">Keterangan</label><textarea class="form-control" rows="4" name="notes">{{pond.notes|default:''}}</textarea></div><div class="col-12"><button class="btn btn-primary px-4">Simpan Data Kolam</button><a class="btn btn-outline-secondary ms-2" href="{% url 'ponds:list' %}">Batal</a></div></form></div>
+<div class="pond-form-page">
+  <div class="page-head pond-form-head">
+    <div>
+      <span class="form-kicker"><i class="fa-solid fa-water"></i> MASTER KOLAM</span>
+      <h1>{% if mode == 'edit' %}Edit Data Kolam{% else %}Tambah Data Kolam{% endif %}</h1>
+      <p>Kelola identitas, kapasitas tebar, dimensi, lokasi, dan dokumentasi kolam tambak.</p>
+    </div>
+    <a class="btn btn-outline-primary" href="{% url 'ponds:list' %}"><i class="fa-solid fa-arrow-left"></i> Kembali</a>
+  </div>
+
+  {% if form_errors %}
+  <div class="validation-summary">
+    <div class="validation-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+    <div>
+      <strong>Data belum bisa disimpan</strong>
+      <p>Perbaiki format input berikut sebelum melanjutkan.</p>
+      <ul>
+        {% for field, error in form_errors.items %}<li>{{ error }}</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data" class="pond-form-layout" novalidate>
+    {% csrf_token %}
+    <section class="pond-form-card">
+      <div class="section-title">
+        <span><i class="fa-solid fa-circle-info"></i></span>
+        <div><h2>Informasi Utama</h2><p>Kode dan nama kolam digunakan sebagai identitas utama pada laporan dan dashboard.</p></div>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label">Kode Kolam <b>*</b></label>
+          <div class="input-icon {% if form_errors.code %}has-error{% endif %}"><i class="fa-solid fa-hashtag"></i><input class="form-control" name="code" value="{% if form_data %}{{ form_data.code }}{% else %}{{ pond.code|default:'' }}{% endif %}" placeholder="Contoh: K-01" required></div>
+          {% if form_errors.code %}<div class="field-error">{{ form_errors.code }}</div>{% endif %}
+        </div>
+        <div class="col-md-5">
+          <label class="form-label">Nama Kolam <b>*</b></label>
+          <div class="input-icon {% if form_errors.name %}has-error{% endif %}"><i class="fa-solid fa-pen"></i><input class="form-control" name="name" value="{% if form_data %}{{ form_data.name }}{% else %}{{ pond.name|default:'' }}{% endif %}" placeholder="Contoh: Kolam 1" required></div>
+          {% if form_errors.name %}<div class="field-error">{{ form_errors.name }}</div>{% endif %}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Status</label>
+          <div class="input-icon {% if form_errors.status %}has-error{% endif %}"><i class="fa-solid fa-layer-group"></i><select class="form-select" name="status">
+            {% for value,label in status_choices %}
+              <option value="{{ value }}" {% if form_data and form_data.status == value %}selected{% elif not form_data and pond.status == value %}selected{% elif not form_data and not pond and value == 'Persiapan' %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select></div>
+          {% if form_errors.status %}<div class="field-error">{{ form_errors.status }}</div>{% endif %}
+        </div>
+      </div>
+    </section>
+
+    <section class="pond-form-card">
+      <div class="section-title">
+        <span><i class="fa-solid fa-ruler-combined"></i></span>
+        <div><h2>Dimensi & Kapasitas</h2><p>Gunakan input angka murni. Desimal memakai titik, contoh: 1825.00 atau 1.45.</p></div>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label">Luas Kolam (m²)</label>
+          <div class="input-icon {% if form_errors.area_m2 %}has-error{% endif %}"><i class="fa-solid fa-vector-square"></i><input class="form-control number-input" type="number" name="area_m2" inputmode="decimal" min="0" step="0.01" data-number-mode="decimal" value="{% if form_data %}{{ form_data.area_m2 }}{% else %}{{ pond.area_m2|default:''|unlocalize }}{% endif %}" placeholder="1825.00"></div>
+          {% if form_errors.area_m2 %}<div class="field-error">{{ form_errors.area_m2 }}</div>{% else %}<div class="field-help">Hanya angka. Desimal gunakan titik, contoh 1825.00.</div>{% endif %}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Kedalaman (m)</label>
+          <div class="input-icon {% if form_errors.depth_m %}has-error{% endif %}"><i class="fa-solid fa-arrows-down-to-line"></i><input class="form-control number-input" type="number" name="depth_m" inputmode="decimal" min="0" step="0.01" data-number-mode="decimal" value="{% if form_data %}{{ form_data.depth_m }}{% else %}{{ pond.depth_m|default:''|unlocalize }}{% endif %}" placeholder="1.45"></div>
+          {% if form_errors.depth_m %}<div class="field-error">{{ form_errors.depth_m }}</div>{% else %}<div class="field-help">Hanya angka. Contoh: 1.45 meter.</div>{% endif %}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Kapasitas Tebar</label>
+          <div class="input-icon {% if form_errors.capacity_seed %}has-error{% endif %}"><i class="fa-solid fa-fish-fins"></i><input class="form-control number-input" type="number" name="capacity_seed" inputmode="numeric" min="0" step="1" data-number-mode="integer" value="{% if form_data %}{{ form_data.capacity_seed }}{% else %}{{ pond.capacity_seed|default:'' }}{% endif %}" placeholder="177500"></div>
+          {% if form_errors.capacity_seed %}<div class="field-error">{{ form_errors.capacity_seed }}</div>{% else %}<div class="field-help">Hanya angka bulat. Contoh: 177500.</div>{% endif %}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Jenis Kolam</label>
+          <div class="input-icon"><i class="fa-solid fa-table-cells-large"></i><input class="form-control" name="pond_type" value="{% if form_data %}{{ form_data.pond_type }}{% else %}{{ pond.pond_type|default:'HDPE' }}{% endif %}" placeholder="HDPE / Tanah / Beton"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="pond-form-card">
+      <div class="section-title">
+        <span><i class="fa-solid fa-location-dot"></i></span>
+        <div><h2>Lokasi & Dokumentasi</h2><p>Tambahkan lokasi dan catatan agar riwayat kolam mudah ditelusuri.</p></div>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-7">
+          <label class="form-label">Lokasi</label>
+          <div class="input-icon"><i class="fa-solid fa-map-location-dot"></i><input class="form-control" name="location" value="{% if form_data %}{{ form_data.location }}{% else %}{{ pond.location|default:'' }}{% endif %}" placeholder="Jalan Pantai Mekar, Muara Gembong"></div>
+        </div>
+        <div class="col-md-5">
+          <label class="form-label">Foto Kolam</label>
+          <input class="form-control file-input" type="file" name="photo" accept="image/*">
+          {% if pond.photo %}<div class="field-help">Foto saat ini sudah tersimpan. Pilih file baru hanya bila ingin mengganti.</div>{% endif %}
+        </div>
+        <div class="col-12">
+          <label class="form-label">Keterangan</label>
+          <textarea class="form-control notes-input" rows="4" name="notes" placeholder="Catatan kondisi kolam, jenis konstruksi, atau informasi lain.">{% if form_data %}{{ form_data.notes }}{% else %}{{ pond.notes|default:'' }}{% endif %}</textarea>
+        </div>
+      </div>
+    </section>
+
+    <aside class="pond-form-side">
+      <div class="side-card primary">
+        <i class="fa-solid fa-shield-halved"></i>
+        <h3>Validasi Otomatis</h3>
+        <p>Sistem hanya menerima input angka pada luas, kedalaman, dan kapasitas tebar. Nilai tidak valid akan ditolak dengan notifikasi.</p>
+      </div>
+      <div class="side-card">
+        <h3>Panduan Format Nilai</h3>
+        <ul>
+          <li><b>Luas:</b> 1825 atau 1825.00</li>
+          <li><b>Kedalaman:</b> 1.45</li>
+          <li><b>Kapasitas:</b> 177500</li>
+          <li>Jangan gunakan huruf, koma, titik ribuan, atau simbol.</li>
+        </ul>
+      </div>
+      <div class="side-actions">
+        <button class="btn btn-primary w-100" type="submit"><i class="fa-solid fa-floppy-disk"></i> Simpan Data Kolam</button>
+        <a class="btn btn-outline-secondary w-100" href="{% url 'ponds:list' %}">Batal</a>
+      </div>
+    </aside>
+  </form>
+</div>
+
+<script>
+(function(){
+  function normalizeAndGuard(input){
+    const mode = input.dataset.numberMode;
+    input.addEventListener('keydown', function(e){
+      const allowedKeys = ['Backspace','Delete','Tab','Escape','Enter','ArrowLeft','ArrowRight','Home','End'];
+      if (allowedKeys.includes(e.key) || (e.ctrlKey || e.metaKey)) return;
+      if (mode === 'integer') {
+        if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+        return;
+      }
+      if (mode === 'decimal') {
+        if (e.key === '.') {
+          if (input.value.includes('.')) e.preventDefault();
+          return;
+        }
+        if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+      }
+    });
+    input.addEventListener('paste', function(e){
+      const text = (e.clipboardData || window.clipboardData).getData('text');
+      const valid = mode === 'integer' ? /^\d+$/.test(text) : /^\d+(\.\d+)?$/.test(text);
+      if (!valid) {
+        e.preventDefault();
+        input.setCustomValidity(mode === 'integer' ? 'Kapasitas tebar hanya boleh angka bulat, contoh 177500.' : 'Gunakan angka saja. Desimal memakai titik, contoh 1825.00.');
+        input.reportValidity();
+        setTimeout(function(){ input.setCustomValidity(''); }, 2000);
+      }
+    });
+  }
+  document.querySelectorAll('[data-number-mode]').forEach(normalizeAndGuard);
+})();
+</script>
+
 {% endblock %}

@@ -2,39 +2,148 @@
 {% block content %}
 <div class="page-head">
   <div>
+    <span class="badge rounded-pill bg-primary-subtle text-primary mb-2"><i class="fa-solid fa-flask-vial"></i> PARAMETER HARIAN</span>
     <h1>{% if mode == 'edit' %}Edit{% else %}Input{% endif %} Parameter Harian</h1>
-    <p>Catat tinggi air, kualitas air, pakan, mortalitas, warna air, dan catatan teknisi.</p>
+    <p>Catat kode pakan, pakan harian, air masuk, cuaca, tinggi air pagi/sore, kualitas air, warna air, kecerahan, mortalitas, dan catatan teknisi.</p>
   </div>
+  <a class="btn btn-outline-primary" href="{% url 'operations:parameters' %}"><i class="fa-solid fa-arrow-left"></i> Kembali</a>
 </div>
 
-<div class="cardx">
-  <form method="post" class="row g-3">{% csrf_token %}
-    <div class="col-12 section-mini"><i class="fa-solid fa-water"></i><div><b>Data Dasar Kolam</b><small>Tanggal, kolam, DOC, dan tinggi air sesuai format monitoring harian.</small></div></div>
-    <div class="col-md-3"><label class="form-label">Tanggal</label><input class="form-control" type="date" name="date" value="{{ obj.date|date:'Y-m-d' }}" required></div>
-    <div class="col-md-3"><label class="form-label">Kolam</label><select class="form-select" name="pond">{% for p in ponds %}<option value="{{p.id}}" {% if obj.pond_id == p.id %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></div>
-    <div class="col-md-3"><label class="form-label">DOC</label><input class="form-control" name="doc" type="number" value="{{ obj.doc|default:0 }}"></div>
-    <div class="col-md-3"><label class="form-label">Tinggi Air (cm)</label><input class="form-control" name="water_level_cm" inputmode="decimal" placeholder="Contoh: 90" value="{{ obj.water_level_cm|default:'' }}"></div>
+{% if errors %}
+<div class="alert alert-danger border-0 shadow-sm mb-3">
+  <div class="fw-bold mb-1"><i class="fa-solid fa-triangle-exclamation"></i> Data belum bisa disimpan</div>
+  <ul class="mb-0">
+    {% for key, msg in errors.items %}<li>{{ msg }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
 
-    <div class="col-12 section-mini mt-2"><i class="fa-solid fa-flask"></i><div><b>Kualitas Air</b><small>Gunakan titik atau koma untuk angka desimal, contoh 7,6 atau 7.6.</small></div></div>
-    <div class="col-md-3"><label class="form-label">Suhu Air (°C)</label><input class="form-control" name="temperature" inputmode="decimal" value="{{ obj.temperature|default:'' }}"></div>
-    <div class="col-md-3"><label class="form-label">pH Pagi</label><input class="form-control" name="ph_morning" inputmode="decimal" value="{{ obj.ph_morning|default:'' }}"></div>
-    <div class="col-md-3"><label class="form-label">pH Sore</label><input class="form-control" name="ph_evening" inputmode="decimal" value="{{ obj.ph_evening|default:'' }}"></div>
-    <div class="col-md-3"><label class="form-label">DO Pagi</label><input class="form-control" name="do_morning" inputmode="decimal" value="{{ obj.do_morning|default:'' }}"></div>
-    <div class="col-md-3"><label class="form-label">DO Malam</label><input class="form-control" name="do_night" inputmode="decimal" value="{{ obj.do_night|default:'' }}"></div>
-    <div class="col-md-3"><label class="form-label">Salinitas (ppt)</label><input class="form-control" name="salinity" inputmode="decimal" value="{{ obj.salinity|default:'' }}"></div>
-    <div class="col-md-3"><label class="form-label">Alkalinitas</label><input class="form-control" name="alkalinity" inputmode="decimal" value="{{ obj.alkalinity|default:'' }}"></div>
-    <div class="col-md-3"><label class="form-label">Kecerahan (cm)</label><input class="form-control" name="transparency" inputmode="decimal" value="{{ obj.transparency|default:'' }}"></div>
+<form method="post" id="parameterForm" novalidate>{% csrf_token %}
+  <div class="row g-3">
+    <div class="col-lg-9">
+      <div class="cardx mb-3">
+        <div class="section-mini"><i class="fa-solid fa-water"></i><div><b>Data Dasar Kolam</b><small>Tanggal, kolam, DOC, kode pakan, air masuk, cuaca, serta tinggi air pagi dan sore.</small></div></div>
+        <div class="row g-3 mt-1">
+          <div class="col-md-3">
+            <label class="form-label">Tanggal <span class="text-danger">*</span></label>
+            <input class="form-control" type="date" name="date" value="{% if obj.date|date:'Y-m-d' %}{{ obj.date|date:'Y-m-d' }}{% else %}{{ obj.date|default:'' }}{% endif %}" required>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Kolam <span class="text-danger">*</span></label>
+            <select class="form-select" name="pond" required>
+              {% for p in ponds %}<option value="{{p.id}}" {% if obj.pond_id|stringformat:'s' == p.id|stringformat:'s' %}selected{% endif %}>{{p.name}}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">DOC</label>
+            <input class="form-control numeric-int" name="doc" type="number" min="0" step="1" value="{{ obj.doc|default:0 }}" placeholder="52">
+            <small class="text-muted">Bilangan bulat.</small>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Kode Pakan</label>
+            <input class="form-control" name="feed_code" maxlength="80" value="{{ obj.feed_code|default:'' }}" placeholder="6003">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Air Masuk (cm)</label>
+            <input class="form-control numeric-decimal" name="water_in_cm" type="number" min="0" step="0.01" value="{{ obj.water_in_cm|default:'' }}" placeholder="2">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Cuaca</label>
+            <select class="form-select" name="weather">
+              <option value="">Pilih cuaca</option>
+              {% for v,l in weather_choices %}<option value="{{v}}" {% if obj.weather == v %}selected{% endif %}>{{l}}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Tinggi Air Pagi (cm)</label>
+            <input class="form-control numeric-decimal" name="water_level_morning_cm" type="number" min="0" step="0.01" value="{{ obj.water_level_morning_cm|default:'' }}" placeholder="Contoh: 79">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Tinggi Air Sore (cm)</label>
+            <input class="form-control numeric-decimal" name="water_level_evening_cm" type="number" min="0" step="0.01" value="{{ obj.water_level_evening_cm|default:'' }}" placeholder="Contoh: 82">
+          </div>
+        </div>
+      </div>
 
-    <div class="col-12 section-mini mt-2"><i class="fa-solid fa-clipboard-list"></i><div><b>Operasional & Catatan</b><small>Pakan, kematian, warna air, dan catatan teknisi.</small></div></div>
-    <div class="col-md-3"><label class="form-label">Pakan Harian (kg)</label><input class="form-control" name="feed_kg" inputmode="decimal" value="{{ obj.feed_kg|default:0 }}"></div>
-    <div class="col-md-3"><label class="form-label">Mortalitas</label><input class="form-control" name="mortality" type="number" value="{{ obj.mortality|default:0 }}"></div>
-    <div class="col-md-6"><label class="form-label">Warna Air</label><input class="form-control" name="water_color" placeholder="Contoh: CH / HC / C / Hijau kecoklatan" value="{{ obj.water_color|default:'' }}"></div>
-    <div class="col-12"><label class="form-label">Catatan</label><textarea class="form-control" name="notes" rows="4">{{ obj.notes|default:'' }}</textarea></div>
-    <div class="col-12 d-flex gap-2 flex-wrap">
-      <button class="btn btn-primary" name="save"><i class="fa-solid fa-floppy-disk"></i> Simpan Parameter</button>
-      <button class="btn btn-success" name="analyse"><i class="fa-solid fa-robot"></i> Simpan & Analisa Ollama</button>
-      <a class="btn btn-outline-secondary" href="{% url 'operations:parameters' %}">Batal</a>
+      <div class="cardx mb-3">
+        <div class="section-mini"><i class="fa-solid fa-vial-circle-check"></i><div><b>Kualitas Air</b><small>Gunakan angka sesuai tipe data. Desimal memakai titik, contoh 7.6 atau 28.5.</small></div></div>
+        <div class="row g-3 mt-1">
+          <div class="col-md-3"><label class="form-label">Suhu Air (°C)</label><input class="form-control numeric-decimal" name="temperature" type="number" min="0" step="0.01" value="{{ obj.temperature|default:'' }}" placeholder="28.5"></div>
+          <div class="col-md-3"><label class="form-label">pH Pagi</label><input class="form-control numeric-decimal" name="ph_morning" type="number" min="0" step="0.01" value="{{ obj.ph_morning|default:'' }}" placeholder="7.6"></div>
+          <div class="col-md-3"><label class="form-label">pH Sore</label><input class="form-control numeric-decimal" name="ph_evening" type="number" min="0" step="0.01" value="{{ obj.ph_evening|default:'' }}" placeholder="7.8"></div>
+          <div class="col-md-3"><label class="form-label">Salinitas (ppt)</label><input class="form-control numeric-decimal" name="salinity" type="number" min="0" step="0.01" value="{{ obj.salinity|default:'' }}" placeholder="26"></div>
+          <div class="col-md-3"><label class="form-label">DO Pagi</label><input class="form-control numeric-decimal" name="do_morning" type="number" min="0" step="0.01" value="{{ obj.do_morning|default:'' }}" placeholder="4.5"></div>
+          <div class="col-md-3"><label class="form-label">DO Malam</label><input class="form-control numeric-decimal" name="do_night" type="number" min="0" step="0.01" value="{{ obj.do_night|default:'' }}" placeholder="5.0"></div>
+          <div class="col-md-3"><label class="form-label">Alkalinitas</label><input class="form-control numeric-decimal" name="alkalinity" type="number" min="0" step="0.01" value="{{ obj.alkalinity|default:'' }}" placeholder="120"></div>
+        </div>
+      </div>
+
+      <div class="cardx mb-3">
+        <div class="section-mini"><i class="fa-solid fa-eye"></i><div><b>Visual Air Pagi & Sore</b><small>Kecerahan dan warna air dicatat terpisah antara pagi dan sore.</small></div></div>
+        <div class="row g-3 mt-1">
+          <div class="col-md-3"><label class="form-label">Kecerahan Pagi (cm)</label><input class="form-control numeric-decimal" name="transparency_morning" type="number" min="0" step="0.01" value="{{ obj.transparency_morning|default:'' }}" placeholder="40"></div>
+          <div class="col-md-3"><label class="form-label">Kecerahan Sore (cm)</label><input class="form-control numeric-decimal" name="transparency_evening" type="number" min="0" step="0.01" value="{{ obj.transparency_evening|default:'' }}" placeholder="35"></div>
+          <div class="col-md-3"><label class="form-label">Warna Air Pagi</label><input class="form-control" name="water_color_morning" maxlength="80" value="{{ obj.water_color_morning|default:'' }}" placeholder="CH / HC / C / Hijau"></div>
+          <div class="col-md-3"><label class="form-label">Warna Air Sore</label><input class="form-control" name="water_color_evening" maxlength="80" value="{{ obj.water_color_evening|default:'' }}" placeholder="CH / HC / C / Coklat"></div>
+        </div>
+      </div>
+
+      <div class="cardx mb-3">
+        <div class="section-mini"><i class="fa-solid fa-clipboard-list"></i><div><b>Operasional & Catatan</b><small>Pakan harian dalam kg, mortalitas, dan catatan teknisi.</small></div></div>
+        <div class="row g-3 mt-1">
+          <div class="col-md-4"><label class="form-label">Pakan Harian (kg)</label><input class="form-control numeric-decimal" name="feed_kg" type="number" min="0" step="0.01" value="{{ obj.feed_kg|default:0 }}" placeholder="33"></div>
+          <div class="col-md-4"><label class="form-label">Mortalitas</label><input class="form-control numeric-int" name="mortality" type="number" min="0" step="1" value="{{ obj.mortality|default:0 }}" placeholder="0"></div>
+          <div class="col-12"><label class="form-label">Catatan</label><textarea class="form-control" name="notes" rows="4" placeholder="Catatan teknisi, treatment, atau kondisi khusus kolam.">{{ obj.notes|default:'' }}</textarea></div>
+        </div>
+      </div>
     </div>
-  </form>
-</div>
+
+    <div class="col-lg-3">
+      <div class="cardx bg-primary text-white mb-3">
+        <div class="d-flex gap-3 align-items-start">
+          <div class="rounded-3 bg-white bg-opacity-25 p-3"><i class="fa-solid fa-shield-halved"></i></div>
+          <div><h5 class="mb-2">Validasi Otomatis</h5><p class="mb-0 small">Sistem memeriksa tipe data angka sebelum menyimpan agar tidak muncul error Django.</p></div>
+        </div>
+      </div>
+      <div class="cardx mb-3">
+        <h5 class="mb-2">Panduan Input</h5>
+        <ul class="small mb-0 ps-3">
+          <li>Field angka hanya boleh berisi angka.</li>
+          <li>Desimal gunakan titik, contoh <b>7.6</b>, <b>1.45</b>, atau <b>38.5</b>.</li>
+          <li>DOC dan mortalitas harus bilangan bulat.</li>
+          <li>Air masuk dan pakan harian wajib memakai satuan cm/kg sesuai label.</li>
+          <li>Kode pakan boleh teks/angka, contoh <b>6003</b>.</li>
+          <li>Cuaca harus dipilih dari daftar.</li>
+          <li>Warna air boleh teks, contoh <b>CH</b>, <b>HC</b>, <b>C</b>.</li>
+        </ul>
+      </div>
+      <div class="cardx d-grid gap-2">
+        <button class="btn btn-primary" name="save"><i class="fa-solid fa-floppy-disk"></i> Simpan Parameter</button>
+        <button class="btn btn-success" name="analyse"><i class="fa-solid fa-robot"></i> Simpan & Analisa Ollama</button>
+        <a class="btn btn-outline-secondary" href="{% url 'operations:parameters' %}">Batal</a>
+      </div>
+    </div>
+  </div>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const form = document.getElementById('parameterForm');
+  const decimalInputs = form.querySelectorAll('.numeric-decimal');
+  const intInputs = form.querySelectorAll('.numeric-int');
+
+  decimalInputs.forEach(function (input) {
+    input.addEventListener('input', function () {
+      input.value = input.value.replace(',', '.').replace(/[^0-9.\-]/g, '');
+      const parts = input.value.split('.');
+      if (parts.length > 2) input.value = parts.shift() + '.' + parts.join('');
+    });
+  });
+  intInputs.forEach(function (input) {
+    input.addEventListener('input', function () {
+      input.value = input.value.replace(/[^0-9]/g, '');
+    });
+  });
+});
+</script>
 {% endblock %}

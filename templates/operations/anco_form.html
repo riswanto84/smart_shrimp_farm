@@ -1,5 +1,48 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="page-head"><div><h1>{% if mode == 'edit' %}Edit{% else %}Input{% endif %} Cek Anco Harian</h1><p>Catat hasil anco pagi, siang, dan sore. Sistem akan menganalisa appetite otomatis.</p></div></div>
-<div class="ops-form-layout"><section class="cardx ops-form-card"><form method="post" class="row g-3">{% csrf_token %}<div class="ops-section-title"><i class="fa-solid fa-clipboard-check"></i><div><b>Identitas Cek</b><small>Input tanggal, kolam, dan DOC.</small></div></div><div class="col-md-4"><label class="form-label">Tanggal</label><input class="form-control" type="date" name="date" value="{{ obj.date|date:'Y-m-d' }}" required></div><div class="col-md-4"><label class="form-label">Kolam</label><select class="form-select" name="pond" required>{% for p in ponds %}<option value="{{p.id}}" {% if obj.pond_id == p.id %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></div><div class="col-md-4"><label class="form-label">DOC</label><input class="form-control" type="number" name="doc" value="{{ obj.doc|default:0 }}"></div><div class="ops-section-title mt-2"><i class="fa-solid fa-shrimp"></i><div><b>Status Anco</b><small>H=Habis, S=Sisa, SS=Sisa Banyak, -=Tidak Dicek.</small></div></div><div class="col-md-2"><label class="form-label">A1 Pagi</label><select class="form-select" name="anco1_morning">{% for v,l in status_choices %}<option value="{{v}}" {% if obj.anco1_morning == v %}selected{% endif %}>{{v}} - {{l}}</option>{% endfor %}</select></div><div class="col-md-2"><label class="form-label">A2 Pagi</label><select class="form-select" name="anco2_morning">{% for v,l in status_choices %}<option value="{{v}}" {% if obj.anco2_morning == v %}selected{% endif %}>{{v}} - {{l}}</option>{% endfor %}</select></div><div class="col-md-2"><label class="form-label">A1 Siang</label><select class="form-select" name="anco1_noon">{% for v,l in status_choices %}<option value="{{v}}" {% if obj.anco1_noon == v %}selected{% endif %}>{{v}} - {{l}}</option>{% endfor %}</select></div><div class="col-md-2"><label class="form-label">A2 Siang</label><select class="form-select" name="anco2_noon">{% for v,l in status_choices %}<option value="{{v}}" {% if obj.anco2_noon == v %}selected{% endif %}>{{v}} - {{l}}</option>{% endfor %}</select></div><div class="col-md-2"><label class="form-label">A1 Sore</label><select class="form-select" name="anco1_evening">{% for v,l in status_choices %}<option value="{{v}}" {% if obj.anco1_evening == v %}selected{% endif %}>{{v}} - {{l}}</option>{% endfor %}</select></div><div class="col-md-2"><label class="form-label">A2 Sore</label><select class="form-select" name="anco2_evening">{% for v,l in status_choices %}<option value="{{v}}" {% if obj.anco2_evening == v %}selected{% endif %}>{{v}} - {{l}}</option>{% endfor %}</select></div><div class="col-12"><label class="form-label">Catatan</label><textarea class="form-control" name="notes" rows="4">{{ obj.notes|default:'' }}</textarea></div><div class="col-12 d-flex gap-2"><button class="btn btn-primary"><i class="fa-solid fa-save"></i> Simpan Cek Anco</button><a class="btn btn-outline-secondary" href="{% url 'operations:anco_checks' %}">Batal</a></div></form></section><aside class="cardx ops-help"><h3>Analisa Otomatis</h3><p>Rekomendasi berasal dari kombinasi status H/S/SS pada anco pagi, siang, dan sore.</p></aside></div>
+<div class="page-head">
+  <div><h1>{% if mode == 'edit' %}Edit{% else %}Input{% endif %} Cek Anco Harian</h1><p>Format mengikuti tabel lapangan: kode pakan, DOC, P/H, cek anco pagi/siang/sore, air masuk, cuaca, dan treatment.</p></div>
+  <a class="btn btn-outline-primary" href="{% url 'operations:anco_checks' %}"><i class="fa-solid fa-arrow-left"></i> Kembali</a>
+</div>
+{% if errors %}<div class="alert alert-danger"><b>Data belum valid.</b><ul class="mb-0">{% for k,msg in errors.items %}<li>{{ msg }}</li>{% endfor %}</ul></div>{% endif %}
+<form method="post" id="ancoForm" novalidate>{% csrf_token %}
+<div class="row g-3">
+  <div class="col-lg-9">
+    <div class="cardx mb-3">
+      <div class="section-mini"><i class="fa-solid fa-clipboard-check"></i><div><b>Data Harian Cek Anco</b><small>Input tanggal, kode pakan, DOC, pakan harian, air masuk, cuaca, dan treatment.</small></div></div>
+      <div class="row g-3 mt-1">
+        <div class="col-md-3"><label class="form-label">Tanggal <span class="text-danger">*</span></label><input class="form-control" type="date" name="date" value="{% if obj.date|date:'Y-m-d' %}{{ obj.date|date:'Y-m-d' }}{% else %}{{ obj.date|default:'' }}{% endif %}" required></div>
+        <div class="col-md-3"><label class="form-label">Kolam <span class="text-danger">*</span></label><select class="form-select" name="pond" required>{% for p in ponds %}<option value="{{p.id}}" {% if obj.pond_id|stringformat:'s' == p.id|stringformat:'s' %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></div>
+        <div class="col-md-2"><label class="form-label">Kode Pakan</label><input class="form-control" name="feed_code" maxlength="80" value="{{ obj.feed_code|default:'' }}" placeholder="6003"></div>
+        <div class="col-md-2"><label class="form-label">DOC</label><input class="form-control numeric-int" type="number" min="0" step="1" name="doc" value="{{ obj.doc|default:0 }}" placeholder="52"></div>
+        <div class="col-md-2"><label class="form-label">P/H (Kg)</label><input class="form-control numeric-decimal" type="number" min="0" step="0.01" name="daily_feed_kg" value="{{ obj.daily_feed_kg|default:0 }}" placeholder="64"></div>
+        <div class="col-md-3"><label class="form-label">Air Masuk (cm)</label><input class="form-control numeric-decimal" type="number" min="0" step="0.01" name="water_in_cm" value="{{ obj.water_in_cm|default:'' }}" placeholder="2"></div>
+        <div class="col-md-3"><label class="form-label">Cuaca</label><select class="form-select" name="weather"><option value="">Pilih cuaca</option>{% for v,l in weather_choices %}<option value="{{v}}" {% if obj.weather == v %}selected{% endif %}>{{l}}</option>{% endfor %}</select></div>
+        <div class="col-md-6"><label class="form-label">Treatment</label><input class="form-control" name="treatment" value="{{ obj.treatment|default:'' }}" placeholder="Contoh: Tebar Kultur Vanapro / Per. SpLacto"></div>
+      </div>
+    </div>
+
+    <div class="cardx mb-3">
+      <div class="section-mini"><i class="fa-solid fa-shrimp"></i><div><b>Cek Anco Harian</b><small>H=Habis, S=Sisa, SS=Sisa Banyak, -=Tidak Dicek.</small></div></div>
+      <div class="row g-3 mt-1">
+        <div class="col-md-4"><div class="border rounded-4 p-3"><h6 class="mb-3">Pagi</h6><label class="form-label">Anco 1</label><select class="form-select mb-2" name="anco1_morning">{% for v,l in status_choices %}<option value="{{v}}" {% if obj.anco1_morning == v %}selected{% endif %}>{{v}} - {{l}}</option>{% endfor %}</select><label class="form-label">Anco 2</label><select class="form-select" name="anco2_morning">{% for v,l in status_choices %}<option value="{{v}}" {% if obj.anco2_morning == v %}selected{% endif %}>{{v}} - {{l}}</option>{% endfor %}</select></div></div>
+        <div class="col-md-4"><div class="border rounded-4 p-3"><h6 class="mb-3">Siang</h6><label class="form-label">Anco 1</label><select class="form-select mb-2" name="anco1_noon">{% for v,l in status_choices %}<option value="{{v}}" {% if obj.anco1_noon == v %}selected{% endif %}>{{v}} - {{l}}</option>{% endfor %}</select><label class="form-label">Anco 2</label><select class="form-select" name="anco2_noon">{% for v,l in status_choices %}<option value="{{v}}" {% if obj.anco2_noon == v %}selected{% endif %}>{{v}} - {{l}}</option>{% endfor %}</select></div></div>
+        <div class="col-md-4"><div class="border rounded-4 p-3"><h6 class="mb-3">Sore</h6><label class="form-label">Anco 1</label><select class="form-select mb-2" name="anco1_evening">{% for v,l in status_choices %}<option value="{{v}}" {% if obj.anco1_evening == v %}selected{% endif %}>{{v}} - {{l}}</option>{% endfor %}</select><label class="form-label">Anco 2</label><select class="form-select" name="anco2_evening">{% for v,l in status_choices %}<option value="{{v}}" {% if obj.anco2_evening == v %}selected{% endif %}>{{v}} - {{l}}</option>{% endfor %}</select></div></div>
+        <div class="col-12"><label class="form-label">Catatan</label><textarea class="form-control" name="notes" rows="4">{{ obj.notes|default:'' }}</textarea></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-3">
+    <div class="cardx bg-primary text-white mb-3"><h5><i class="fa-solid fa-wand-magic-sparkles"></i> Analisa Otomatis</h5><p class="small mb-0">Sistem menganalisa H/S/SS untuk menentukan appetite dan rekomendasi pakan.</p></div>
+    <div class="cardx mb-3"><h5>Panduan Validasi</h5><ul class="small mb-0 ps-3"><li>DOC harus bilangan bulat.</li><li>P/H dan air masuk hanya angka.</li><li>Cuaca dipilih dari daftar.</li><li>Status anco hanya H, S, SS, atau tidak dicek.</li></ul></div>
+    <div class="cardx d-grid gap-2"><button class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Simpan Cek Anco</button><a class="btn btn-outline-secondary" href="{% url 'operations:anco_checks' %}">Batal</a></div>
+  </div>
+</div>
+</form>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  document.querySelectorAll('.numeric-decimal').forEach(function(input){input.addEventListener('input', function(){input.value=input.value.replace(',', '.').replace(/[^0-9.]/g,''); const p=input.value.split('.'); if(p.length>2) input.value=p.shift()+'.'+p.join('');});});
+  document.querySelectorAll('.numeric-int').forEach(function(input){input.addEventListener('input', function(){input.value=input.value.replace(/[^0-9]/g,'');});});
+});
+</script>
 {% endblock %}

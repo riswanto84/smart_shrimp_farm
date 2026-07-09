@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}Edit Profil{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <span class="badge bg-primary-subtle text-primary rounded-pill mb-2"><i class="fa-solid fa-user-pen"></i> AKUN</span>
+    <h1>Edit Profil</h1>
+    <p>Perbarui nama, email, dan nomor telepon akun pengguna.</p>
+  </div>
+  <a class="btn btn-outline-primary" href="{% url 'accounts:change_password' %}"><i class="fa-solid fa-lock"></i> Ubah Password</a>
+</div>
+<div class="row g-3 profile-card">
+  <div class="col-lg-4">
+    <div class="cardx h-100 text-center">
+      <div class="avatar-xl mx-auto mb-3">{{ user.username|first|upper }}</div>
+      <h4 class="mb-1">{{ user.get_full_name|default:user.username }}</h4>
+      <p class="text-muted mb-2">{{ user.email|default:'Email belum diisi' }}</p>
+      <span class="badge bg-primary-subtle text-primary">{{ PRIMARY_ROLE_LABEL }}</span>
+      <hr>
+      <p class="small text-muted mb-0">Gunakan menu ini untuk memperbarui identitas pengguna yang tampil pada sistem.</p>
+    </div>
+  </div>
+  <div class="col-lg-8">
+    <form class="cardx" method="post">{% csrf_token %}
+      <div class="section-mini"><i class="fa-solid fa-id-card"></i><div><b>Informasi Profil</b><small>Pastikan data sesuai pengguna aplikasi.</small></div></div>
+      <div class="row g-3 mt-1">
+        <div class="col-md-6"><label class="form-label">Username</label><input class="form-control" value="{{ user.username }}" disabled></div>
+        <div class="col-md-6"><label class="form-label">Role</label><input class="form-control" value="{{ PRIMARY_ROLE_LABEL }}" disabled></div>
+        <div class="col-md-6"><label class="form-label">Nama Depan</label><input class="form-control" name="first_name" value="{{ user.first_name }}" placeholder="Nama depan"></div>
+        <div class="col-md-6"><label class="form-label">Nama Belakang</label><input class="form-control" name="last_name" value="{{ user.last_name }}" placeholder="Nama belakang"></div>
+        <div class="col-md-6"><label class="form-label">Email</label><input class="form-control" type="email" name="email" value="{{ user.email }}" placeholder="nama@email.com"></div>
+        <div class="col-md-6"><label class="form-label">No. HP</label><input class="form-control" name="phone" value="{{ user.userprofile.phone|default:'' }}" placeholder="0812xxxx"></div>
+        <div class="col-12 d-flex gap-2"><button class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Simpan Profil</button><a class="btn btn-outline-secondary" href="/dashboard/">Batal</a></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
