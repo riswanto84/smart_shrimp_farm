@@ -33,22 +33,22 @@
       </div>
       <div class="col-md-4">
         <label class="form-label">DOC</label>
-        <input class="form-control numeric-int" type="text" inputmode="numeric" name="doc" value="{{ obj.doc|default:0 }}" placeholder="Contoh: 52">
+        <input class="form-control numeric-int" type="text" inputmode="numeric" name="doc" value="{{ obj.doc|default:0 }}">
         <small class="text-muted">Bilangan bulat, tanpa koma/desimal.</small>
       </div>
 
       <div class="ops-section-title mt-2"><i class="fa-solid fa-shrimp"></i><div><b>Jumlah Siphon Harian</b><small>Isi hanya angka bulat. Sistem menghitung total harian dan akumulasi otomatis.</small></div></div>
       <div class="col-md-6">
         <label class="form-label">Udang Mati</label>
-        <input class="form-control numeric-int" type="text" inputmode="numeric" name="dead_count" value="{{ obj.dead_count|default:0 }}" placeholder="Contoh: 15">
+        <input class="form-control numeric-int" type="text" inputmode="numeric" name="dead_count" value="{{ obj.dead_count|default:0 }}">
       </div>
       <div class="col-md-6">
         <label class="form-label">Udang Hidup Ikut Tersiphon</label>
-        <input class="form-control numeric-int" type="text" inputmode="numeric" name="live_count" value="{{ obj.live_count|default:0 }}" placeholder="Contoh: 2">
+        <input class="form-control numeric-int" type="text" inputmode="numeric" name="live_count" value="{{ obj.live_count|default:0 }}">
       </div>
       <div class="col-12">
         <label class="form-label">Catatan</label>
-        <textarea class="form-control" name="notes" rows="4" placeholder="Contoh: siphon pagi, kondisi dasar kolam, bau lumpur, indikasi molting, dll.">{{ obj.notes|default:'' }}</textarea>
+        <textarea class="form-control" name="notes" rows="4">{{ obj.notes|default:'' }}</textarea>
       </div>
       <div class="col-12 d-flex gap-2">
         <button class="btn btn-primary"><i class="fa-solid fa-save"></i> Simpan Siphon</button>

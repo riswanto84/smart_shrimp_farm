@@ -17,9 +17,9 @@
         <div class="row g-3 mt-1">
           <div class="col-md-3"><label class="form-label">Tanggal <span class="text-danger">*</span></label><input class="form-control" type="date" name="date" value="{% if obj.date|date:'Y-m-d' %}{{ obj.date|date:'Y-m-d' }}{% else %}{{ obj.date|default:'' }}{% endif %}" required></div>
           <div class="col-md-3"><label class="form-label">Kolam <span class="text-danger">*</span></label><select class="form-select" name="pond" required>{% for p in ponds %}<option value="{{p.id}}" {% if obj.pond_id|stringformat:'s' == p.id|stringformat:'s' %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></div>
-          <div class="col-md-2"><label class="form-label">Kode Pakan</label><input class="form-control" name="feed_code" value="{{ obj.feed_code|default:'' }}" maxlength="80" placeholder="6003"></div>
-          <div class="col-md-2"><label class="form-label">DOC</label><input class="form-control numeric-int" type="text" inputmode="numeric" name="doc" value="{{ obj.doc|default:0 }}" placeholder="52"></div>
-          <div class="col-md-2"><label class="form-label">P/H</label><input class="form-control numeric-decimal" type="text" inputmode="decimal" name="daily_feed_kg" value="{{ obj.daily_feed_kg|default:0 }}" placeholder="64"></div>
+          <div class="col-md-2"><label class="form-label">Kode Pakan</label><input class="form-control" name="feed_code" value="{{ obj.feed_code|default:'' }}" maxlength="80"></div>
+          <div class="col-md-2"><label class="form-label">DOC</label><input class="form-control numeric-int" type="text" inputmode="numeric" name="doc" value="{{ obj.doc|default:0 }}"></div>
+          <div class="col-md-2"><label class="form-label">P/H</label><input class="form-control numeric-decimal" type="text" inputmode="decimal" name="daily_feed_kg" value="{{ obj.daily_feed_kg|default:0 }}"></div>
         </div>
       </div>
       <div class="cardx mb-3">
@@ -41,9 +41,9 @@
       <div class="cardx mb-3">
         <div class="section-mini"><i class="fa-solid fa-cloud-sun"></i><div><b>Lingkungan & Treatment</b><small>Air masuk, cuaca, treatment, dan catatan tambahan.</small></div></div>
         <div class="row g-3 mt-1">
-          <div class="col-md-3"><label class="form-label">Air Masuk (cm)</label><input class="form-control numeric-decimal" type="text" inputmode="decimal" name="water_in_cm" value="{{ obj.water_in_cm|default:'' }}" placeholder="2"></div>
+          <div class="col-md-3"><label class="form-label">Air Masuk (cm)</label><input class="form-control numeric-decimal" type="text" inputmode="decimal" name="water_in_cm" value="{{ obj.water_in_cm|default:'' }}"></div>
           <div class="col-md-3"><label class="form-label">Cuaca</label><select class="form-select" name="weather"><option value="">Pilih cuaca</option>{% for v,l in weather_choices %}<option value="{{v}}" {% if obj.weather == v %}selected{% endif %}>{{l}}</option>{% endfor %}</select></div>
-          <div class="col-md-6"><label class="form-label">Treatment</label><input class="form-control" name="treatment" value="{{ obj.treatment|default:'' }}" placeholder="Tebar Kultur Vanapro / Per. Sp Lacto"></div>
+          <div class="col-md-6"><label class="form-label">Treatment</label><input class="form-control" name="treatment" value="{{ obj.treatment|default:'' }}"></div>
           <div class="col-12"><label class="form-label">Catatan</label><textarea class="form-control" name="notes" rows="4">{{ obj.notes|default:'' }}</textarea></div>
         </div>
       </div>

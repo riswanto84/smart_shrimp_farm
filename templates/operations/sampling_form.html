@@ -78,7 +78,7 @@
         </div>
         <div class="col-md-3">
           <label class="form-label">Estimasi Panen Manual</label>
-          <input class="form-control" name="harvest_estimation" id="harvest_estimation" value="{{ obj.harvest_estimation|default:'' }}" placeholder="Opsional, kosongkan untuk otomatis">
+          <input class="form-control" name="harvest_estimation" id="harvest_estimation" value="{{ obj.harvest_estimation|default:'' }}">
         </div>
       </div>
 
@@ -105,7 +105,7 @@
 
       <div class="mt-4">
         <label class="form-label">Catatan Teknisi</label>
-        <textarea class="form-control" name="notes" rows="4" placeholder="Catatan kondisi sampling, kondisi udang, atau tindak lanjut...">{{ obj.notes|default:'' }}</textarea>
+        <textarea class="form-control" name="notes" rows="4">{{ obj.notes|default:'' }}</textarea>
       </div>
 
       <div class="d-flex gap-2 mt-4 flex-wrap">

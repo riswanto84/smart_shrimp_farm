@@ -40,16 +40,16 @@
       </div>
       <div class="col-md-6">
         <label class="form-label">Size Udang / Keterangan Size <span class="text-danger">*</span></label>
-        <input class="form-control" name="size_text" value="{{ obj.size_text|default:'' }}" placeholder="Contoh: 50 / 40-50 / Campur" maxlength="50" required>
+        <input class="form-control" name="size_text" value="{{ obj.size_text|default:'' }}" maxlength="50" required>
       </div>
       <div class="col-md-6">
         <label class="form-label">Total Kg <span class="text-danger">*</span></label>
-        <input class="form-control numeric-decimal" type="text" inputmode="decimal" name="total_kg" value="{{ obj.total_kg|default:'' }}" placeholder="Contoh: 450.5 atau 450,5" required>
+        <input class="form-control numeric-decimal" type="text" inputmode="decimal" name="total_kg" value="{{ obj.total_kg|default:'' }}" required>
         <small class="text-muted">Bisa pakai titik atau koma desimal. Sistem otomatis menormalkan nilainya.</small>
       </div>
       <div class="col-12">
         <label class="form-label">Catatan</label>
-        <textarea class="form-control" name="notes" rows="4" placeholder="Contoh: panen parsial size 60, buyer lokal, kondisi udang bagus.">{{ obj.notes|default:'' }}</textarea>
+        <textarea class="form-control" name="notes" rows="4">{{ obj.notes|default:'' }}</textarea>
       </div>
       <div class="col-12 d-flex gap-2">
         <button class="btn btn-primary"><i class="fa-solid fa-save"></i> Simpan Panen</button>
