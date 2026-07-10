@@ -134,7 +134,7 @@ class AncoCheck(models.Model):
     STATUS_CHOICES = [
         ('H', 'Habis'),
         ('S', 'Sisa'),
-        ('SS', 'Sisa Banyak'),
+        ('SS', 'Sisa Sedikit'),
         ('-', 'Tidak Dicek'),
     ]
     pond = models.ForeignKey(Pond, on_delete=models.CASCADE, related_name='anco_checks')

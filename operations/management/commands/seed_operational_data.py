@@ -107,7 +107,7 @@ class Command(BaseCommand):
             ('H', 'H', 'H', 'H', 'H', 'H', 'Nafsu makan kuat, pakan dapat dipertahankan.'),
             ('H', 'H', 'S', 'H', 'H', 'S', 'Ada sisa ringan, evaluasi pakan siang/sore.'),
             ('S', 'S', 'H', 'S', 'H', 'S', 'Nafsu makan menurun, pertahankan atau turunkan pakan 5–10%.'),
-            ('SS', 'S', 'H', 'SS', 'S', 'H', 'Sisa banyak, cek DO, pH, suhu, dan kondisi dasar kolam.'),
+            ('SS', 'S', 'H', 'SS', 'S', 'H', 'Sisa sedikit, cek DO, pH, suhu, dan kondisi dasar kolam.'),
             ('H', 'S', 'H', 'S', 'H', 'H', 'Respons masih baik, pantau tren besok.'),
         ]
         for i in range(count):

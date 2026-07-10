@@ -168,7 +168,7 @@ Fitur operasional inti yang ditambahkan:
 
 3. **Cek Anco Harian**
    - Cek pagi/siang/sore untuk Anco 1 dan Anco 2.
-   - Status: H = Habis, S = Sisa, SS = Sisa Banyak.
+   - Status: H = Habis, S = Sisa, SS = Sisa Sedikit.
    - Analisa otomatis status appetite dan rekomendasi pakan.
 
 4. **Data Sampling**
