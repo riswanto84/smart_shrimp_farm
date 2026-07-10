@@ -5,7 +5,7 @@
   <div>
     <span class="badge rounded-pill bg-primary-subtle text-primary mb-2"><i class="fa-solid fa-flask-vial"></i> PARAMETER HARIAN</span>
     <h1>{% if mode == 'edit' %}Edit{% else %}Input{% endif %} Parameter Harian</h1>
-    <p>Catat pakan harian, tinggi air pagi/sore, kualitas air, warna air, kecerahan, mortalitas, dan catatan teknisi.</p>
+    <p>Catat tinggi air pagi/sore, kualitas air, warna air, kecerahan, dan catatan teknisi.</p>
   </div>
   <a class="btn btn-outline-primary" href="{% url 'operations:parameters' %}"><i class="fa-solid fa-arrow-left"></i> Kembali</a>
 </div>
@@ -75,10 +75,8 @@
       </div>
 
       <div class="cardx mb-3">
-        <div class="section-mini"><i class="fa-solid fa-clipboard-list"></i><div><b>Operasional & Catatan</b><small>Pakan harian dalam kg, mortalitas, dan catatan teknisi.</small></div></div>
+        <div class="section-mini"><i class="fa-solid fa-clipboard-list"></i><div><b>Catatan Teknis</b><small>Catatan kondisi kolam, treatment, atau informasi teknis lainnya.</small></div></div>
         <div class="row g-3 mt-1">
-          <div class="col-md-4"><label class="form-label">Pakan Harian (kg)</label><input class="form-control numeric-decimal" name="feed_kg" type="text" inputmode="decimal" value="{{ obj.feed_kg|default:0|unlocalize }}" autocomplete="off"></div>
-          <div class="col-md-4"><label class="form-label">Mortalitas</label><input class="form-control numeric-int" name="mortality" type="text" inputmode="numeric" pattern="[0-9]*" value="{{ obj.mortality|default:0|unlocalize }}" autocomplete="off"></div>
           <div class="col-12"><label class="form-label">Catatan</label><textarea class="form-control" name="notes" rows="4">{{ obj.notes|default:'' }}</textarea></div>
         </div>
       </div>
@@ -97,7 +95,7 @@
           <li>Field angka dibuat tanpa spinner agar pH/DO lebih mudah diketik.</li>
           <li>Desimal gunakan titik, contoh <b>7.6</b>, <b>1.45</b>, atau <b>38.5</b>.</li>
           <li>Sistem juga otomatis mengubah koma menjadi titik, misalnya <b>7,6</b> menjadi <b>7.6</b>.</li>
-          <li>DOC dan mortalitas harus bilangan bulat.</li>
+          <li>DOC harus bilangan bulat.</li>
           <li>Warna air boleh teks, contoh <b>CH</b>, <b>HC</b>, <b>C</b>.</li>
         </ul>
       </div>
