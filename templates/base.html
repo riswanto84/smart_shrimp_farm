@@ -31,6 +31,10 @@
           <a class="{% if request.path == item.url %}active{% endif %}" href="{{ item.url }}"><i class="{{ item.icon }}"></i><span>{{ item.label }}</span></a>
         {% endif %}
       {% endfor %}
+      {% if IS_OWNER %}
+      <p>SIKLUS</p>
+      <a class="{% if request.path|slice:':8' == '/cycles/' %}active{% endif %}" href="{% url 'cultivation:list' %}"><i class="fa-solid fa-arrows-rotate"></i><span>Siklus Budidaya</span></a>
+      {% endif %}
       <p>AKUN</p>
       <a class="{% if request.path == '/accounts/profile/' %}active{% endif %}" href="/accounts/profile/"><i class="fa-solid fa-user-pen"></i><span>Edit Profil</span></a>
       <a class="{% if request.path == '/accounts/password/' %}active{% endif %}" href="/accounts/password/"><i class="fa-solid fa-lock"></i><span>Ubah Password</span></a>
@@ -45,6 +49,16 @@
     <div class="topbar">
       <button class="hamburger" id="sidebarToggle" type="button" aria-label="Buka menu"><i class="fa-solid fa-bars"></i></button>
       <div class="topbar-spacer"></div>
+      {% if IS_OWNER and cultivation_cycles %}
+      <form method="post" action="{% url 'cultivation:select' %}" class="d-flex align-items-center gap-2 me-2">
+        {% csrf_token %}
+        <label class="small text-muted d-none d-lg-inline">Siklus</label>
+        <select class="form-select form-select-sm" name="cycle" onchange="this.form.submit()" style="min-width:180px">
+          {% for c in cultivation_cycles %}<option value="{{ c.id }}" {% if selected_cycle.id == c.id %}selected{% endif %}>{{ c.name }} · {{ c.get_status_display }}</option>{% endfor %}
+        </select>
+      </form>
+      {% endif %}
+
       <div class="top-pill"><i class="fa-solid fa-cloud-sun text-warning"></i><strong>28°C</strong><small>Muara Gembong</small></div>
       <div class="top-pill"><i class="fa-regular fa-calendar"></i><strong>{{ app_today|date:"d M Y" }}</strong><small>{{ app_today|date:"H:i" }} WIB</small></div>
       <div class="notif-wrap">

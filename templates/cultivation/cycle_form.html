@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block title %}Form Siklus Budidaya{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{% if obj %}Edit{% else %}Tambah{% endif %} Siklus Budidaya</h1>
+    <p>Durasi default 135 hari termasuk persiapan kolam. Target selesai dihitung otomatis.</p>
+  </div>
+</div>
+
+<div class="cardx">
+  <form method="post" class="row g-3" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="col-12">
+        <div class="alert alert-danger mb-0">{{ form.non_field_errors }}</div>
+      </div>
+    {% endif %}
+
+    <div class="col-md-6">
+      <label class="form-label" for="id_name">Nama Siklus</label>
+      <input class="form-control{% if form.name.errors %} is-invalid{% endif %}"
+             id="id_name" name="name" value="{{ form.name.value|default:'' }}" required>
+      {% for error in form.name.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label" for="id_start_date">Tanggal Mulai</label>
+      <input class="form-control{% if form.start_date.errors %} is-invalid{% endif %}"
+             id="id_start_date" type="date" name="start_date"
+             value="{{ form.start_date.value|date:'Y-m-d'|default:form.start_date.value }}" required>
+      {% for error in form.start_date.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label" for="id_target_duration_days">Durasi Target</label>
+      <div class="input-group">
+        <input class="form-control{% if form.target_duration_days.errors %} is-invalid{% endif %}"
+               id="id_target_duration_days" type="number" min="1"
+               name="target_duration_days" value="{{ form.target_duration_days.value|default:135 }}">
+        <span class="input-group-text">hari</span>
+        {% for error in form.target_duration_days.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <label class="form-label" for="id_status">Status</label>
+      <select class="form-select{% if form.status.errors %} is-invalid{% endif %}"
+              id="id_status" name="status">
+        {% for value, label in statuses %}
+          <option value="{{ value }}" {% if form.status.value == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      {% for error in form.status.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+    </div>
+
+    <div class="col-md-4">
+      <label class="form-label" for="id_actual_end_date">Tanggal Selesai Aktual</label>
+      <input class="form-control{% if form.actual_end_date.errors %} is-invalid{% endif %}"
+             id="id_actual_end_date" type="date" name="actual_end_date"
+             value="{{ form.actual_end_date.value|date:'Y-m-d'|default:form.actual_end_date.value }}">
+      {% for error in form.actual_end_date.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+    </div>
+
+    <div class="col-12">
+      <label class="form-label" for="id_notes">Catatan</label>
+      <textarea class="form-control{% if form.notes.errors %} is-invalid{% endif %}"
+                id="id_notes" name="notes" rows="3">{{ form.notes.value|default:'' }}</textarea>
+      {% for error in form.notes.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+    </div>
+
+    <div class="col-12">
+      <button class="btn btn-primary" type="submit">Simpan</button>
+      <a class="btn btn-outline-secondary" href="{% url 'cultivation:list' %}">Batal</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

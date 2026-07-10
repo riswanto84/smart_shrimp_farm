@@ -18,6 +18,7 @@ from .models import (
 from chat_ai.services import ask_ollama, ollama_health
 from core.reporting import get_date_range, filter_by_date_range, format_date_range, export_excel, export_pdf
 from core.pagination import paginate_queryset
+from cultivation.utils import get_selected_cycle, filter_selected_cycle
 
 
 def _selected_pond(request):
@@ -28,6 +29,7 @@ def _selected_pond(request):
 def _apply_common_filters(request, qs, date_field='date'):
     date_from, date_to = get_date_range(request)
     qs = filter_by_date_range(qs, date_field, date_from, date_to)
+    qs = filter_selected_cycle(request, qs)
     pond = _selected_pond(request)
     if pond:
         qs = qs.filter(pond_id=pond)
@@ -473,6 +475,7 @@ def add_parameter(request):
                 'ponds': ponds, 'weather_choices': DailyParameter.WEATHER_CHOICES, 'obj': payload, 'errors': errors, 'mode': 'add'
             })
         obj = DailyParameter.objects.create(
+            cycle=get_selected_cycle(request, required=True),
             pond_id=payload['pond_id'], technician=request.user, date=payload['date'],
             doc=payload['doc'], feed_code=payload['feed_code'], water_in_cm=payload['water_in_cm'], weather=payload['weather'],
             water_level_cm=payload['water_level_cm'],
@@ -527,7 +530,7 @@ def add_daily_record(request):
                 'ponds': ponds, 'weather_choices': DailyPondRecord.WEATHER_CHOICES, 'obj': payload, 'errors': errors
             })
         DailyPondRecord.objects.update_or_create(
-            pond_id=payload['pond_id'], date=payload['date'],
+            cycle=get_selected_cycle(request, required=True), pond_id=payload['pond_id'], date=payload['date'],
             defaults={
                 'technician': request.user,
                 'doc': payload['doc'],
@@ -576,7 +579,7 @@ def add_anco_check(request):
                 'weather_choices': DailyPondRecord.WEATHER_CHOICES, 'obj': payload, 'errors': errors, 'mode': 'add'
             })
         AncoCheck.objects.update_or_create(
-            pond_id=payload['pond_id'], date=payload['date'],
+            cycle=get_selected_cycle(request, required=True), pond_id=payload['pond_id'], date=payload['date'],
             defaults={
                 'technician': request.user,
                 'doc': payload['doc'],
@@ -663,6 +666,7 @@ def add_sampling_record(request):
                 'errors': errors,
             })
         SamplingRecord.objects.create(
+            cycle=get_selected_cycle(request, required=True),
             pond_id=payload['pond_id'],
             date=payload['date'],
             doc=payload['doc'],
@@ -821,6 +825,7 @@ def add_harvest(request):
                 messages.error(request, msg)
             return render(request, 'operations/harvest_form.html', {'ponds': ponds, 'obj': payload, 'errors': errors})
         Harvest.objects.create(
+            cycle=get_selected_cycle(request, required=True),
             pond_id=payload['pond_id'], date=payload['date'], harvest_type=payload['harvest_type'],
             size_text=payload['size_text'], total_kg=payload['total_kg'], notes=payload['notes']
         )
@@ -832,6 +837,164 @@ def add_harvest(request):
 # ---------------------------------------------------------------------
 # CRUD helpers - tombol Edit & Hapus untuk semua modul input operasional.
 # ---------------------------------------------------------------------
+
+def _detail_value(value, suffix=''):
+    if value in (None, ''):
+        return '-'
+    return f'{value}{suffix}'
+
+
+def _record_detail_context(obj, title, subtitle, back_url, edit_url, sections, ai_recommendation=''):
+    return {
+        'obj': obj,
+        'title': title,
+        'subtitle': subtitle,
+        'back_url': back_url,
+        'edit_url': edit_url,
+        'sections': sections,
+        'ai_recommendation': ai_recommendation or '',
+    }
+
+
+@login_required
+@permission_required('operations.daily_records')
+def daily_record_detail(request, pk):
+    obj = get_object_or_404(DailyPondRecord.objects.select_related('pond', 'technician', 'cycle'), pk=pk)
+    sections = [
+        {'title': 'Identitas Data', 'icon': 'fa-calendar-day', 'rows': [
+            ('Tanggal', obj.date.strftime('%d/%m/%Y')), ('Kolam', obj.pond.name),
+            ('Siklus Budidaya', obj.cycle.name if obj.cycle else '-'), ('DOC', obj.doc),
+            ('Teknisi', obj.technician.get_full_name() or obj.technician.username if obj.technician else '-'),
+        ]},
+        {'title': 'Operasional Harian', 'icon': 'fa-clipboard-list', 'rows': [
+            ('Kode Pakan', obj.feed_code or '-'), ('Pakan Harian', _detail_value(obj.daily_feed_kg, ' kg')),
+            ('Air Masuk', _detail_value(obj.water_in_cm, ' cm')), ('Cuaca', obj.weather or '-'),
+            ('Treatment', obj.treatment or '-'), ('Catatan', obj.notes or '-'),
+        ]},
+    ]
+    return render(request, 'operations/record_detail.html', _record_detail_context(
+        obj, 'Detail Data Harian Kolam', 'Informasi lengkap pencatatan operasional harian.',
+        reverse('operations:daily_records'), reverse('operations:edit_daily_record', args=[obj.pk]), sections))
+
+
+@login_required
+@permission_required('operations.parameters')
+def parameter_detail(request, pk):
+    obj = get_object_or_404(DailyParameter.objects.select_related('pond', 'technician', 'cycle'), pk=pk)
+    sections = [
+        {'title': 'Identitas Parameter', 'icon': 'fa-calendar-check', 'rows': [
+            ('Tanggal', obj.date.strftime('%d/%m/%Y')), ('Kolam', obj.pond.name),
+            ('Siklus Budidaya', obj.cycle.name if obj.cycle else '-'), ('DOC', obj.doc),
+            ('Teknisi', obj.technician.get_full_name() or obj.technician.username if obj.technician else '-'),
+        ]},
+        {'title': 'Tinggi & Visual Air', 'icon': 'fa-water', 'rows': [
+            ('Tinggi Air Pagi', _detail_value(obj.water_level_morning_cm or obj.water_level_cm, ' cm')),
+            ('Tinggi Air Sore', _detail_value(obj.water_level_evening_cm or obj.water_level_cm, ' cm')),
+            ('Warna Air Pagi', obj.water_color_morning or obj.water_color or '-'),
+            ('Warna Air Sore', obj.water_color_evening or obj.water_color or '-'),
+            ('Kecerahan Pagi', _detail_value(obj.transparency_morning or obj.transparency, ' cm')),
+            ('Kecerahan Sore', _detail_value(obj.transparency_evening or obj.transparency, ' cm')),
+        ]},
+        {'title': 'Kualitas Air', 'icon': 'fa-flask-vial', 'rows': [
+            ('Suhu Air', _detail_value(obj.temperature, ' °C')), ('pH Pagi', _detail_value(obj.ph_morning)),
+            ('pH Sore', _detail_value(obj.ph_evening)), ('DO Pagi', _detail_value(obj.do_morning, ' mg/L')),
+            ('DO Malam', _detail_value(obj.do_night, ' mg/L')), ('Salinitas', _detail_value(obj.salinity, ' ppt')),
+            ('Alkalinitas', _detail_value(obj.alkalinity, ' mg/L')), ('Catatan', obj.notes or '-'),
+        ]},
+    ]
+    return render(request, 'operations/record_detail.html', _record_detail_context(
+        obj, 'Detail Parameter Harian', 'Data parameter lengkap beserta hasil rekomendasi AI Ollama.',
+        reverse('operations:parameters'), reverse('operations:edit_parameter', args=[obj.pk]), sections,
+        ai_recommendation=obj.ai_recommendation))
+
+
+@login_required
+@permission_required('operations.anco')
+def anco_detail(request, pk):
+    obj = get_object_or_404(AncoCheck.objects.select_related('pond', 'technician', 'cycle'), pk=pk)
+    sections = [
+        {'title': 'Identitas Cek Anco', 'icon': 'fa-calendar-check', 'rows': [
+            ('Tanggal', obj.date.strftime('%d/%m/%Y')), ('Kolam', obj.pond.name),
+            ('Siklus Budidaya', obj.cycle.name if obj.cycle else '-'), ('DOC', obj.doc),
+            ('Teknisi', obj.technician.get_full_name() or obj.technician.username if obj.technician else '-'),
+        ]},
+        {'title': 'Hasil Pemeriksaan Anco', 'icon': 'fa-table-cells', 'rows': [
+            ('Pagi - Anco 1', obj.get_anco1_morning_display()), ('Pagi - Anco 2', obj.get_anco2_morning_display()),
+            ('Siang - Anco 1', obj.get_anco1_noon_display()), ('Siang - Anco 2', obj.get_anco2_noon_display()),
+            ('Sore - Anco 1', obj.get_anco1_evening_display()), ('Sore - Anco 2', obj.get_anco2_evening_display()),
+        ]},
+        {'title': 'Analisis Nafsu Makan', 'icon': 'fa-chart-line', 'rows': [
+            ('Status Nafsu Makan', obj.appetite_status or '-'), ('Rekomendasi', obj.recommendation or '-'),
+            ('Treatment', obj.treatment or '-'), ('Catatan', obj.notes or '-'),
+        ]},
+    ]
+    return render(request, 'operations/record_detail.html', _record_detail_context(
+        obj, 'Detail Cek Anco Harian', 'Hasil pemeriksaan anco pagi, siang, sore dan rekomendasinya.',
+        reverse('operations:anco_checks'), reverse('operations:edit_anco_check', args=[obj.pk]), sections))
+
+
+@login_required
+@permission_required('operations.sampling')
+def sampling_detail(request, pk):
+    obj = get_object_or_404(SamplingRecord.objects.select_related('pond', 'cycle'), pk=pk)
+    sections = [
+        {'title': 'Identitas Sampling', 'icon': 'fa-calendar-check', 'rows': [
+            ('Tanggal', obj.date.strftime('%d/%m/%Y')), ('Kolam', obj.pond.name),
+            ('Siklus Budidaya', obj.cycle.name if obj.cycle else '-'), ('DOC', obj.doc),
+        ]},
+        {'title': 'Pertumbuhan Udang', 'icon': 'fa-shrimp', 'rows': [
+            ('Berat Sampel', _detail_value(obj.sample_weight_g, ' g')), ('Jumlah Sampel', _detail_value(obj.sample_count, ' ekor')),
+            ('ABW Last', _detail_value(obj.abw_last_g, ' g')), ('ABW Today', _detail_value(obj.abw_g, ' g')),
+            ('Size', obj.size), ('ADG Mingguan', obj.adg_weekly), ('ADG Kumulatif', obj.adg_cumulative),
+        ]},
+        {'title': 'Estimasi Produksi', 'icon': 'fa-chart-pie', 'rows': [
+            ('Estimasi SR', _detail_value(obj.estimated_sr, ' %')), ('Biomassa FR', _detail_value(obj.biomass_kg, ' kg')),
+            ('FCR', obj.fcr), ('Populasi', _detail_value(obj.population, ' ekor')),
+            ('Pakan Kumulatif', _detail_value(obj.cumulative_feed_kg, ' kg')), ('Estimasi Panen', obj.harvest_estimation or '-'),
+            ('Catatan', obj.notes or '-'),
+        ]},
+    ]
+    return render(request, 'operations/record_detail.html', _record_detail_context(
+        obj, 'Detail Data Sampling', 'Informasi lengkap pertumbuhan, biomassa, SR, dan FCR.',
+        reverse('operations:sampling_records'), reverse('operations:edit_sampling_record', args=[obj.pk]), sections))
+
+
+@login_required
+@permission_required('operations.siphon')
+def siphon_detail(request, pk):
+    obj = get_object_or_404(SiphonRecord.objects.select_related('pond', 'technician', 'cycle'), pk=pk)
+    sections = [
+        {'title': 'Identitas Siphon', 'icon': 'fa-calendar-check', 'rows': [
+            ('Tanggal', obj.date.strftime('%d/%m/%Y')), ('Kolam', obj.pond.name),
+            ('Siklus Budidaya', obj.cycle.name if obj.cycle else '-'), ('DOC', obj.doc),
+            ('Teknisi', obj.technician.get_full_name() or obj.technician.username if obj.technician else '-'),
+        ]},
+        {'title': 'Hasil Siphon', 'icon': 'fa-shrimp', 'rows': [
+            ('Udang Mati', _detail_value(obj.dead_count, ' ekor')), ('Udang Hidup', _detail_value(obj.live_count, ' ekor')),
+            ('Jumlah Harian', _detail_value(obj.daily_total, ' ekor')), ('Total Akumulatif', _detail_value(obj.accumulated_total, ' ekor')),
+            ('Indikator Kesehatan', obj.health_indicator or '-'), ('Catatan', obj.notes or '-'),
+        ]},
+    ]
+    return render(request, 'operations/record_detail.html', _record_detail_context(
+        obj, 'Detail Data Siphon', 'Informasi mortalitas dan indikator kesehatan kolam.',
+        reverse('operations:siphon_records'), reverse('operations:edit_siphon_record', args=[obj.pk]), sections))
+
+
+@login_required
+@permission_required('operations.harvests')
+def harvest_detail(request, pk):
+    obj = get_object_or_404(Harvest.objects.select_related('pond', 'cycle'), pk=pk)
+    sections = [
+        {'title': 'Detail Panen', 'icon': 'fa-scale-balanced', 'rows': [
+            ('Tanggal', obj.date.strftime('%d/%m/%Y')), ('Kolam', obj.pond.name),
+            ('Siklus Budidaya', obj.cycle.name if obj.cycle else '-'), ('Jenis Panen', obj.harvest_type),
+            ('Size', obj.size_text), ('Total Panen', _detail_value(obj.total_kg, ' kg')), ('Catatan', obj.notes or '-'),
+        ]},
+    ]
+    return render(request, 'operations/record_detail.html', _record_detail_context(
+        obj, 'Detail Data Panen', 'Informasi lengkap hasil panen per kolam.',
+        reverse('operations:harvests'), reverse('operations:edit_harvest', args=[obj.pk]), sections))
+
 @login_required
 @permission_required('operations.daily_records')
 def edit_daily_record(request, pk):
@@ -847,6 +1010,7 @@ def edit_daily_record(request, pk):
             })
         obj.pond_id = payload['pond_id']
         obj.date = payload['date']
+        obj.cycle = get_selected_cycle(request, required=True)
         obj.technician = request.user
         obj.doc = payload['doc']
         obj.feed_code = payload['feed_code']
@@ -884,6 +1048,7 @@ def edit_anco_check(request, pk):
             })
         obj.pond_id = payload['pond_id']
         obj.date = payload['date']
+        obj.cycle = get_selected_cycle(request, required=True)
         obj.technician = request.user
         obj.doc = payload['doc']
         obj.feed_code = payload['feed_code']
@@ -930,6 +1095,7 @@ def edit_sampling_record(request, pk):
             })
         obj.pond_id = payload['pond_id']
         obj.date = payload['date']
+        obj.cycle = get_selected_cycle(request, required=True)
         obj.doc = payload['doc']
         obj.sample_weight_g = payload['sample_weight_g']
         obj.sample_count = payload['sample_count']
@@ -971,6 +1137,7 @@ def edit_siphon_record(request, pk):
             })
         obj.pond_id = payload['pond_id']
         obj.date = payload['date']
+        obj.cycle = get_selected_cycle(request, required=True)
         obj.technician = request.user
         obj.doc = payload['doc']
         obj.dead_count = payload['dead_count']
@@ -1005,6 +1172,7 @@ def edit_parameter(request, pk):
         obj.pond_id = payload['pond_id']
         obj.technician = request.user
         obj.date = payload['date']
+        obj.cycle = get_selected_cycle(request, required=True)
         obj.doc = payload['doc']
         for field in [
             'feed_code', 'water_in_cm', 'weather',
@@ -1045,6 +1213,7 @@ def edit_harvest(request, pk):
             })
         obj.pond_id = payload['pond_id']
         obj.date = payload['date']
+        obj.cycle = get_selected_cycle(request, required=True)
         obj.harvest_type = payload['harvest_type']
         obj.size_text = payload['size_text']
         obj.total_kg = payload['total_kg']

@@ -2,6 +2,7 @@ from decimal import Decimal
 from django.db import models
 from django.contrib.auth.models import User
 from operations.models import Harvest
+from cultivation.models import CultivationCycle
 
 
 class Customer(models.Model):
@@ -15,6 +16,7 @@ class Customer(models.Model):
 
 
 class Sale(models.Model):
+    cycle = models.ForeignKey(CultivationCycle, on_delete=models.PROTECT, null=True, blank=True, related_name='sales')
     PAYMENT = [('Cash', 'Cash'), ('Transfer', 'Transfer'), ('Tempo', 'Tempo'), ('QRIS', 'QRIS'), ('Midtrans', 'Midtrans')]
     STATUS = [
         ('Lunas', 'Lunas'),

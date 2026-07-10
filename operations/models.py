@@ -6,6 +6,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from ponds.models import Pond
+from cultivation.models import CultivationCycle
 
 
 def _date_value(value):
@@ -33,6 +34,7 @@ def _d(value, default='0'):
 
 
 class Stocking(models.Model):
+    cycle = models.ForeignKey(CultivationCycle, on_delete=models.PROTECT, null=True, blank=True, related_name='%(class)s_records')
     pond = models.ForeignKey(Pond, on_delete=models.CASCADE)
     date = models.DateField()
     seed_count = models.IntegerField()
@@ -47,6 +49,7 @@ class Stocking(models.Model):
 
 
 class DailyParameter(models.Model):
+    cycle = models.ForeignKey(CultivationCycle, on_delete=models.PROTECT, null=True, blank=True, related_name='%(class)s_records')
     pond=models.ForeignKey(Pond,on_delete=models.CASCADE)
     technician=models.ForeignKey(User,on_delete=models.SET_NULL,null=True,blank=True)
     WEATHER_CHOICES = [
@@ -94,18 +97,22 @@ class DailyParameter(models.Model):
 
 
 class Treatment(models.Model):
+    cycle = models.ForeignKey(CultivationCycle, on_delete=models.PROTECT, null=True, blank=True, related_name='%(class)s_records')
     pond=models.ForeignKey(Pond,on_delete=models.CASCADE); date=models.DateField(); name=models.CharField(max_length=120); dose=models.CharField(max_length=80,blank=True); notes=models.TextField(blank=True)
 
 
 class FeedLog(models.Model):
+    cycle = models.ForeignKey(CultivationCycle, on_delete=models.PROTECT, null=True, blank=True, related_name='%(class)s_records')
     pond=models.ForeignKey(Pond,on_delete=models.CASCADE); date=models.DateField(); feed_name=models.CharField(max_length=100); quantity_kg=models.DecimalField(max_digits=8, decimal_places=2)
 
 
 class Harvest(models.Model):
+    cycle = models.ForeignKey(CultivationCycle, on_delete=models.PROTECT, null=True, blank=True, related_name='%(class)s_records')
     pond=models.ForeignKey(Pond,on_delete=models.CASCADE); date=models.DateField(); harvest_type=models.CharField(max_length=30, default='Parsial'); size_text=models.CharField(max_length=50); total_kg=models.DecimalField(max_digits=10, decimal_places=2); notes=models.TextField(blank=True)
 
 
 class DailyPondRecord(models.Model):
+    cycle = models.ForeignKey(CultivationCycle, on_delete=models.PROTECT, null=True, blank=True, related_name='%(class)s_records')
     WEATHER_CHOICES = [
         ('Cerah', 'Cerah'), ('Berawan', 'Berawan'), ('Hujan', 'Hujan'),
         ('Panas', 'Panas'), ('Angin Kencang', 'Angin Kencang'),
@@ -131,6 +138,7 @@ class DailyPondRecord(models.Model):
 
 
 class AncoCheck(models.Model):
+    cycle = models.ForeignKey(CultivationCycle, on_delete=models.PROTECT, null=True, blank=True, related_name='%(class)s_records')
     STATUS_CHOICES = [
         ('H', 'Habis'),
         ('S', 'Sisa'),
@@ -185,6 +193,7 @@ class AncoCheck(models.Model):
 
 
 class SamplingRecord(models.Model):
+    cycle = models.ForeignKey(CultivationCycle, on_delete=models.PROTECT, null=True, blank=True, related_name='%(class)s_records')
     pond = models.ForeignKey(Pond, on_delete=models.CASCADE, related_name='sampling_records')
     date = models.DateField(default=timezone.localdate)
     doc = models.PositiveIntegerField(default=0)
@@ -305,6 +314,7 @@ class SamplingRecord(models.Model):
 
 
 class SiphonRecord(models.Model):
+    cycle = models.ForeignKey(CultivationCycle, on_delete=models.PROTECT, null=True, blank=True, related_name='%(class)s_records')
     pond = models.ForeignKey(Pond, on_delete=models.CASCADE, related_name='siphon_records')
     technician = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     date = models.DateField(default=timezone.localdate)

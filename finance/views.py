@@ -19,11 +19,12 @@ from .models import OperationalExpense
 from core.reporting import get_date_range, filter_by_date_range, format_date_range, export_excel, export_pdf, rupiah
 from core.utils import parse_rupiah
 from core.pagination import paginate_queryset
+from cultivation.utils import get_selected_cycle, filter_selected_cycle
 
 
 def _expense_queryset(request):
     date_from, date_to = get_date_range(request)
-    items = OperationalExpense.objects.select_related('pond').order_by('-date')
+    items = filter_selected_cycle(request, OperationalExpense.objects.select_related('pond').order_by('-date'))
     items = filter_by_date_range(items, 'date', date_from, date_to)
     category = request.GET.get('category') or ''
     pond = request.GET.get('pond') or ''
@@ -126,6 +127,7 @@ def add_expense(request):
     ponds = Pond.objects.all()
     if request.method == 'POST':
         OperationalExpense.objects.create(
+            cycle=get_selected_cycle(request, required=True),
             date=request.POST['date'],
             category=request.POST['category'],
             pond_id=request.POST.get('pond') or None,
@@ -141,9 +143,9 @@ def add_expense(request):
 
 def _profit_loss_data(request):
     date_from, date_to = get_date_range(request)
-    sales = Sale.objects.all()
+    sales = filter_selected_cycle(request, Sale.objects.all())
     sales = filter_by_date_range(sales, 'date', date_from, date_to, is_datetime=True)
-    expenses = OperationalExpense.objects.all()
+    expenses = filter_selected_cycle(request, OperationalExpense.objects.all())
     expenses = filter_by_date_range(expenses, 'date', date_from, date_to)
     revenue = sales.aggregate(s=Sum('total_amount'))['s'] or 0
     expense_total = expenses.aggregate(s=Sum('amount'))['s'] or 0
@@ -236,7 +238,7 @@ def _periodic_querysets(request, period_type):
     payment_method = request.GET.get('payment_method') or ''
     status = request.GET.get('status') or ''
 
-    sales = Sale.objects.select_related('customer').prefetch_related('items__harvest__pond').all()
+    sales = filter_selected_cycle(request, Sale.objects.select_related('customer').prefetch_related('items__harvest__pond').all())
     sales = filter_by_date_range(sales, 'date', date_from, date_to, is_datetime=True)
     if payment_method:
         sales = sales.filter(payment_method=payment_method)
@@ -245,7 +247,7 @@ def _periodic_querysets(request, period_type):
     if pond_id:
         sales = sales.filter(items__harvest__pond_id=pond_id).distinct()
 
-    expenses = OperationalExpense.objects.select_related('pond').all()
+    expenses = filter_selected_cycle(request, OperationalExpense.objects.select_related('pond').all())
     expenses = filter_by_date_range(expenses, 'date', date_from, date_to)
     if pond_id:
         expenses = expenses.filter(pond_id=pond_id)
@@ -759,6 +761,7 @@ def edit_expense(request, pk):
     obj = get_object_or_404(OperationalExpense, pk=pk)
     ponds = Pond.objects.all()
     if request.method == 'POST':
+        obj.cycle = get_selected_cycle(request, required=True)
         obj.date = request.POST['date']
         obj.category = request.POST['category']
         obj.pond_id = request.POST.get('pond') or None

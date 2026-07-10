@@ -22,6 +22,8 @@ from core.reporting import get_date_range, filter_by_date_range, format_date_ran
 from core.utils import parse_rupiah
 from core.pagination import paginate_queryset
 
+from cultivation.utils import get_selected_cycle, filter_selected_cycle
+
 
 def _parse_decimal_field(value, label, *, required=True, allow_zero=False):
     raw = str(value or '').strip()
@@ -103,7 +105,7 @@ def _default_month_range(request):
 
 def _filtered_sales_for_dashboard(request):
     date_from, date_to = _default_month_range(request)
-    qs = Sale.objects.select_related('customer', 'cashier').prefetch_related('items').order_by('-date')
+    qs = filter_selected_cycle(request, Sale.objects.select_related('customer', 'cashier').prefetch_related('items').order_by('-date'))
     qs = filter_by_date_range(qs, 'date', date_from, date_to, is_datetime=True)
     status = request.GET.get('status') or ''
     payment_method = request.GET.get('payment_method') or ''
@@ -250,6 +252,7 @@ def cashier(request):
             inv = 'INV' + timezone.now().strftime('%Y%m%d%H%M%S')
             weight, price, subtotal, shipping_cost, packing_cost, other_cost, total_amount = _get_sale_amounts_from_request(request)
             sale = Sale.objects.create(
+                cycle=get_selected_cycle(request, required=True),
                 invoice_no=inv,
                 customer_id=customer_id,
                 total_kg=weight,
@@ -329,7 +332,7 @@ def edit_sale(request, pk):
 
 def _sales_queryset(request):
     date_from, date_to = get_date_range(request)
-    sales = Sale.objects.select_related('customer', 'cashier').order_by('-date')
+    sales = filter_selected_cycle(request, Sale.objects.select_related('customer', 'cashier').order_by('-date'))
     sales = filter_by_date_range(sales, 'date', date_from, date_to, is_datetime=True)
     status = request.GET.get('status') or ''
     if status:

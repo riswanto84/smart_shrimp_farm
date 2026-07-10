@@ -4,6 +4,6 @@ from django.conf import settings
 from django.conf.urls.static import static
 urlpatterns = [
  path('admin/', admin.site.urls), path('', include('core.urls')), path('accounts/', include('accounts.urls')),
- path('ponds/', include('ponds.urls')), path('operations/', include('operations.urls')), path('sales/', include('sales.urls')),
+ path('cycles/', include('cultivation.urls')), path('ponds/', include('ponds.urls')), path('operations/', include('operations.urls')), path('sales/', include('sales.urls')),
  path('finance/', include('finance.urls')), path('investor/', include('investor.urls')), path('weather/', include('weather_ai.urls')), path('chat-ai/', include('chat_ai.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

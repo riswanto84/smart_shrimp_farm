@@ -11,7 +11,20 @@
   <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-chart-line"></i></div><div><span>Omzet Hari Ini</span><strong>{{ sales_total|rupiah }}</strong><small class="up">↑ 12.5% dari kemarin</small></div></div>
   <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-wallet"></i></div><div><span>Pengeluaran Hari Ini</span><strong>{{ expense_total|rupiah }}</strong><small class="down">↓ 5.3% dari kemarin</small></div></div>
   <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-water"></i></div><div><span>Kolam Aktif</span><strong>{{ ponds.count }}</strong><small>dari 6 kolam</small></div></div>
-  <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-microchip"></i></div><div><span>Status AI</span><strong>Ollama</strong><small class="online">Online</small></div></div>
+  <div class="kpi-card" id="ollama-status-card">
+    <div class="kpi-icon purple"><i class="fa-solid fa-microchip"></i></div>
+    <div>
+      <span>Status AI</span>
+      <strong>Ollama</strong>
+      <small id="ollama-status-badge" class="{% if ollama_status.status == 'online' %}online{% elif ollama_status.status == 'model_missing' or ollama_status.status == 'timeout' %}warning{% else %}offline{% endif %}">
+        {% if ollama_status.status == 'online' %}Online{% elif ollama_status.status == 'model_missing' %}Model belum tersedia{% elif ollama_status.status == 'timeout' %}Timeout{% else %}Offline{% endif %}
+      </small>
+      <small id="ollama-status-detail" class="text-muted d-block">
+        {% if ollama_status.ok %}{{ ollama_status.model }} · {{ ollama_status.latency_ms }} ms{% else %}Tidak tersambung{% endif %}
+      </small>
+      <button type="button" id="ollama-recheck" class="btn btn-sm btn-outline-primary mt-1">Cek ulang</button>
+    </div>
+  </div>
 </div>
 <div class="dashboard-grid">
   <section class="panel pond-summary">
@@ -33,4 +46,50 @@
   <section class="panel production-panel"><h2>Produksi <span>(Ton)</span></h2><div class="donut"><span>Total<br><b>24.8</b><br>Ton</span></div><ul><li><b style="--c:#2d7ff9"></b> Kolam 1 <span>4.2 Ton</span></li><li><b style="--c:#f59e0b"></b> Kolam 2 <span>6.8 Ton</span></li><li><b style="--c:#22c55e"></b> Kolam 3 <span>5.6 Ton</span></li><li><b style="--c:#ef4444"></b> Kolam 4 <span>4.1 Ton</span></li></ul></section>
   <section class="panel activity-panel"><div class="panel-head"><h2>Aktivitas Terbaru</h2><a href="#">Lihat Semua</a></div><div class="activity-list"><div><i class="fa-solid fa-flask"></i><p><b>Pencatatan parameter Kolam 2</b><small>Suhu: 28.4°C, pH: 7.8, DO: 5.6 mg/L</small></p><span>10:15 WIB</span></div><div><i class="fa-solid fa-bowl-food"></i><p><b>Pemberian pakan Kolam 3</b><small>Pelet 781-2: 40 kg</small></p><span>09:30 WIB</span></div><div><i class="fa-solid fa-cash-register"></i><p><b>Penjualan udang 120 kg</b><small>Pelanggan: PT Bahari Sentosa</small></p><span>09:00 WIB</span></div><div><i class="fa-solid fa-shrimp"></i><p><b>Panen Kolam 5</b><small>Total produksi 4.100 kg</small></p><span>Kemarin</span></div></div></section>
 </div>
+<script>
+(function () {
+  const badge = document.getElementById('ollama-status-badge');
+  const detail = document.getElementById('ollama-status-detail');
+  const button = document.getElementById('ollama-recheck');
+  if (!badge || !detail || !button) return;
+
+  function applyStatus(data) {
+    badge.classList.remove('online', 'offline', 'warning');
+    if (data.status === 'online') {
+      badge.textContent = 'Online';
+      badge.classList.add('online');
+      detail.textContent = `${data.model} · ${data.latency_ms} ms`;
+    } else if (data.status === 'model_missing') {
+      badge.textContent = 'Model belum tersedia';
+      badge.classList.add('warning');
+      detail.textContent = data.message;
+    } else if (data.status === 'timeout') {
+      badge.textContent = 'Timeout';
+      badge.classList.add('warning');
+      detail.textContent = data.message;
+    } else {
+      badge.textContent = 'Offline';
+      badge.classList.add('offline');
+      detail.textContent = data.message || 'Ollama tidak dapat dihubungi';
+    }
+  }
+
+  async function checkOllama() {
+    button.disabled = true;
+    button.textContent = 'Memeriksa...';
+    try {
+      const response = await fetch('/ollama/status/', {headers: {'X-Requested-With': 'XMLHttpRequest'}});
+      applyStatus(await response.json());
+    } catch (error) {
+      applyStatus({status: 'offline', message: 'Gagal memeriksa status Ollama'});
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Cek ulang';
+    }
+  }
+
+  button.addEventListener('click', checkOllama);
+  window.setInterval(checkOllama, 30000);
+})();
+</script>
 {% endblock %}

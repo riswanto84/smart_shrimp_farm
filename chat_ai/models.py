@@ -3,6 +3,7 @@ from datetime import timedelta
 from django.db import models
 from django.contrib.auth.models import User
 from ponds.models import Pond
+from cultivation.models import CultivationCycle
 
 
 class ChatSession(models.Model):
@@ -17,6 +18,7 @@ class ChatSession(models.Model):
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    cycle = models.ForeignKey(CultivationCycle, on_delete=models.PROTECT, null=True, blank=True, related_name='chat_sessions')
     pond = models.ForeignKey(Pond, on_delete=models.SET_NULL, null=True, blank=True)
     title = models.CharField(max_length=150, default='Chat AI Tambak')
     model_name = models.CharField(max_length=100, blank=True)

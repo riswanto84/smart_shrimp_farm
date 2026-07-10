@@ -9,6 +9,8 @@ from operations.models import DailyParameter, DailyPondRecord, AncoCheck, Sampli
 from .models import ChatSession, ChatMessage
 from .services import ask_ollama, ollama_health
 
+from cultivation.utils import get_selected_cycle
+
 
 def _pond_ai_context(pond):
     if not pond:
@@ -44,10 +46,12 @@ def _is_ollama_error(answer):
 @permission_required('chat.view')
 def chat(request):
     ponds = Pond.objects.all()
-    session = ChatSession.objects.filter(user=request.user).order_by('-updated_at', '-created_at').first()
+    cycle = get_selected_cycle(request)
+    session = ChatSession.objects.filter(user=request.user, cycle=cycle).order_by('-updated_at', '-created_at').first()
     if not session:
         session = ChatSession.objects.create(
             user=request.user,
+            cycle=cycle,
             model_name=getattr(settings, 'OLLAMA_MODEL', 'gemma2:2b'),
         )
 
