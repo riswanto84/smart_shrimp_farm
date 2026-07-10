@@ -79,6 +79,28 @@ def normalized_roles(user):
     except Exception:
         return []
 
+
+def is_owner(user):
+    """True hanya untuk superuser atau role aplikasi Owner/Owner Tambak."""
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    roles = normalized_roles(user)
+    return any(role in {"owner", "owner tambak"} for role in roles)
+
+
+def owner_required(view_func):
+    """Batasi view hanya untuk Owner/Owner Tambak."""
+    @login_required
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if is_owner(request.user):
+            return view_func(request, *args, **kwargs)
+        messages.error(request, "Akses ditolak. Fitur Siklus Budidaya hanya dapat diakses oleh Owner.")
+        return render(request, "accounts/forbidden.html", status=403)
+    return wrapper
+
 def has_permission(user, permission_code):
     if not user.is_authenticated:
         return False

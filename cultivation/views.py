@@ -1,13 +1,14 @@
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
+
+from accounts.rbac import owner_required
 
 from .forms import CultivationCycleForm
 from .models import CultivationCycle
 
 
-@login_required
+@owner_required
 def cycle_list(request):
     return render(
         request,
@@ -16,7 +17,7 @@ def cycle_list(request):
     )
 
 
-@login_required
+@owner_required
 def cycle_form(request, pk=None):
     obj = get_object_or_404(CultivationCycle, pk=pk) if pk else None
 
@@ -42,7 +43,7 @@ def cycle_form(request, pk=None):
     )
 
 
-@login_required
+@owner_required
 @require_POST
 def select_cycle(request):
     cycle = get_object_or_404(CultivationCycle, pk=request.POST.get("cycle"))
