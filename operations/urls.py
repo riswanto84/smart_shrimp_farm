@@ -26,13 +26,6 @@ urlpatterns = [
     path('harvests/add/', views.add_harvest, name='add_harvest'),
     path('harvests/export/excel/', views.export_harvests_excel, name='export_harvests_excel'),
     path('harvests/export/pdf/', views.export_harvests_pdf, name='export_harvests_pdf'),
-
-    path('daily-records/<int:pk>/', views.daily_record_detail, name='daily_record_detail'),
-    path('anco/<int:pk>/', views.anco_detail, name='anco_detail'),
-    path('sampling/<int:pk>/', views.sampling_detail, name='sampling_detail'),
-    path('siphon/<int:pk>/', views.siphon_detail, name='siphon_detail'),
-    path('parameters/<int:pk>/', views.parameter_detail, name='parameter_detail'),
-    path('harvests/<int:pk>/', views.harvest_detail, name='harvest_detail'),
     path('daily-records/<int:pk>/edit/', views.edit_daily_record, name='edit_daily_record'),
     path('daily-records/<int:pk>/delete/', views.delete_daily_record, name='delete_daily_record'),
     path('anco/<int:pk>/edit/', views.edit_anco_check, name='edit_anco_check'),
