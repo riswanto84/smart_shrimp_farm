@@ -5,7 +5,7 @@
   <div>
     <span class="badge rounded-pill bg-primary-subtle text-primary mb-2"><i class="fa-solid fa-flask-vial"></i> PARAMETER HARIAN</span>
     <h1>{% if mode == 'edit' %}Edit{% else %}Input{% endif %} Parameter Harian</h1>
-    <p>Catat kode pakan, pakan harian, air masuk, cuaca, tinggi air pagi/sore, kualitas air, warna air, kecerahan, mortalitas, dan catatan teknisi.</p>
+    <p>Catat pakan harian, tinggi air pagi/sore, kualitas air, warna air, kecerahan, mortalitas, dan catatan teknisi.</p>
   </div>
   <a class="btn btn-outline-primary" href="{% url 'operations:parameters' %}"><i class="fa-solid fa-arrow-left"></i> Kembali</a>
 </div>
@@ -23,37 +23,22 @@
   <div class="row g-3">
     <div class="col-lg-9">
       <div class="cardx mb-3">
-        <div class="section-mini"><i class="fa-solid fa-water"></i><div><b>Data Dasar Kolam</b><small>Tanggal, kolam, DOC, kode pakan, air masuk, cuaca, serta tinggi air pagi dan sore.</small></div></div>
+        <div class="section-mini"><i class="fa-solid fa-water"></i><div><b>Data Dasar Kolam</b><small>Tanggal, kolam, DOC, serta tinggi air pagi dan sore.</small></div></div>
         <div class="row g-3 mt-1">
-          <div class="col-md-3">
+          <div class="col-md-4">
             <label class="form-label">Tanggal <span class="text-danger">*</span></label>
             <input class="form-control" type="date" name="date" value="{% if obj.date|date:'Y-m-d' %}{{ obj.date|date:'Y-m-d' }}{% else %}{{ obj.date|default:'' }}{% endif %}" required>
           </div>
-          <div class="col-md-3">
+          <div class="col-md-4">
             <label class="form-label">Kolam <span class="text-danger">*</span></label>
             <select class="form-select" name="pond" required>
               {% for p in ponds %}<option value="{{p.id}}" {% if obj.pond_id|stringformat:'s' == p.id|stringformat:'s' %}selected{% endif %}>{{p.name}}</option>{% endfor %}
             </select>
           </div>
-          <div class="col-md-2">
+          <div class="col-md-4">
             <label class="form-label">DOC</label>
             <input class="form-control numeric-int" name="doc" type="text" inputmode="numeric" pattern="[0-9]*" value="{{ obj.doc|default:0|unlocalize }}" autocomplete="off">
             <small class="text-muted">Bilangan bulat.</small>
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">Kode Pakan</label>
-            <input class="form-control" name="feed_code" maxlength="80" value="{{ obj.feed_code|default:'' }}">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">Air Masuk (cm)</label>
-            <input class="form-control numeric-decimal" name="water_in_cm" type="text" inputmode="decimal" value="{{ obj.water_in_cm|default:''|unlocalize }}" autocomplete="off">
-          </div>
-          <div class="col-md-2">
-            <label class="form-label">Cuaca</label>
-            <select class="form-select" name="weather">
-              <option value="">Pilih cuaca</option>
-              {% for v,l in weather_choices %}<option value="{{v}}" {% if obj.weather == v %}selected{% endif %}>{{l}}</option>{% endfor %}
-            </select>
           </div>
           <div class="col-md-3">
             <label class="form-label">Tinggi Air Pagi (cm)</label>
@@ -113,9 +98,6 @@
           <li>Desimal gunakan titik, contoh <b>7.6</b>, <b>1.45</b>, atau <b>38.5</b>.</li>
           <li>Sistem juga otomatis mengubah koma menjadi titik, misalnya <b>7,6</b> menjadi <b>7.6</b>.</li>
           <li>DOC dan mortalitas harus bilangan bulat.</li>
-          <li>Air masuk dan pakan harian wajib memakai satuan cm/kg sesuai label.</li>
-          <li>Kode pakan boleh teks/angka, contoh <b>6003</b>.</li>
-          <li>Cuaca harus dipilih dari daftar.</li>
           <li>Warna air boleh teks, contoh <b>CH</b>, <b>HC</b>, <b>C</b>.</li>
         </ul>
       </div>
