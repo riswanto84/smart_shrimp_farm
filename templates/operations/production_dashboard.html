@@ -4,31 +4,41 @@
   <div class="page-head ops-hero-head">
     <div>
       <h1>Dashboard Produksi</h1>
-      <p>Alur data: Tebar → Parameter Harian → Cek Anco → Sampling → Siphon → Estimasi Panen.</p>
+      <p>Alur data aktual: Tebar → Pakan → Cek Anco → Sampling → Siphon → Estimasi Panen.</p>
+      {% if selected_cycle %}<small class="text-muted"><i class="fa-solid fa-arrows-rotate"></i> Siklus: <b>{{ selected_cycle.name }}</b></small>{% endif %}
     </div>
-    <div class="ops-head-actions"><a class="btn btn-primary" href="{% url 'operations:add_parameter' %}"><i class="fa-solid fa-plus"></i> Input Parameter</a></div>
+    <div class="ops-head-actions"><a class="btn btn-primary" href="{% url 'operations:add_parameter' %}" title="Input Parameter" aria-label="Input Parameter"><i class="fa-solid fa-plus"></i> Input Parameter</a></div>
   </div>
 
   <div class="ops-flow cardx mb-3">
-    <div><i class="fa-solid fa-seedling"></i><b>Data Tebar</b><span>Populasi awal</span></div>
-    <em></em><div><i class="fa-solid fa-bowl-food"></i><b>Pakan Harian</b><span>Konsumsi pakan</span></div>
-    <em></em><div><i class="fa-solid fa-clipboard-check"></i><b>Cek Anco</b><span>Nafsu makan</span></div>
-    <em></em><div><i class="fa-solid fa-weight-scale"></i><b>Sampling</b><span>ABW, ADG, FCR</span></div>
-    <em></em><div><i class="fa-solid fa-water"></i><b>Siphon</b><span>Mortalitas</span></div>
-    <em></em><div><i class="fa-solid fa-chart-line"></i><b>Estimasi Panen</b><span>Prediksi biomass</span></div>
+    <div><i class="fa-solid fa-seedling"></i><b>Data Tebar</b><span>{{ active_stocking|ribuan }} ekor</span></div>
+    <em></em><div><i class="fa-solid fa-bowl-food"></i><b>Pakan Harian</b><span>{{ feed_today|angka:2 }} kg</span></div>
+    <em></em><div><i class="fa-solid fa-clipboard-check"></i><b>Cek Anco</b><span>{{ anco_alerts|ribuan }} alert</span></div>
+    <em></em><div><i class="fa-solid fa-weight-scale"></i><b>Sampling</b><span>ABW {{ avg_abw|angka:2 }} g</span></div>
+    <em></em><div><i class="fa-solid fa-water"></i><b>Siphon</b><span>{{ dead_7d|ribuan }} mati/7 hari</span></div>
+    <em></em><div><i class="fa-solid fa-chart-line"></i><b>Estimasi Panen</b><span>{{ estimated_biomass|angka:2 }} kg</span></div>
   </div>
 
   <div class="kpi-grid">
-    <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-fish-fins"></i></div><div><span>Populasi Tebar</span><strong>{{ active_stocking|ribuan }} ekor</strong><small>Akumulasi data tebar</small></div></div>
-    <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-bowl-rice"></i></div><div><span>Pakan Hari Ini</span><strong>{{ feed_today|angka:2 }} Kg</strong><small>Data harian pakan</small></div></div>
-    <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-weight-scale"></i></div><div><span>Rata-rata ABW</span><strong>{{ avg_abw|angka:2 }} g</strong><small>Data sampling</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-fish-fins"></i></div><div><span>Populasi Tebar</span><strong>{{ active_stocking|ribuan }} ekor</strong><small>Sumber: {{ stocking_source }}</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-bowl-rice"></i></div><div><span>{% if feed_is_today %}Pakan Hari Ini{% else %}Pakan Terbaru{% endif %}</span><strong>{{ feed_today|angka:2 }} Kg</strong><small>{{ feed_source }}{% if feed_date %} · {{ feed_date|date:"d M Y" }}{% endif %}</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-weight-scale"></i></div><div><span>Rata-rata ABW</span><strong>{{ avg_abw|angka:2 }} g</strong><small>Sampling terbaru per kolam</small></div></div>
     <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-triangle-exclamation"></i></div><div><span>Alert Anco/Mortalitas</span><strong>{{ anco_alerts|ribuan }} / {{ dead_7d|ribuan }}</strong><small>Anco 3 hari / mati 7 hari</small></div></div>
   </div>
+
+  {% if not active_stocking or not feed_today %}
+  <div class="alert alert-info mt-3" role="alert">
+    <i class="fa-solid fa-circle-info"></i>
+    {% if not active_stocking %}Populasi tebar belum tersedia pada modul Tebar maupun sampling terbaru. {% endif %}
+    {% if not feed_today %}Pakan belum tersedia pada Cek Anco, Data Harian, Log Pakan, Parameter, maupun Sampling. {% endif %}
+    Data lama dengan siklus kosong tetap dibaca selama masa transisi.
+  </div>
+  {% endif %}
 
   <div class="ops-grid">
     <section class="panel ops-panel-wide">
       <div class="panel-head"><h2>Kondisi Terbaru Per Kolam</h2><a href="{% url 'operations:sampling_records' %}">Lihat Sampling</a></div>
-      <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>DOC</th><th>Pakan Terakhir</th><th>Anco</th><th>ABW / Size</th><th>FCR</th><th>Siphon</th><th>Estimasi</th></tr></thead><tbody>{% for row in pond_cards %}<tr><td><b>{{ row.pond.name }}</b><br><small class="text-muted">{{ row.pond.status }}</small></td><td>{% if row.daily %}{{ row.daily.doc|ribuan }}{% elif row.sample %}{{ row.sample.doc|ribuan }}{% else %}-{% endif %}</td><td>{% if row.daily %}{{ row.daily.daily_feed_kg|angka:2 }} Kg<br><small>{{ row.daily.date }}</small>{% else %}-{% endif %}</td><td>{% if row.anco %}<span class="badge-soft">{{ row.anco.appetite_status }}</span>{% else %}-{% endif %}</td><td>{% if row.sample %}<b>{{ row.sample.abw_g|angka:2 }} g</b><br><small>Size {{ row.sample.size|angka:2 }}</small>{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.fcr|angka:2 }}{% else %}-{% endif %}</td><td>{% if row.siphon %}{{ row.siphon.dead_count|ribuan }} mati<br><small>{{ row.siphon.health_indicator }}</small>{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.harvest_estimation }}{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="8" class="text-center text-muted">Belum ada data kolam.</td></tr>{% endfor %}</tbody></table></div>
+      <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>DOC</th><th>Pakan Terakhir</th><th>Anco</th><th>ABW / Size</th><th>FCR</th><th>Siphon</th><th>Estimasi</th></tr></thead><tbody>{% for row in pond_cards %}<tr><td><b>{{ row.pond.name }}</b><br><small class="text-muted">{{ row.pond.status }}</small></td><td>{% if row.latest_doc is not None %}{{ row.latest_doc|ribuan }}{% else %}-{% endif %}</td><td>{% if row.latest_feed %}{{ row.latest_feed.1|angka:2 }} Kg<br><small>{{ row.latest_feed.0|date:"d M Y" }} · {{ row.latest_feed.2 }}</small>{% else %}-{% endif %}</td><td>{% if row.anco %}<span class="badge-soft">{{ row.anco.appetite_status }}</span>{% else %}-{% endif %}</td><td>{% if row.sample %}<b>{{ row.sample.abw_g|angka:2 }} g</b><br><small>Size {{ row.sample.size|angka:2 }}</small>{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.fcr|angka:2 }}{% else %}-{% endif %}</td><td>{% if row.siphon %}{{ row.siphon.dead_count|ribuan }} mati<br><small>{{ row.siphon.health_indicator }}</small>{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.harvest_estimation|default:"-" }}{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="8" class="text-center text-muted">Belum ada data kolam.</td></tr>{% endfor %}</tbody></table></div>
     </section>
     <aside class="panel insight-panel">
       <div class="ai-management-box mb-3">
@@ -37,9 +47,9 @@
         <a class="btn btn-sm mt-3" href="{% url 'chat_ai:chat' %}">Buka Chat AI</a>
       </div>
       <div class="panel-head"><h2>Insight Operasional</h2></div>
-      <div class="insight-card green-soft"><i class="fa-solid fa-arrow-trend-up"></i><div><b>FCR Rata-rata</b><p>{{ avg_fcr|angka:2 }}. Jaga pakan agar FCR tetap efisien.</p></div></div>
+      <div class="insight-card green-soft"><i class="fa-solid fa-arrow-trend-up"></i><div><b>FCR Rata-rata</b><p>{{ avg_fcr|angka:2 }} dari sampling terbaru per kolam.</p></div></div>
       <div class="insight-card orange-soft"><i class="fa-solid fa-shrimp"></i><div><b>Monitoring Siphon</b><p>{{ dead_7d|ribuan }} ekor mati tercatat dalam 7 hari terakhir.</p></div></div>
-      <div class="insight-card blue-soft"><i class="fa-solid fa-clipboard-list"></i><div><b>Data Terintegrasi</b><p>Data harian, anco, sampling, dan siphon menjadi dasar dashboard dan laporan investor.</p></div></div>
+      <div class="insight-card blue-soft"><i class="fa-solid fa-chart-column"></i><div><b>Estimasi Biomassa</b><p>{{ estimated_biomass|angka:2 }} kg berdasarkan sampling terbaru per kolam.</p></div></div>
     </aside>
   </div>
 </div>

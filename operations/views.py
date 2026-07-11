@@ -326,39 +326,159 @@ def _sampling_payload(request):
 @login_required
 @permission_required('operations.production_dashboard')
 def production_dashboard(request):
+    """Dashboard produksi dengan data aktual berdasarkan siklus terpilih.
+
+    Sumber data dibuat berlapis agar dashboard tidak tampak kosong ketika
+    modul lama belum diisi, tetapi data ekuivalen sudah tersedia di sampling
+    atau cek anco. Record lama dengan ``cycle=NULL`` tetap dibaca melalui
+    ``filter_selected_cycle`` selama masa transisi.
+    """
     ponds = Pond.objects.all().order_by('name')
     today = timezone.localdate()
-    daily_today = DailyPondRecord.objects.filter(date=today)
-    feed_today = daily_today.aggregate(s=Sum('daily_feed_kg'))['s'] or Decimal('0')
-    latest_sampling = SamplingRecord.objects.select_related('pond').order_by('pond_id', '-date')
-    sampling_map = {}
-    for s in latest_sampling:
-        if s.pond_id not in sampling_map:
-            sampling_map[s.pond_id] = s
-    latest_samples = list(sampling_map.values())[:8]
-    avg_abw = SamplingRecord.objects.aggregate(a=Avg('abw_g'))['a'] or 0
-    avg_fcr = SamplingRecord.objects.aggregate(a=Avg('fcr'))['a'] or 0
-    dead_7d = SiphonRecord.objects.filter(date__gte=today-timedelta(days=7)).aggregate(s=Sum('dead_count'))['s'] or 0
-    anco_alerts = AncoCheck.objects.filter(date__gte=today-timedelta(days=3), appetite_status__in=['Nafsu makan turun','Ada sisa pakan']).count()
-    active_stocking = Stocking.objects.aggregate(s=Sum('seed_count'))['s'] or 0
+    selected_cycle = get_selected_cycle(request)
+
+    def cycle_qs(qs):
+        return filter_selected_cycle(request, qs)
+
+    def latest_per_pond(qs):
+        result = {}
+        for obj in qs.select_related('pond').order_by('pond_id', '-date', '-id'):
+            if obj.pond_id not in result:
+                result[obj.pond_id] = obj
+        return result
+
+    # Sampling terbaru per kolam menjadi dasar KPI, bukan rata-rata seluruh histori.
+    sampling_qs = cycle_qs(SamplingRecord.objects.all())
+    sampling_map = latest_per_pond(sampling_qs)
+    latest_samples = list(sampling_map.values())
+    avg_abw = (
+        sum((_float(x.abw_g) for x in latest_samples), 0.0) / len(latest_samples)
+        if latest_samples else 0
+    )
+    fcr_values = [_float(x.fcr) for x in latest_samples if _float(x.fcr) > 0]
+    avg_fcr = sum(fcr_values, 0.0) / len(fcr_values) if fcr_values else 0
+    estimated_biomass = sum((_float(x.biomass_kg) for x in latest_samples), 0.0)
+
+    # Populasi tebar: prioritas modul Stocking, fallback ke nilai Tebar pada
+    # sampling terbaru setiap kolam. Ini mencegah kartu 0 ketika data sampling
+    # sudah lengkap tetapi modul tebar belum pernah digunakan.
+    stocking_qs = cycle_qs(Stocking.objects.all())
+    active_stocking = stocking_qs.aggregate(s=Sum('seed_count'))['s'] or 0
+    stocking_source = 'Data tebar'
+    if not active_stocking:
+        active_stocking = sum((int(x.stocking_count or 0) for x in latest_samples), 0)
+        stocking_source = 'Sampling terbaru' if active_stocking else 'Belum ada data'
+
+    # Pakan memakai satu sumber prioritas agar tidak terjadi hitung ganda.
+    feed_sources = [
+        ('Cek Anco', AncoCheck, 'daily_feed_kg'),
+        ('Data Harian', DailyPondRecord, 'daily_feed_kg'),
+        ('Log Pakan', FeedLog, 'quantity_kg'),
+        ('Parameter Harian', DailyParameter, 'feed_kg'),
+        ('Sampling', SamplingRecord, 'daily_feed_kg'),
+    ]
+    feed_value = Decimal('0')
+    feed_date = None
+    feed_source = 'Belum ada data'
+    feed_is_today = False
+
+    # Coba data hari ini terlebih dahulu sesuai urutan prioritas.
+    for source_name, model, field_name in feed_sources:
+        qs = cycle_qs(model.objects.filter(date=today))
+        value = qs.aggregate(s=Sum(field_name))['s'] or Decimal('0')
+        if value:
+            feed_value = value
+            feed_date = today
+            feed_source = source_name
+            feed_is_today = True
+            break
+
+    # Bila hari ini belum diinput, tampilkan pakan pada tanggal terbaru yang ada.
+    if not feed_value:
+        latest_candidates = []
+        for source_name, model, field_name in feed_sources:
+            qs = cycle_qs(model.objects.all())
+            latest_obj = qs.order_by('-date', '-id').first()
+            if latest_obj:
+                latest_candidates.append((latest_obj.date, source_name, model, field_name))
+        if latest_candidates:
+            feed_date, feed_source, model, field_name = max(latest_candidates, key=lambda x: x[0])
+            feed_value = (
+                cycle_qs(model.objects.filter(date=feed_date))
+                .aggregate(s=Sum(field_name))['s'] or Decimal('0')
+            )
+
+    # Alert dan siphon juga wajib mengikuti siklus terpilih.
+    siphon_qs = cycle_qs(SiphonRecord.objects.all())
+    anco_qs = cycle_qs(AncoCheck.objects.all())
+    dead_7d = siphon_qs.filter(date__gte=today - timedelta(days=7)).aggregate(
+        s=Sum('dead_count')
+    )['s'] or 0
+    anco_alerts = anco_qs.filter(
+        date__gte=today - timedelta(days=3),
+        appetite_status__in=['Nafsu makan turun', 'Ada sisa pakan'],
+    ).count()
+
+    siphon_map = latest_per_pond(siphon_qs)
+    anco_map = latest_per_pond(anco_qs)
+    daily_map = latest_per_pond(cycle_qs(DailyPondRecord.objects.all()))
+    parameter_map = latest_per_pond(cycle_qs(DailyParameter.objects.all()))
+    feedlog_map = latest_per_pond(cycle_qs(FeedLog.objects.all()))
 
     pond_cards = []
-    for p in ponds:
-        sample = sampling_map.get(p.id)
-        siphon = SiphonRecord.objects.filter(pond=p).order_by('-date').first()
-        anco = AncoCheck.objects.filter(pond=p).order_by('-date').first()
-        daily = DailyPondRecord.objects.filter(pond=p).order_by('-date').first()
-        pond_cards.append({'pond': p, 'sample': sample, 'siphon': siphon, 'anco': anco, 'daily': daily})
+    for pond in ponds:
+        sample = sampling_map.get(pond.id)
+        daily = daily_map.get(pond.id)
+        parameter = parameter_map.get(pond.id)
+        anco = anco_map.get(pond.id)
+        feedlog = feedlog_map.get(pond.id)
+
+        # Pilih catatan pakan terbaru per kolam dari seluruh sumber.
+        feed_options = []
+        if anco and _float(anco.daily_feed_kg) > 0:
+            feed_options.append((anco.date, anco.daily_feed_kg, 'Cek Anco'))
+        if daily and _float(daily.daily_feed_kg) > 0:
+            feed_options.append((daily.date, daily.daily_feed_kg, 'Data Harian'))
+        if feedlog and _float(feedlog.quantity_kg) > 0:
+            feed_options.append((feedlog.date, feedlog.quantity_kg, 'Log Pakan'))
+        if parameter and _float(parameter.feed_kg) > 0:
+            feed_options.append((parameter.date, parameter.feed_kg, 'Parameter'))
+        if sample and _float(sample.daily_feed_kg) > 0:
+            feed_options.append((sample.date, sample.daily_feed_kg, 'Sampling'))
+        latest_feed = max(feed_options, key=lambda x: x[0]) if feed_options else None
+
+        doc_candidates = [
+            (obj.date, obj.doc) for obj in (anco, daily, parameter, sample)
+            if obj is not None and getattr(obj, 'doc', None) is not None
+        ]
+        latest_doc = max(doc_candidates, key=lambda x: x[0])[1] if doc_candidates else None
+
+        pond_cards.append({
+            'pond': pond,
+            'sample': sample,
+            'siphon': siphon_map.get(pond.id),
+            'anco': anco,
+            'daily': daily,
+            'parameter': parameter,
+            'latest_feed': latest_feed,
+            'latest_doc': latest_doc,
+        })
 
     context = {
         'ponds': ponds,
-        'feed_today': feed_today,
+        'selected_cycle': selected_cycle,
+        'feed_today': feed_value,
+        'feed_date': feed_date,
+        'feed_source': feed_source,
+        'feed_is_today': feed_is_today,
         'avg_abw': avg_abw,
         'avg_fcr': avg_fcr,
+        'estimated_biomass': estimated_biomass,
         'dead_7d': dead_7d,
         'anco_alerts': anco_alerts,
         'active_stocking': active_stocking,
-        'latest_samples': latest_samples,
+        'stocking_source': stocking_source,
+        'latest_samples': latest_samples[:8],
         'pond_cards': pond_cards,
         'ollama_health': ollama_health(),
     }
