@@ -578,26 +578,51 @@ def add_anco_check(request):
                 'ponds': ponds, 'status_choices': AncoCheck.STATUS_CHOICES,
                 'weather_choices': DailyPondRecord.WEATHER_CHOICES, 'obj': payload, 'errors': errors, 'mode': 'add'
             })
-        AncoCheck.objects.update_or_create(
-            cycle=get_selected_cycle(request, required=True), pond_id=payload['pond_id'], date=payload['date'],
-            defaults={
-                'technician': request.user,
-                'doc': payload['doc'],
-                'feed_code': payload['feed_code'],
-                'daily_feed_kg': payload['daily_feed_kg'],
-                'water_in_cm': payload['water_in_cm'],
-                'weather': payload['weather'],
-                'treatment': payload['treatment'],
-                'anco1_morning': payload['anco1_morning'],
-                'anco2_morning': payload['anco2_morning'],
-                'anco1_noon': payload['anco1_noon'],
-                'anco2_noon': payload['anco2_noon'],
-                'anco1_evening': payload['anco1_evening'],
-                'anco2_evening': payload['anco2_evening'],
-                'notes': payload['notes'],
-            }
-        )
-        messages.success(request, 'Cek anco harian berhasil disimpan sesuai format tabel lapangan.')
+        cycle = get_selected_cycle(request, required=True)
+        defaults = {
+            'technician': request.user,
+            'doc': payload['doc'],
+            'feed_code': payload['feed_code'],
+            'daily_feed_kg': payload['daily_feed_kg'],
+            'water_in_cm': payload['water_in_cm'],
+            'weather': payload['weather'],
+            'treatment': payload['treatment'],
+            'anco1_morning': payload['anco1_morning'],
+            'anco2_morning': payload['anco2_morning'],
+            'anco1_noon': payload['anco1_noon'],
+            'anco2_noon': payload['anco2_noon'],
+            'anco1_evening': payload['anco1_evening'],
+            'anco2_evening': payload['anco2_evening'],
+            'notes': payload['notes'],
+        }
+
+        # Kompatibilitas data lama: sebelum fitur siklus, data unik hanya
+        # berdasarkan kolam dan tanggal. Jika data lama belum mempunyai
+        # siklus, gunakan kembali record tersebut dan kaitkan ke siklus aktif.
+        obj = AncoCheck.objects.filter(
+            cycle=cycle, pond_id=payload['pond_id'], date=payload['date']
+        ).first()
+        if obj is None:
+            obj = AncoCheck.objects.filter(
+                cycle__isnull=True, pond_id=payload['pond_id'], date=payload['date']
+            ).order_by('pk').first()
+
+        created = obj is None
+        if created:
+            obj = AncoCheck(
+                cycle=cycle, pond_id=payload['pond_id'], date=payload['date']
+            )
+        else:
+            obj.cycle = cycle
+
+        for field, value in defaults.items():
+            setattr(obj, field, value)
+        obj.save()
+
+        if created:
+            messages.success(request, 'Cek anco harian berhasil ditambahkan.')
+        else:
+            messages.success(request, 'Data Cek Anco pada kolam dan tanggal tersebut sudah ada, sehingga diperbarui tanpa membuat data duplikat.')
         return redirect('operations:anco_checks')
     return render(request, 'operations/anco_form.html', {
         'ponds': ponds, 'status_choices': AncoCheck.STATUS_CHOICES, 'weather_choices': DailyPondRecord.WEATHER_CHOICES, 'mode': 'add'

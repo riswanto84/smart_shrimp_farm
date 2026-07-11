@@ -167,7 +167,12 @@ class AncoCheck(models.Model):
 
     class Meta:
         ordering = ['-date', 'pond__name']
-        unique_together = [('pond', 'date')]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['cycle', 'pond', 'date'],
+                name='unique_anco_per_cycle_pond_date',
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         statuses = [self.anco1_morning, self.anco2_morning, self.anco1_noon, self.anco2_noon, self.anco1_evening, self.anco2_evening]

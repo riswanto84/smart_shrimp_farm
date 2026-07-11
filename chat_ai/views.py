@@ -1,3 +1,4 @@
+from django.db.models import Q
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -47,7 +48,7 @@ def _is_ollama_error(answer):
 def chat(request):
     ponds = Pond.objects.all()
     cycle = get_selected_cycle(request)
-    session = ChatSession.objects.filter(user=request.user, cycle=cycle).order_by('-updated_at', '-created_at').first()
+    session = ChatSession.objects.filter(user=request.user).filter(Q(cycle=cycle) | Q(cycle__isnull=True)).order_by('-updated_at', '-created_at').first()
     if not session:
         session = ChatSession.objects.create(
             user=request.user,
