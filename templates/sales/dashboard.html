@@ -117,7 +117,7 @@
           <thead><tr><th>Tanggal</th><th>Nota</th><th>Pelanggan</th><th>Kg</th><th>Total</th><th>Metode</th><th>Status</th><th></th></tr></thead>
           <tbody>
           {% for s in recent_sales %}
-            <tr><td>{{ s.date|date:'d/m/Y H:i' }}</td><td><b>{{ s.invoice_no }}</b></td><td>{{ s.customer.name|default:'-' }}</td><td>{{ s.total_kg|angka:2 }}</td><td>{{ s.total_amount|rupiah }}</td><td>{{ s.payment_method }}</td><td><span class="status {% if s.status == 'Lunas' %}status-budidaya{% else %}status-panen{% endif %}">{{ s.status }}</span></td><td><a class="btn btn-sm btn-outline-primary" href="{% url 'sales:invoice' s.id %}">Detail</a></td></tr>
+            <tr><td>{{ s.date|date:'d/m/Y H:i' }}</td><td><b>{{ s.invoice_no }}</b></td><td>{{ s.customer.name|default:'-' }}</td><td>{{ s.total_kg|angka:2 }}</td><td>{{ s.total_amount|rupiah }}</td><td>{{ s.payment_method }}</td><td><span class="status {% if s.status == 'Lunas' %}status-budidaya{% else %}status-panen{% endif %}">{{ s.status }}</span></td><td><a class="btn btn-sm btn-outline-primary icon-action-btn" href="{% url 'sales:invoice' s.id %}" title="Detail" aria-label="Detail"><i class="fa-solid fa-eye"></i></a></td></tr>
           {% empty %}<tr><td colspan="8" class="text-center text-muted">Belum ada nota.</td></tr>{% endfor %}
           </tbody>
         </table>
