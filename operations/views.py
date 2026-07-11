@@ -279,21 +279,55 @@ def _parameter_risk(obj):
         return 'Perhatian', risk[0]
     return 'Baik', 'Parameter utama dalam rentang aman.'
 
-def _sampling_pond_meta():
-    today = timezone.localdate()
+def _sampling_pond_meta(cycle=None):
+    """Metadata kalkulator sampling yang mengikuti siklus aktif.
+
+    Riwayat sampling, pakan harian, dan tebar dikirim ke form agar nilai
+    sebelumnya selalu dihitung terhadap tanggal sampling yang dipilih.
+    """
     meta = {}
-    for pond in Pond.objects.all():
-        latest_sample = SamplingRecord.objects.filter(pond=pond).order_by('-date').first()
-        stocking = Stocking.objects.filter(pond=pond).order_by('-date').first()
-        latest_daily = DailyPondRecord.objects.filter(pond=pond).order_by('-date').first()
-        feed_total = DailyPondRecord.objects.filter(pond=pond, date__lte=today).aggregate(s=Sum('daily_feed_kg'))['s'] or Decimal('0')
+    for pond in Pond.objects.all().order_by('name'):
+        sampling_qs = SamplingRecord.objects.filter(pond=pond)
+        stocking_qs = Stocking.objects.filter(pond=pond)
+        daily_qs = DailyPondRecord.objects.filter(pond=pond)
+        if cycle is not None:
+            sampling_qs = sampling_qs.filter(cycle=cycle)
+            stocking_qs = stocking_qs.filter(cycle=cycle)
+            daily_qs = daily_qs.filter(cycle=cycle)
+
+        samples = list(sampling_qs.order_by('date', 'id').values('id', 'date', 'abw_g', 'doc'))
+        stockings = list(stocking_qs.order_by('date', 'id').values('date', 'seed_count'))
+        daily_rows = list(daily_qs.order_by('date', 'id').values('date', 'daily_feed_kg', 'doc'))
+        latest_sample = samples[-1] if samples else None
+
         meta[str(pond.id)] = {
-            'last_abw': _float(latest_sample.abw_g if latest_sample else 0),
-            'last_date': latest_sample.date.isoformat() if latest_sample else '',
-            'stocking_count': int(stocking.seed_count) if stocking else 0,
-            'daily_feed_kg': _float(latest_daily.daily_feed_kg if latest_daily else 0),
-            'cumulative_feed_kg': _float(feed_total),
-            'latest_doc': int(latest_daily.doc) if latest_daily else int(latest_sample.doc) if latest_sample else 0,
+            'history': [
+                {
+                    'id': row['id'],
+                    'date': row['date'].isoformat(),
+                    'abw': _float(row['abw_g']),
+                    'doc': int(row['doc'] or 0),
+                }
+                for row in samples
+            ],
+            'stocking_history': [
+                {
+                    'date': row['date'].isoformat(),
+                    'seed_count': int(row['seed_count'] or 0),
+                }
+                for row in stockings
+            ],
+            'daily_history': [
+                {
+                    'date': row['date'].isoformat(),
+                    'daily_feed_kg': _float(row['daily_feed_kg']),
+                    'doc': int(row['doc'] or 0),
+                }
+                for row in daily_rows
+            ],
+            'last_abw': _float(latest_sample['abw_g'] if latest_sample else 0),
+            'last_date': latest_sample['date'].isoformat() if latest_sample else '',
+            'latest_doc': int(latest_sample['doc']) if latest_sample else 0,
         }
     return meta
 
@@ -320,6 +354,16 @@ def _sampling_payload(request):
         errors['Kolam'] = 'Kolam wajib dipilih.'
     if not data['date']:
         errors['Tanggal'] = 'Tanggal sampling wajib diisi.'
+    if data['doc'] <= 0:
+        errors['DOC'] = 'DOC harus lebih dari 0.'
+    if data['sample_weight_g'] <= 0:
+        errors['Berat SHRIMP'] = 'Berat SHRIMP harus lebih dari 0 gram.'
+    if data['sample_count'] <= 0:
+        errors['Jumlah SHRIMP'] = 'Jumlah SHRIMP harus lebih dari 0 ekor.'
+    if data['fr_percent'] <= 0:
+        errors['FR'] = 'FR harus lebih dari 0 agar biomassa dapat dihitung.'
+    if data['stocking_count'] <= 0:
+        errors['Tebar'] = 'Jumlah tebar harus lebih dari 0.'
     return data, errors
 
 
@@ -679,6 +723,7 @@ def sampling_records(request):
 @permission_required('operations.sampling')
 def add_sampling_record(request):
     ponds = Pond.objects.all().order_by('name')
+    cycle = get_selected_cycle(request)
     if request.method == 'POST':
         payload, errors = _sampling_payload(request)
         if errors:
@@ -687,7 +732,7 @@ def add_sampling_record(request):
             return render(request, 'operations/sampling_form.html', {
                 'ponds': ponds,
                 'today': timezone.localdate(),
-                'pond_meta': _sampling_pond_meta(),
+                'pond_meta': _sampling_pond_meta(cycle),
                 'errors': errors,
             })
         SamplingRecord.objects.create(
@@ -712,7 +757,7 @@ def add_sampling_record(request):
     return render(request, 'operations/sampling_form.html', {
         'ponds': ponds,
         'today': timezone.localdate(),
-        'pond_meta': _sampling_pond_meta(),
+        'pond_meta': _sampling_pond_meta(cycle),
     })
 
 
@@ -1109,13 +1154,14 @@ def delete_anco_check(request, pk):
 def edit_sampling_record(request, pk):
     obj = get_object_or_404(SamplingRecord, pk=pk)
     ponds = Pond.objects.all().order_by('name')
+    cycle = obj.cycle or get_selected_cycle(request)
     if request.method == 'POST':
         payload, errors = _sampling_payload(request)
         if errors:
             for msg in errors.values():
                 messages.error(request, msg)
             return render(request, 'operations/sampling_form.html', {
-                'ponds': ponds, 'today': timezone.localdate(), 'pond_meta': _sampling_pond_meta(),
+                'ponds': ponds, 'today': timezone.localdate(), 'pond_meta': _sampling_pond_meta(cycle),
                 'obj': obj, 'mode': 'edit', 'errors': errors
             })
         obj.pond_id = payload['pond_id']
@@ -1136,7 +1182,7 @@ def edit_sampling_record(request, pk):
         obj.save()
         messages.success(request, 'Data sampling berhasil diperbarui dan dihitung ulang otomatis.')
         return redirect('operations:sampling_records')
-    return render(request, 'operations/sampling_form.html', {'ponds': ponds, 'today': timezone.localdate(), 'pond_meta': _sampling_pond_meta(), 'obj': obj, 'mode': 'edit'})
+    return render(request, 'operations/sampling_form.html', {'ponds': ponds, 'today': timezone.localdate(), 'pond_meta': _sampling_pond_meta(cycle), 'obj': obj, 'mode': 'edit'})
 
 
 @login_required

@@ -102,8 +102,6 @@ def owner_required(view_func):
     return wrapper
 
 def has_permission(user, permission_code):
-    if permission_code == 'cultivation.owner':
-        return is_owner(user)
     if not user.is_authenticated:
         return False
     if user.is_superuser:
