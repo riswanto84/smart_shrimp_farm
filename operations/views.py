@@ -689,6 +689,33 @@ def export_anco_excel(request):
     )
 
 
+def _format_sampling_decimal(value):
+    try:
+        return f"{Decimal(value or 0):,.3f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+    except Exception:
+        return '0,000'
+
+
+def _sampling_pdf_rows(items):
+    rows = []
+    for i in items:
+        rows.append([
+            i.date.strftime('%d/%m/%Y'), i.pond.name, i.doc,
+            _format_sampling_decimal(i.sample_weight_g), i.sample_count,
+            _format_sampling_decimal(i.abw_last_g), _format_sampling_decimal(i.abw_g),
+            _format_sampling_decimal(i.abw_target_g), _format_sampling_decimal(i.target_size),
+            _format_sampling_decimal(i.size), _format_sampling_decimal(i.adg_weekly_target),
+            _format_sampling_decimal(i.adg_weekly), _format_sampling_decimal(i.adg_cumulative),
+            _format_sampling_decimal(i.estimated_sr), _format_sampling_decimal(i.sr_index_percent),
+            _format_sampling_decimal(i.biomass_kg), _format_sampling_decimal(i.biomass_index_kg),
+            _format_sampling_decimal(i.fcr), i.population, i.population_index,
+            _format_sampling_decimal(i.cumulative_feed_kg), i.stocking_count,
+            _format_sampling_decimal(i.daily_feed_kg), _format_sampling_decimal(i.fr_percent),
+            _format_sampling_decimal(i.index_score), i.harvest_estimation, i.notes,
+        ])
+    return rows
+
+
 def _sampling_rows(items):
     return [[
         i.date.strftime('%d/%m/%Y'), i.pond.name, i.doc,
@@ -706,7 +733,7 @@ def _sampling_rows(items):
 @login_required
 @permission_required('operations.sampling')
 def sampling_records(request):
-    items = SamplingRecord.objects.select_related('pond').order_by('-date')
+    items = SamplingRecord.objects.select_related('pond').order_by('-date', '-id')
     items, date_from, date_to, pond = _apply_common_filters(request, items)
     avg_abw = items.aggregate(a=Avg('abw_g'))['a'] or 0
     avg_fcr = items.aggregate(a=Avg('fcr'))['a'] or 0
@@ -764,18 +791,34 @@ def add_sampling_record(request):
 @login_required
 @permission_required('operations.sampling')
 def export_sampling_excel(request):
-    items = SamplingRecord.objects.select_related('pond').order_by('-date')
+    items = SamplingRecord.objects.select_related('pond').order_by('-date', '-id')
     items, date_from, date_to, pond = _apply_common_filters(request, items)
     headers = ['Tanggal','Kolam','DOC','SHRIMP Berat (gr)','SHRIMP Jumlah (ekor)','ABW Last','ABW Today','ABW Target','Target Size','Size','ADG Target','ADG Actual','ADG Accum','SR% FR','SR% Index','Biomassa FR','Biomassa Index','FCR','Populasi FR','Populasi Index','Pakan Kumulatif','Tebar','F/D','FR','Index','Estimasi Panen','Catatan']
-    return export_excel('laporan_sampling', 'Laporan Sampling Pertumbuhan', f'Periode: {format_date_range(date_from, date_to)}', headers, _sampling_rows(items))
+    return export_excel(
+        'laporan_sampling', 'Laporan Sampling Pertumbuhan',
+        f'Periode: {format_date_range(date_from, date_to)}', headers, _sampling_rows(items),
+        number_formats={
+            3: '#,##0', 4: '#,##0.000', 5: '#,##0',
+            6: '#,##0.000', 7: '#,##0.000', 8: '#,##0.000', 9: '#,##0.000', 10: '#,##0.000',
+            11: '#,##0.000', 12: '#,##0.000', 13: '#,##0.000', 14: '#,##0.000', 15: '#,##0.000',
+            16: '#,##0.000', 17: '#,##0.000', 18: '#,##0.000', 19: '#,##0', 20: '#,##0',
+            21: '#,##0.000', 22: '#,##0', 23: '#,##0.000', 24: '#,##0.000', 25: '#,##0.000',
+        },
+    )
 
 
 @login_required
 @permission_required('operations.sampling')
 def export_sampling_pdf(request):
-    items = SamplingRecord.objects.select_related('pond').order_by('-date')
+    items = SamplingRecord.objects.select_related('pond').order_by('-date', '-id')
     items, date_from, date_to, pond = _apply_common_filters(request, items)
-    return export_pdf('laporan_sampling', 'Laporan Sampling Pertumbuhan', f'Periode: {format_date_range(date_from, date_to)}', ['Tanggal','Kolam','DOC','ABW','Size','ADG','SR FR','Biomassa','FCR','Estimasi'], [[r[0],r[1],r[2],r[6],r[9],r[11],r[13],r[15],r[17],r[25]] for r in _sampling_rows(items)])
+    pdf_rows = _sampling_pdf_rows(items)
+    return export_pdf(
+        'laporan_sampling', 'Laporan Sampling Pertumbuhan',
+        f'Periode: {format_date_range(date_from, date_to)}',
+        ['Tanggal','Kolam','DOC','ABW','Size','ADG','SR FR','Biomassa','FCR','Estimasi'],
+        [[r[0], r[1], r[2], r[6], r[9], r[11], r[13], r[15], r[17], r[25]] for r in pdf_rows],
+    )
 
 
 def _siphon_rows(items):
@@ -914,7 +957,12 @@ def _detail_value(value, suffix=''):
     return f'{value}{suffix}'
 
 
+def _sampling_detail_value(value, suffix=''):
+    return f'{_format_sampling_decimal(value)}{suffix}'
+
+
 def _record_detail_context(obj, title, subtitle, back_url, edit_url, sections, ai_recommendation=''):
+
     return {
         'obj': obj,
         'title': title,
@@ -1013,14 +1061,16 @@ def sampling_detail(request, pk):
             ('Siklus Budidaya', obj.cycle.name if obj.cycle else '-'), ('DOC', obj.doc),
         ]},
         {'title': 'Pertumbuhan Udang', 'icon': 'fa-shrimp', 'rows': [
-            ('Berat Sampel', _detail_value(obj.sample_weight_g, ' g')), ('Jumlah Sampel', _detail_value(obj.sample_count, ' ekor')),
-            ('ABW Last', _detail_value(obj.abw_last_g, ' g')), ('ABW Today', _detail_value(obj.abw_g, ' g')),
-            ('Size', obj.size), ('ADG Mingguan', obj.adg_weekly), ('ADG Kumulatif', obj.adg_cumulative),
+            ('Berat Sampel', _sampling_detail_value(obj.sample_weight_g, ' g')), ('Jumlah Sampel', _detail_value(obj.sample_count, ' ekor')),
+            ('ABW Last', _sampling_detail_value(obj.abw_last_g, ' g')), ('ABW Today', _sampling_detail_value(obj.abw_g, ' g')),
+            ('Size', _sampling_detail_value(obj.size)), ('ADG Mingguan', _sampling_detail_value(obj.adg_weekly)), ('ADG Kumulatif', _sampling_detail_value(obj.adg_cumulative)),
         ]},
         {'title': 'Estimasi Produksi', 'icon': 'fa-chart-pie', 'rows': [
-            ('Estimasi SR', _detail_value(obj.estimated_sr, ' %')), ('Biomassa FR', _detail_value(obj.biomass_kg, ' kg')),
-            ('FCR', obj.fcr), ('Populasi', _detail_value(obj.population, ' ekor')),
-            ('Pakan Kumulatif', _detail_value(obj.cumulative_feed_kg, ' kg')), ('Estimasi Panen', obj.harvest_estimation or '-'),
+            ('SR FR', _sampling_detail_value(obj.estimated_sr, ' %')), ('SR Index', _sampling_detail_value(obj.sr_index_percent, ' %')),
+            ('Biomassa FR', _sampling_detail_value(obj.biomass_kg, ' kg')), ('Biomassa Index', _sampling_detail_value(obj.biomass_index_kg, ' kg')),
+            ('FCR', _sampling_detail_value(obj.fcr)), ('Populasi FR', _detail_value(obj.population, ' ekor')), ('Populasi Index', _detail_value(obj.population_index, ' ekor')),
+            ('Pakan Kumulatif', _sampling_detail_value(obj.cumulative_feed_kg, ' kg')), ('FR', _sampling_detail_value(obj.fr_percent, ' %')),
+            ('Index', _sampling_detail_value(obj.index_score)), ('Estimasi Panen', obj.harvest_estimation or '-'),
             ('Catatan', obj.notes or '-'),
         ]},
     ]

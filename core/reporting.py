@@ -71,7 +71,7 @@ def angka(value, decimals=2):
     return _format_id_number(value, decimals)
 
 
-def export_excel(filename, title, subtitle, headers, rows, total_rows=None):
+def export_excel(filename, title, subtitle, headers, rows, total_rows=None, number_formats=None):
     wb = Workbook()
     ws = wb.active
     ws.title = "Laporan"
@@ -103,7 +103,10 @@ def export_excel(filename, title, subtitle, headers, rows, total_rows=None):
             cell = ws.cell(row=row_idx, column=col_idx, value=value)
             cell.border = border
             if isinstance(value, (int, float, Decimal)):
-                cell.number_format = '#,##0.00'
+                if number_formats and col_idx in number_formats:
+                    cell.number_format = number_formats[col_idx]
+                else:
+                    cell.number_format = '#,##0.00'
 
     if total_rows:
         row_idx = start_row + 1 + len(rows) + 1
