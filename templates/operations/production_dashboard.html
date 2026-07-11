@@ -10,25 +10,25 @@
   </div>
 
   <div class="ops-flow cardx mb-3">
-    <div><i class="fa-solid fa-seedling"></i><b>Data Tebar</b><span>{{ active_stocking|ribuan }} ekor</span></div>
-    <em></em><div><i class="fa-solid fa-bowl-food"></i><b>Pakan</b><span>{{ feed_today|angka:2 }} kg</span></div>
-    <em></em><div><i class="fa-solid fa-clipboard-check"></i><b>Cek Anco</b><span>{{ anco_alerts|ribuan }} alert</span></div>
-    <em></em><div><i class="fa-solid fa-weight-scale"></i><b>Sampling</b><span>ABW {{ avg_abw|angka:2 }} g</span></div>
-    <em></em><div><i class="fa-solid fa-water"></i><b>Siphon</b><span>{{ dead_7d|ribuan }} mati</span></div>
-    <em></em><div><i class="fa-solid fa-chart-line"></i><b>Biomassa</b><span>{{ total_biomass|angka:2 }} kg</span></div>
+    <div><i class="fa-solid fa-seedling"></i><b>Data Tebar</b><span>Populasi awal</span></div>
+    <em></em><div><i class="fa-solid fa-bowl-food"></i><b>Pakan Harian</b><span>Konsumsi pakan</span></div>
+    <em></em><div><i class="fa-solid fa-clipboard-check"></i><b>Cek Anco</b><span>Nafsu makan</span></div>
+    <em></em><div><i class="fa-solid fa-weight-scale"></i><b>Sampling</b><span>ABW, ADG, FCR</span></div>
+    <em></em><div><i class="fa-solid fa-water"></i><b>Siphon</b><span>Mortalitas</span></div>
+    <em></em><div><i class="fa-solid fa-chart-line"></i><b>Estimasi Panen</b><span>Prediksi biomass</span></div>
   </div>
 
   <div class="kpi-grid">
-    <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-fish-fins"></i></div><div><span>Populasi Tebar</span><strong>{{ active_stocking|ribuan }} ekor</strong><small>{{ stocking_source }}{% if selected_cycle %} · {{ selected_cycle.name }}{% endif %}</small></div></div>
-    <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-bowl-rice"></i></div><div><span>{% if feed_is_today %}Pakan Hari Ini{% else %}Pakan Terbaru{% endif %}</span><strong>{{ feed_today|angka:2 }} Kg</strong><small>{{ feed_source }} · {{ feed_date|date:"d M Y" }}</small></div></div>
-    <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-weight-scale"></i></div><div><span>Rata-rata ABW</span><strong>{{ avg_abw|angka:2 }} g</strong><small>Sampling terbaru per kolam</small></div></div>
-    <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-triangle-exclamation"></i></div><div><span>Alert Anco/Mortalitas</span><strong>{{ anco_alerts|ribuan }} / {{ dead_7d|ribuan }}</strong><small>3 hari anco / 7 hari siphon dari data terbaru</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-fish-fins"></i></div><div><span>Populasi Tebar</span><strong>{{ active_stocking|ribuan }} ekor</strong><small>Akumulasi data tebar</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-bowl-rice"></i></div><div><span>Pakan Hari Ini</span><strong>{{ feed_today|angka:2 }} Kg</strong><small>Data harian pakan</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-weight-scale"></i></div><div><span>Rata-rata ABW</span><strong>{{ avg_abw|angka:2 }} g</strong><small>Data sampling</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-triangle-exclamation"></i></div><div><span>Alert Anco/Mortalitas</span><strong>{{ anco_alerts|ribuan }} / {{ dead_7d|ribuan }}</strong><small>Anco 3 hari / mati 7 hari</small></div></div>
   </div>
 
   <div class="ops-grid">
     <section class="panel ops-panel-wide">
       <div class="panel-head"><h2>Kondisi Terbaru Per Kolam</h2><a href="{% url 'operations:sampling_records' %}">Lihat Sampling</a></div>
-      <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>DOC</th><th>Pakan Terakhir</th><th>Anco</th><th>ABW / Size</th><th>FCR</th><th>Siphon</th><th>Estimasi</th></tr></thead><tbody>{% for row in pond_cards %}<tr><td><b>{{ row.pond.name }}</b><br><small class="text-muted">{{ row.pond.status }}</small></td><td>{% if row.daily %}{{ row.daily.doc|ribuan }}{% elif row.anco %}{{ row.anco.doc|ribuan }}{% elif row.parameter %}{{ row.parameter.doc|ribuan }}{% elif row.sample %}{{ row.sample.doc|ribuan }}{% else %}-{% endif %}</td><td>{% if row.anco and row.anco.daily_feed_kg %}{{ row.anco.daily_feed_kg|angka:2 }} Kg<br><small>{{ row.anco.date }}</small>{% elif row.daily %}{{ row.daily.daily_feed_kg|angka:2 }} Kg<br><small>{{ row.daily.date }}</small>{% elif row.parameter and row.parameter.feed_kg %}{{ row.parameter.feed_kg|angka:2 }} Kg<br><small>{{ row.parameter.date }}</small>{% else %}-{% endif %}</td><td>{% if row.anco %}<span class="badge-soft">{{ row.anco.appetite_status }}</span>{% else %}-{% endif %}</td><td>{% if row.sample %}<b>{{ row.sample.abw_g|angka:2 }} g</b><br><small>Size {{ row.sample.size|angka:2 }}</small>{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.fcr|angka:2 }}{% else %}-{% endif %}</td><td>{% if row.siphon %}{{ row.siphon.dead_count|ribuan }} mati<br><small>{{ row.siphon.health_indicator }}</small>{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.harvest_estimation }}{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="8" class="text-center text-muted">Belum ada data kolam.</td></tr>{% endfor %}</tbody></table></div>
+      <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>DOC</th><th>Pakan Terakhir</th><th>Anco</th><th>ABW / Size</th><th>FCR</th><th>Siphon</th><th>Estimasi</th></tr></thead><tbody>{% for row in pond_cards %}<tr><td><b>{{ row.pond.name }}</b><br><small class="text-muted">{{ row.pond.status }}</small></td><td>{% if row.daily %}{{ row.daily.doc|ribuan }}{% elif row.sample %}{{ row.sample.doc|ribuan }}{% else %}-{% endif %}</td><td>{% if row.daily %}{{ row.daily.daily_feed_kg|angka:2 }} Kg<br><small>{{ row.daily.date }}</small>{% else %}-{% endif %}</td><td>{% if row.anco %}<span class="badge-soft">{{ row.anco.appetite_status }}</span>{% else %}-{% endif %}</td><td>{% if row.sample %}<b>{{ row.sample.abw_g|angka:2 }} g</b><br><small>Size {{ row.sample.size|angka:2 }}</small>{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.fcr|angka:2 }}{% else %}-{% endif %}</td><td>{% if row.siphon %}{{ row.siphon.dead_count|ribuan }} mati<br><small>{{ row.siphon.health_indicator }}</small>{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.harvest_estimation }}{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="8" class="text-center text-muted">Belum ada data kolam.</td></tr>{% endfor %}</tbody></table></div>
     </section>
     <aside class="panel insight-panel">
       <div class="ai-management-box mb-3">

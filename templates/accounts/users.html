@@ -51,11 +51,11 @@
             </td>
             <td class="text-end">
               <a class="btn btn-sm btn-outline-primary me-1" href="{% url 'accounts:edit_user' u.id %}">
-                <i class="fa-solid fa-pen-to-square"></i>
+                <i class="fa-solid fa-pen-to-square"></i> Edit
               </a>
               {% if u.id != request.user.id %}
-              <a class="btn btn-sm btn-outline-danger icon-action-btn" title="Hapus" aria-label="Hapus" href="{% url 'accounts:delete_user' u.id %}">
-                <i class="fa-solid fa-trash"></i>
+              <a class="btn btn-sm btn-outline-danger" href="{% url 'accounts:delete_user' u.id %}">
+                <i class="fa-solid fa-trash"></i> Hapus
               </a>
               {% else %}
               <button class="btn btn-sm btn-outline-secondary" disabled title="Akun yang sedang login tidak dapat dihapus">

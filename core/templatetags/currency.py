@@ -74,16 +74,3 @@ def rupiah(value):
 def ribuan(value):
     """Format angka ribuan Indonesia tanpa simbol mata uang, tanpa desimal."""
     return _format_id_number(value, decimals=0, strip_zero=True)
-
-
-@register.filter(name='desimal3')
-def desimal3(value):
-    """Format angka Indonesia tepat 3 digit desimal: 2.47 -> 2,470."""
-    amount = _to_decimal(value)
-    sign = '-' if amount < 0 else ''
-    amount = abs(amount).quantize(Decimal('0.001'), rounding=ROUND_HALF_UP)
-    whole = int(amount)
-    fraction = amount - Decimal(whole)
-    whole_text = f"{whole:,}".replace(',', '.')
-    frac_text = f"{fraction:.3f}".split('.')[1]
-    return f"{sign}{whole_text},{frac_text}"

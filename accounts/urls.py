@@ -10,6 +10,8 @@ urlpatterns=[
     path('users/<int:user_id>/edit/',views.edit_user,name='edit_user'),
     path('users/<int:user_id>/delete/',views.delete_user,name='delete_user'),
     path('roles/',views.roles,name='roles'),
+    path('activity/', views.activity_logs, name='activity_logs'),
+    path('activity/<int:log_id>/', views.activity_log_detail, name='activity_log_detail'),
     path('profile/', views.edit_profile, name='edit_profile'),
     path('password/', views.change_password, name='change_password'),
     path('password-reset/', auth_views.PasswordResetView.as_view(

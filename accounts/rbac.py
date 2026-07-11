@@ -58,6 +58,7 @@ MENU_DEFINITIONS = [
     {'type': 'group', 'label': 'PENGATURAN'},
     {'type': 'item', 'label': 'Pengguna & Hak Akses', 'url': '/accounts/users/', 'icon': 'fa-solid fa-user-shield', 'perm': 'accounts.users'},
     {'type': 'item', 'label': 'Role & Permission', 'url': '/accounts/roles/', 'icon': 'fa-solid fa-key', 'perm': 'accounts.roles'},
+    {'type': 'item', 'label': 'Log Aktivitas', 'url': '/accounts/activity/', 'icon': 'fa-solid fa-clock-rotate-left', 'perm': 'accounts.activity', 'owner_only': True},
 ]
 
 BOTTOM_MENU_DEFINITIONS = [
@@ -134,6 +135,8 @@ def visible_menu(user):
     for item in MENU_DEFINITIONS:
         if item['type'] == 'group':
             pending_group = item
+            continue
+        if item.get('owner_only') and not is_owner(user):
             continue
         if has_permission(user, item['perm']):
             if pending_group:

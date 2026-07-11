@@ -5,10 +5,10 @@
   <a class="btn btn-primary" href="{% url 'operations:add_sampling_record' %}"><i class="fa-solid fa-plus"></i> Input Sampling</a>
 </div>
 <div class="kpi-grid">
-  <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-weight-scale"></i></div><div><span>Rata-rata ABW</span><strong>{{ avg_abw|desimal3 }} g</strong><small>Filter aktif</small></div></div>
-  <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-chart-line"></i></div><div><span>Rata-rata ADG</span><strong>{{ avg_adg|desimal3 }}</strong><small>gr/hari</small></div></div>
-  <div class="kpi-card"><div class="kpi-icon orange"><i class="fa-solid fa-bowl-food"></i></div><div><span>Rata-rata FCR</span><strong>{{ avg_fcr|desimal3 }}</strong><small>Efisiensi pakan</small></div></div>
-  <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-shrimp"></i></div><div><span>Biomassa FR</span><strong>{{ biomass|desimal3 }} Kg</strong><small>Akumulasi sampling</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-weight-scale"></i></div><div><span>Rata-rata ABW</span><strong>{{ avg_abw|angka:2 }} g</strong><small>Filter aktif</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-chart-line"></i></div><div><span>Rata-rata ADG</span><strong>{{ avg_adg|angka:2 }}</strong><small>gr/hari</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon orange"><i class="fa-solid fa-bowl-food"></i></div><div><span>Rata-rata FCR</span><strong>{{ avg_fcr|angka:2 }}</strong><small>Efisiensi pakan</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-shrimp"></i></div><div><span>Biomassa FR</span><strong>{{ biomass|angka:2 }} Kg</strong><small>Akumulasi sampling</small></div></div>
 </div>
 {% include 'operations/_ops_filter.html' %}
 <div class="cardx mb-3 d-flex gap-2 flex-wrap"><a class="btn btn-success" href="{% url 'operations:export_sampling_excel' %}?{{ request.GET.urlencode }}"><i class="fa-solid fa-file-excel"></i> Export Excel</a><a class="btn btn-danger" href="{% url 'operations:export_sampling_pdf' %}?{{ request.GET.urlencode }}"><i class="fa-solid fa-file-pdf"></i> Export PDF</a></div>
@@ -28,13 +28,13 @@
       {% for i in items %}
       <tr>
         <td>{{i.date|date:'d/m/Y'}}</td><td><b>{{i.pond.name}}</b></td><td>{{i.doc|ribuan}}</td>
-        <td>{{i.sample_weight_g|desimal3}}</td><td>{{i.sample_count|ribuan}}</td>
-        <td>{{i.abw_last_g|desimal3}}</td><td><b>{{i.abw_g|desimal3}}</b></td><td>{{i.abw_target_g|desimal3}}</td><td>{{i.size|desimal3}}</td>
-        <td>{{i.adg_weekly_target|desimal3}}</td><td>{{i.adg_weekly|desimal3}}</td><td>{{i.adg_cumulative|desimal3}}</td>
-        <td>{{i.estimated_sr|desimal3}}</td><td>{{i.sr_index_percent|desimal3}}</td>
-        <td>{{i.biomass_kg|desimal3}}</td><td>{{i.biomass_index_kg|desimal3}}</td>
-        <td><span class="badge-soft">{{i.fcr|desimal3}}</span></td><td>{{i.population|ribuan}}</td><td>{{i.population_index|ribuan}}</td>
-        <td>{{i.cumulative_feed_kg|desimal3}}</td><td>{{i.stocking_count|ribuan}}</td><td>{{i.daily_feed_kg|desimal3}}</td><td>{{i.fr_percent|desimal3}}</td><td>{{i.index_score|desimal3}}</td><td>{{i.harvest_estimation}}</td><td>{% url 'operations:sampling_detail' i.id as detail_url %}{% url 'operations:edit_sampling_record' i.id as edit_url %}{% url 'operations:delete_sampling_record' i.id as delete_url %}{% include 'operations/_row_actions.html' %}</td>
+        <td>{{i.sample_weight_g|angka:0}}</td><td>{{i.sample_count|ribuan}}</td>
+        <td>{{i.abw_last_g|angka:2}}</td><td><b>{{i.abw_g|angka:2}}</b></td><td>{{i.abw_target_g|angka:2}}</td><td>{{i.size|angka:2}}</td>
+        <td>{{i.adg_weekly_target|angka:2}}</td><td>{{i.adg_weekly|angka:2}}</td><td>{{i.adg_cumulative|angka:2}}</td>
+        <td>{{i.estimated_sr|angka:2}}</td><td>{{i.sr_index_percent|angka:2}}</td>
+        <td>{{i.biomass_kg|angka:2}}</td><td>{{i.biomass_index_kg|angka:2}}</td>
+        <td><span class="badge-soft">{{i.fcr|angka:2}}</span></td><td>{{i.population|ribuan}}</td><td>{{i.population_index|ribuan}}</td>
+        <td>{{i.cumulative_feed_kg|angka:2}}</td><td>{{i.stocking_count|ribuan}}</td><td>{{i.daily_feed_kg|angka:2}}</td><td>{{i.fr_percent|angka:2}}</td><td>{{i.index_score|angka:2}}</td><td>{{i.harvest_estimation}}</td><td>{% url 'operations:sampling_detail' i.id as detail_url %}{% url 'operations:edit_sampling_record' i.id as edit_url %}{% url 'operations:delete_sampling_record' i.id as delete_url %}{% include 'operations/_row_actions.html' %}</td>
       </tr>
       {% empty %}<tr><td colspan="26" class="text-center text-muted">Belum ada data sampling.</td></tr>{% endfor %}
     </tbody>

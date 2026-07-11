@@ -279,55 +279,21 @@ def _parameter_risk(obj):
         return 'Perhatian', risk[0]
     return 'Baik', 'Parameter utama dalam rentang aman.'
 
-def _sampling_pond_meta(cycle=None):
-    """Metadata kalkulator sampling yang mengikuti siklus aktif.
-
-    Riwayat sampling, pakan harian, dan tebar dikirim ke form agar nilai
-    sebelumnya selalu dihitung terhadap tanggal sampling yang dipilih.
-    """
+def _sampling_pond_meta():
+    today = timezone.localdate()
     meta = {}
-    for pond in Pond.objects.all().order_by('name'):
-        sampling_qs = SamplingRecord.objects.filter(pond=pond)
-        stocking_qs = Stocking.objects.filter(pond=pond)
-        daily_qs = DailyPondRecord.objects.filter(pond=pond)
-        if cycle is not None:
-            sampling_qs = sampling_qs.filter(cycle=cycle)
-            stocking_qs = stocking_qs.filter(cycle=cycle)
-            daily_qs = daily_qs.filter(cycle=cycle)
-
-        samples = list(sampling_qs.order_by('date', 'id').values('id', 'date', 'abw_g', 'doc'))
-        stockings = list(stocking_qs.order_by('date', 'id').values('date', 'seed_count'))
-        daily_rows = list(daily_qs.order_by('date', 'id').values('date', 'daily_feed_kg', 'doc'))
-        latest_sample = samples[-1] if samples else None
-
+    for pond in Pond.objects.all():
+        latest_sample = SamplingRecord.objects.filter(pond=pond).order_by('-date').first()
+        stocking = Stocking.objects.filter(pond=pond).order_by('-date').first()
+        latest_daily = DailyPondRecord.objects.filter(pond=pond).order_by('-date').first()
+        feed_total = DailyPondRecord.objects.filter(pond=pond, date__lte=today).aggregate(s=Sum('daily_feed_kg'))['s'] or Decimal('0')
         meta[str(pond.id)] = {
-            'history': [
-                {
-                    'id': row['id'],
-                    'date': row['date'].isoformat(),
-                    'abw': _float(row['abw_g']),
-                    'doc': int(row['doc'] or 0),
-                }
-                for row in samples
-            ],
-            'stocking_history': [
-                {
-                    'date': row['date'].isoformat(),
-                    'seed_count': int(row['seed_count'] or 0),
-                }
-                for row in stockings
-            ],
-            'daily_history': [
-                {
-                    'date': row['date'].isoformat(),
-                    'daily_feed_kg': _float(row['daily_feed_kg']),
-                    'doc': int(row['doc'] or 0),
-                }
-                for row in daily_rows
-            ],
-            'last_abw': _float(latest_sample['abw_g'] if latest_sample else 0),
-            'last_date': latest_sample['date'].isoformat() if latest_sample else '',
-            'latest_doc': int(latest_sample['doc']) if latest_sample else 0,
+            'last_abw': _float(latest_sample.abw_g if latest_sample else 0),
+            'last_date': latest_sample.date.isoformat() if latest_sample else '',
+            'stocking_count': int(stocking.seed_count) if stocking else 0,
+            'daily_feed_kg': _float(latest_daily.daily_feed_kg if latest_daily else 0),
+            'cumulative_feed_kg': _float(feed_total),
+            'latest_doc': int(latest_daily.doc) if latest_daily else int(latest_sample.doc) if latest_sample else 0,
         }
     return meta
 
@@ -354,149 +320,45 @@ def _sampling_payload(request):
         errors['Kolam'] = 'Kolam wajib dipilih.'
     if not data['date']:
         errors['Tanggal'] = 'Tanggal sampling wajib diisi.'
-    if data['doc'] <= 0:
-        errors['DOC'] = 'DOC harus lebih dari 0.'
-    if data['sample_weight_g'] <= 0:
-        errors['Berat SHRIMP'] = 'Berat SHRIMP harus lebih dari 0 gram.'
-    if data['sample_count'] <= 0:
-        errors['Jumlah SHRIMP'] = 'Jumlah SHRIMP harus lebih dari 0 ekor.'
-    if data['fr_percent'] <= 0:
-        errors['FR'] = 'FR harus lebih dari 0 agar biomassa dapat dihitung.'
-    if data['stocking_count'] <= 0:
-        errors['Tebar'] = 'Jumlah tebar harus lebih dari 0.'
     return data, errors
 
 
 @login_required
 @permission_required('operations.production_dashboard')
 def production_dashboard(request):
-    """Dashboard produksi berbasis data aktual pada siklus terpilih.
-
-    Data lama dengan ``cycle=NULL`` tetap dibaca selama masa transisi. Jika
-    modul sumber tertentu belum memiliki data, indikator memakai sumber data
-    operasional terdekat (contoh: jumlah tebar dari sampling terakhir).
-    """
     ponds = Pond.objects.all().order_by('name')
     today = timezone.localdate()
-    selected_cycle = get_selected_cycle(request)
-
-    stocking_qs = filter_selected_cycle(
-        request, Stocking.objects.select_related('pond').all()
-    )
-    daily_qs = filter_selected_cycle(
-        request, DailyPondRecord.objects.select_related('pond').all()
-    )
-    parameter_qs = filter_selected_cycle(
-        request, DailyParameter.objects.select_related('pond').all()
-    )
-    anco_qs = filter_selected_cycle(
-        request, AncoCheck.objects.select_related('pond').all()
-    )
-    sampling_qs = filter_selected_cycle(
-        request, SamplingRecord.objects.select_related('pond').all()
-    )
-    siphon_qs = filter_selected_cycle(
-        request, SiphonRecord.objects.select_related('pond').all()
-    )
-
-    # Sampling terbaru per kolam menjadi dasar KPI terkini, bukan rata-rata
-    # seluruh histori yang dapat mencampur data lama dan data baru.
+    daily_today = DailyPondRecord.objects.filter(date=today)
+    feed_today = daily_today.aggregate(s=Sum('daily_feed_kg'))['s'] or Decimal('0')
+    latest_sampling = SamplingRecord.objects.select_related('pond').order_by('pond_id', '-date')
     sampling_map = {}
-    for sample in sampling_qs.order_by('pond_id', '-date', '-id'):
-        if sample.pond_id not in sampling_map:
-            sampling_map[sample.pond_id] = sample
-    latest_samples = list(sampling_map.values())
-
-    if latest_samples:
-        avg_abw = sum((s.abw_g or Decimal('0')) for s in latest_samples) / Decimal(len(latest_samples))
-        avg_fcr = sum((s.fcr or Decimal('0')) for s in latest_samples) / Decimal(len(latest_samples))
-        total_biomass = sum((s.biomass_kg or Decimal('0')) for s in latest_samples)
-    else:
-        avg_abw = Decimal('0')
-        avg_fcr = Decimal('0')
-        total_biomass = Decimal('0')
-
-    # Populasi tebar: prioritaskan modul Tebar. Jika belum pernah diinput,
-    # gunakan nilai tebar dari sampling terbaru per kolam agar dashboard tidak
-    # salah menampilkan nol padahal data sampling sudah tersedia.
-    active_stocking = stocking_qs.aggregate(s=Sum('seed_count'))['s'] or 0
-    stocking_source = 'Data tebar'
-    if not active_stocking and latest_samples:
-        active_stocking = sum((s.stocking_count or 0) for s in latest_samples)
-        stocking_source = 'Sampling terbaru'
-
-    # Pakan hari ini dapat berasal dari Cek Anco, Data Harian, atau Parameter
-    # lama. Jika hari ini belum ada input, tampilkan total pada tanggal input
-    # terakhir dan beri label tanggalnya secara jujur.
-    feed_sources = [
-        (anco_qs, 'daily_feed_kg', 'Cek Anco'),
-        (daily_qs, 'daily_feed_kg', 'Data Harian'),
-        (parameter_qs, 'feed_kg', 'Parameter Harian'),
-    ]
-    feed_today = Decimal('0')
-    feed_date = today
-    feed_source = 'Belum ada data'
-    for qs, field_name, source_name in feed_sources:
-        value = qs.filter(date=today).aggregate(s=Sum(field_name))['s'] or Decimal('0')
-        if value:
-            feed_today, feed_source = value, source_name
-            break
-    if not feed_today:
-        latest_dates = [qs.order_by('-date').values_list('date', flat=True).first() for qs, _, _ in feed_sources]
-        latest_dates = [d for d in latest_dates if d]
-        if latest_dates:
-            feed_date = max(latest_dates)
-            for qs, field_name, source_name in feed_sources:
-                value = qs.filter(date=feed_date).aggregate(s=Sum(field_name))['s'] or Decimal('0')
-                if value:
-                    feed_today, feed_source = value, source_name
-                    break
-
-    # Alert memakai jendela terhadap data terbaru apabila data bukan hari ini.
-    latest_anco_date = anco_qs.order_by('-date').values_list('date', flat=True).first()
-    anco_end = latest_anco_date or today
-    anco_start = anco_end - timedelta(days=2)
-    anco_alerts = anco_qs.filter(
-        date__range=(anco_start, anco_end),
-        appetite_status__in=['Nafsu makan turun', 'Ada sisa pakan'],
-    ).count()
-
-    latest_siphon_date = siphon_qs.order_by('-date').values_list('date', flat=True).first()
-    siphon_end = latest_siphon_date or today
-    siphon_start = siphon_end - timedelta(days=6)
-    dead_7d = siphon_qs.filter(date__range=(siphon_start, siphon_end)).aggregate(
-        s=Sum('dead_count')
-    )['s'] or 0
+    for s in latest_sampling:
+        if s.pond_id not in sampling_map:
+            sampling_map[s.pond_id] = s
+    latest_samples = list(sampling_map.values())[:8]
+    avg_abw = SamplingRecord.objects.aggregate(a=Avg('abw_g'))['a'] or 0
+    avg_fcr = SamplingRecord.objects.aggregate(a=Avg('fcr'))['a'] or 0
+    dead_7d = SiphonRecord.objects.filter(date__gte=today-timedelta(days=7)).aggregate(s=Sum('dead_count'))['s'] or 0
+    anco_alerts = AncoCheck.objects.filter(date__gte=today-timedelta(days=3), appetite_status__in=['Nafsu makan turun','Ada sisa pakan']).count()
+    active_stocking = Stocking.objects.aggregate(s=Sum('seed_count'))['s'] or 0
 
     pond_cards = []
-    for pond in ponds:
-        sample = sampling_map.get(pond.id)
-        siphon = siphon_qs.filter(pond=pond).order_by('-date', '-id').first()
-        anco = anco_qs.filter(pond=pond).order_by('-date', '-id').first()
-        daily = daily_qs.filter(pond=pond).order_by('-date', '-id').first()
-        parameter = parameter_qs.filter(pond=pond).order_by('-date', '-id').first()
-        pond_cards.append({
-            'pond': pond, 'sample': sample, 'siphon': siphon, 'anco': anco,
-            'daily': daily, 'parameter': parameter,
-        })
+    for p in ponds:
+        sample = sampling_map.get(p.id)
+        siphon = SiphonRecord.objects.filter(pond=p).order_by('-date').first()
+        anco = AncoCheck.objects.filter(pond=p).order_by('-date').first()
+        daily = DailyPondRecord.objects.filter(pond=p).order_by('-date').first()
+        pond_cards.append({'pond': p, 'sample': sample, 'siphon': siphon, 'anco': anco, 'daily': daily})
 
     context = {
         'ponds': ponds,
-        'selected_cycle': selected_cycle,
         'feed_today': feed_today,
-        'feed_date': feed_date,
-        'feed_is_today': feed_date == today,
-        'feed_source': feed_source,
         'avg_abw': avg_abw,
         'avg_fcr': avg_fcr,
-        'total_biomass': total_biomass,
         'dead_7d': dead_7d,
-        'siphon_period_end': siphon_end,
         'anco_alerts': anco_alerts,
-        'anco_period_end': anco_end,
         'active_stocking': active_stocking,
-        'stocking_source': stocking_source,
-        'latest_samples': latest_samples[:8],
+        'latest_samples': latest_samples,
         'pond_cards': pond_cards,
         'ollama_health': ollama_health(),
     }
@@ -783,33 +645,6 @@ def export_anco_excel(request):
     )
 
 
-def _format_sampling_decimal(value):
-    try:
-        return f"{Decimal(value or 0):,.3f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-    except Exception:
-        return '0,000'
-
-
-def _sampling_pdf_rows(items):
-    rows = []
-    for i in items:
-        rows.append([
-            i.date.strftime('%d/%m/%Y'), i.pond.name, i.doc,
-            _format_sampling_decimal(i.sample_weight_g), i.sample_count,
-            _format_sampling_decimal(i.abw_last_g), _format_sampling_decimal(i.abw_g),
-            _format_sampling_decimal(i.abw_target_g), _format_sampling_decimal(i.target_size),
-            _format_sampling_decimal(i.size), _format_sampling_decimal(i.adg_weekly_target),
-            _format_sampling_decimal(i.adg_weekly), _format_sampling_decimal(i.adg_cumulative),
-            _format_sampling_decimal(i.estimated_sr), _format_sampling_decimal(i.sr_index_percent),
-            _format_sampling_decimal(i.biomass_kg), _format_sampling_decimal(i.biomass_index_kg),
-            _format_sampling_decimal(i.fcr), i.population, i.population_index,
-            _format_sampling_decimal(i.cumulative_feed_kg), i.stocking_count,
-            _format_sampling_decimal(i.daily_feed_kg), _format_sampling_decimal(i.fr_percent),
-            _format_sampling_decimal(i.index_score), i.harvest_estimation, i.notes,
-        ])
-    return rows
-
-
 def _sampling_rows(items):
     return [[
         i.date.strftime('%d/%m/%Y'), i.pond.name, i.doc,
@@ -827,7 +662,7 @@ def _sampling_rows(items):
 @login_required
 @permission_required('operations.sampling')
 def sampling_records(request):
-    items = SamplingRecord.objects.select_related('pond').order_by('-date', '-id')
+    items = SamplingRecord.objects.select_related('pond').order_by('-date')
     items, date_from, date_to, pond = _apply_common_filters(request, items)
     avg_abw = items.aggregate(a=Avg('abw_g'))['a'] or 0
     avg_fcr = items.aggregate(a=Avg('fcr'))['a'] or 0
@@ -844,7 +679,6 @@ def sampling_records(request):
 @permission_required('operations.sampling')
 def add_sampling_record(request):
     ponds = Pond.objects.all().order_by('name')
-    cycle = get_selected_cycle(request)
     if request.method == 'POST':
         payload, errors = _sampling_payload(request)
         if errors:
@@ -853,7 +687,7 @@ def add_sampling_record(request):
             return render(request, 'operations/sampling_form.html', {
                 'ponds': ponds,
                 'today': timezone.localdate(),
-                'pond_meta': _sampling_pond_meta(cycle),
+                'pond_meta': _sampling_pond_meta(),
                 'errors': errors,
             })
         SamplingRecord.objects.create(
@@ -878,41 +712,25 @@ def add_sampling_record(request):
     return render(request, 'operations/sampling_form.html', {
         'ponds': ponds,
         'today': timezone.localdate(),
-        'pond_meta': _sampling_pond_meta(cycle),
+        'pond_meta': _sampling_pond_meta(),
     })
 
 
 @login_required
 @permission_required('operations.sampling')
 def export_sampling_excel(request):
-    items = SamplingRecord.objects.select_related('pond').order_by('-date', '-id')
+    items = SamplingRecord.objects.select_related('pond').order_by('-date')
     items, date_from, date_to, pond = _apply_common_filters(request, items)
     headers = ['Tanggal','Kolam','DOC','SHRIMP Berat (gr)','SHRIMP Jumlah (ekor)','ABW Last','ABW Today','ABW Target','Target Size','Size','ADG Target','ADG Actual','ADG Accum','SR% FR','SR% Index','Biomassa FR','Biomassa Index','FCR','Populasi FR','Populasi Index','Pakan Kumulatif','Tebar','F/D','FR','Index','Estimasi Panen','Catatan']
-    return export_excel(
-        'laporan_sampling', 'Laporan Sampling Pertumbuhan',
-        f'Periode: {format_date_range(date_from, date_to)}', headers, _sampling_rows(items),
-        number_formats={
-            3: '#,##0', 4: '#,##0.000', 5: '#,##0',
-            6: '#,##0.000', 7: '#,##0.000', 8: '#,##0.000', 9: '#,##0.000', 10: '#,##0.000',
-            11: '#,##0.000', 12: '#,##0.000', 13: '#,##0.000', 14: '#,##0.000', 15: '#,##0.000',
-            16: '#,##0.000', 17: '#,##0.000', 18: '#,##0.000', 19: '#,##0', 20: '#,##0',
-            21: '#,##0.000', 22: '#,##0', 23: '#,##0.000', 24: '#,##0.000', 25: '#,##0.000',
-        },
-    )
+    return export_excel('laporan_sampling', 'Laporan Sampling Pertumbuhan', f'Periode: {format_date_range(date_from, date_to)}', headers, _sampling_rows(items))
 
 
 @login_required
 @permission_required('operations.sampling')
 def export_sampling_pdf(request):
-    items = SamplingRecord.objects.select_related('pond').order_by('-date', '-id')
+    items = SamplingRecord.objects.select_related('pond').order_by('-date')
     items, date_from, date_to, pond = _apply_common_filters(request, items)
-    pdf_rows = _sampling_pdf_rows(items)
-    return export_pdf(
-        'laporan_sampling', 'Laporan Sampling Pertumbuhan',
-        f'Periode: {format_date_range(date_from, date_to)}',
-        ['Tanggal','Kolam','DOC','ABW','Size','ADG','SR FR','Biomassa','FCR','Estimasi'],
-        [[r[0], r[1], r[2], r[6], r[9], r[11], r[13], r[15], r[17], r[25]] for r in pdf_rows],
-    )
+    return export_pdf('laporan_sampling', 'Laporan Sampling Pertumbuhan', f'Periode: {format_date_range(date_from, date_to)}', ['Tanggal','Kolam','DOC','ABW','Size','ADG','SR FR','Biomassa','FCR','Estimasi'], [[r[0],r[1],r[2],r[6],r[9],r[11],r[13],r[15],r[17],r[25]] for r in _sampling_rows(items)])
 
 
 def _siphon_rows(items):
@@ -1051,12 +869,7 @@ def _detail_value(value, suffix=''):
     return f'{value}{suffix}'
 
 
-def _sampling_detail_value(value, suffix=''):
-    return f'{_format_sampling_decimal(value)}{suffix}'
-
-
 def _record_detail_context(obj, title, subtitle, back_url, edit_url, sections, ai_recommendation=''):
-
     return {
         'obj': obj,
         'title': title,
@@ -1155,16 +968,14 @@ def sampling_detail(request, pk):
             ('Siklus Budidaya', obj.cycle.name if obj.cycle else '-'), ('DOC', obj.doc),
         ]},
         {'title': 'Pertumbuhan Udang', 'icon': 'fa-shrimp', 'rows': [
-            ('Berat Sampel', _sampling_detail_value(obj.sample_weight_g, ' g')), ('Jumlah Sampel', _detail_value(obj.sample_count, ' ekor')),
-            ('ABW Last', _sampling_detail_value(obj.abw_last_g, ' g')), ('ABW Today', _sampling_detail_value(obj.abw_g, ' g')),
-            ('Size', _sampling_detail_value(obj.size)), ('ADG Mingguan', _sampling_detail_value(obj.adg_weekly)), ('ADG Kumulatif', _sampling_detail_value(obj.adg_cumulative)),
+            ('Berat Sampel', _detail_value(obj.sample_weight_g, ' g')), ('Jumlah Sampel', _detail_value(obj.sample_count, ' ekor')),
+            ('ABW Last', _detail_value(obj.abw_last_g, ' g')), ('ABW Today', _detail_value(obj.abw_g, ' g')),
+            ('Size', obj.size), ('ADG Mingguan', obj.adg_weekly), ('ADG Kumulatif', obj.adg_cumulative),
         ]},
         {'title': 'Estimasi Produksi', 'icon': 'fa-chart-pie', 'rows': [
-            ('SR FR', _sampling_detail_value(obj.estimated_sr, ' %')), ('SR Index', _sampling_detail_value(obj.sr_index_percent, ' %')),
-            ('Biomassa FR', _sampling_detail_value(obj.biomass_kg, ' kg')), ('Biomassa Index', _sampling_detail_value(obj.biomass_index_kg, ' kg')),
-            ('FCR', _sampling_detail_value(obj.fcr)), ('Populasi FR', _detail_value(obj.population, ' ekor')), ('Populasi Index', _detail_value(obj.population_index, ' ekor')),
-            ('Pakan Kumulatif', _sampling_detail_value(obj.cumulative_feed_kg, ' kg')), ('FR', _sampling_detail_value(obj.fr_percent, ' %')),
-            ('Index', _sampling_detail_value(obj.index_score)), ('Estimasi Panen', obj.harvest_estimation or '-'),
+            ('Estimasi SR', _detail_value(obj.estimated_sr, ' %')), ('Biomassa FR', _detail_value(obj.biomass_kg, ' kg')),
+            ('FCR', obj.fcr), ('Populasi', _detail_value(obj.population, ' ekor')),
+            ('Pakan Kumulatif', _detail_value(obj.cumulative_feed_kg, ' kg')), ('Estimasi Panen', obj.harvest_estimation or '-'),
             ('Catatan', obj.notes or '-'),
         ]},
     ]
@@ -1298,14 +1109,13 @@ def delete_anco_check(request, pk):
 def edit_sampling_record(request, pk):
     obj = get_object_or_404(SamplingRecord, pk=pk)
     ponds = Pond.objects.all().order_by('name')
-    cycle = obj.cycle or get_selected_cycle(request)
     if request.method == 'POST':
         payload, errors = _sampling_payload(request)
         if errors:
             for msg in errors.values():
                 messages.error(request, msg)
             return render(request, 'operations/sampling_form.html', {
-                'ponds': ponds, 'today': timezone.localdate(), 'pond_meta': _sampling_pond_meta(cycle),
+                'ponds': ponds, 'today': timezone.localdate(), 'pond_meta': _sampling_pond_meta(),
                 'obj': obj, 'mode': 'edit', 'errors': errors
             })
         obj.pond_id = payload['pond_id']
@@ -1326,7 +1136,7 @@ def edit_sampling_record(request, pk):
         obj.save()
         messages.success(request, 'Data sampling berhasil diperbarui dan dihitung ulang otomatis.')
         return redirect('operations:sampling_records')
-    return render(request, 'operations/sampling_form.html', {'ponds': ponds, 'today': timezone.localdate(), 'pond_meta': _sampling_pond_meta(cycle), 'obj': obj, 'mode': 'edit'})
+    return render(request, 'operations/sampling_form.html', {'ponds': ponds, 'today': timezone.localdate(), 'pond_meta': _sampling_pond_meta(), 'obj': obj, 'mode': 'edit'})
 
 
 @login_required

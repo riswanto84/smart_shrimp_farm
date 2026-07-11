@@ -249,12 +249,7 @@ class SamplingRecord(models.Model):
         self.abw_g = (weight / Decimal(count)).quantize(Decimal('0.01')) if count else Decimal('0')
         self.size = (Decimal('1000') / _d(self.abw_g, '1')).quantize(Decimal('0.01')) if self.abw_g else Decimal('0')
 
-        previous_samples = SamplingRecord.objects.filter(pond=self.pond, date__lt=self.date)
-        if self.cycle_id:
-            previous_samples = previous_samples.filter(cycle_id=self.cycle_id)
-        if self.pk:
-            previous_samples = previous_samples.exclude(pk=self.pk)
-        prev = previous_samples.order_by('-date', '-id').first()
+        prev = SamplingRecord.objects.filter(pond=self.pond, date__lt=self.date).order_by('-date').first()
         if prev:
             self.abw_last_g = _d(prev.abw_g)
             self.sampling_interval_days = max((self.date - prev.date).days, 1)
@@ -276,20 +271,14 @@ class SamplingRecord(models.Model):
             self.adg_weekly = Decimal('0')
         self.adg_cumulative = (_d(self.abw_g) / Decimal(self.doc)).quantize(Decimal('0.001')) if self.doc and self.abw_g else Decimal('0')
 
-        stocking_qs = Stocking.objects.filter(pond=self.pond, date__lte=self.date)
-        if self.cycle_id:
-            stocking_qs = stocking_qs.filter(cycle_id=self.cycle_id)
-        stocking = stocking_qs.order_by('-date', '-id').first()
+        stocking = Stocking.objects.filter(pond=self.pond, date__lte=self.date).order_by('-date').first()
         if stocking and not self.stocking_count:
             self.stocking_count = stocking.seed_count
 
-        daily_qs = DailyPondRecord.objects.filter(pond=self.pond, date__lte=self.date)
-        if self.cycle_id:
-            daily_qs = daily_qs.filter(cycle_id=self.cycle_id)
         if not self.cumulative_feed_kg:
-            feed_total = daily_qs.aggregate(s=models.Sum('daily_feed_kg'))['s'] or Decimal('0')
+            feed_total = DailyPondRecord.objects.filter(pond=self.pond, date__lte=self.date).aggregate(s=models.Sum('daily_feed_kg'))['s'] or Decimal('0')
             self.cumulative_feed_kg = feed_total
-        latest_feed = daily_qs.order_by('-date', '-id').first()
+        latest_feed = DailyPondRecord.objects.filter(pond=self.pond, date__lte=self.date).order_by('-date').first()
         if latest_feed and not self.daily_feed_kg:
             self.daily_feed_kg = latest_feed.daily_feed_kg or Decimal('0')
 
@@ -302,9 +291,8 @@ class SamplingRecord(models.Model):
         else:
             self.estimated_sr = Decimal('0')
 
-        # Populasi Index adalah input lapangan sesuai lembar Excel. Jangan
-        # menggantinya otomatis dengan Populasi FR karena keduanya merupakan
-        # metode estimasi yang berbeda.
+        if not self.population_index:
+            self.population_index = self.population
         self.biomass_index_kg = (_d(self.population_index) / _d(self.size, '1')).quantize(Decimal('0.01')) if self.population_index and self.size else Decimal('0')
         if self.stocking_count:
             self.sr_index_percent = (_d(self.population_index) / Decimal(self.stocking_count) * Decimal('100')).quantize(Decimal('0.01'))

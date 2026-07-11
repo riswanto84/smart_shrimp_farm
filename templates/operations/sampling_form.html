@@ -4,7 +4,7 @@
 <div class="page-head">
   <div>
     <h1>{% if mode == 'edit' %}Edit{% else %}Input{% endif %} Data Sampling</h1>
-    <p>Form mengikuti struktur dan rumus pada Excel Data Sampling 2. Hanya data lapangan yang diinput; seluruh nilai turunan dihitung otomatis dan mengikuti siklus aktif.</p>
+    <p>Form disesuaikan dengan format Excel: kolom input hanya data dasar, sedangkan ABW, Size, ADG, SR, Biomassa, FCR, Populasi, dan estimasi dihitung otomatis.</p>
   </div>
 </div>
 
@@ -46,23 +46,23 @@
 
       <div class="ops-section-title mt-4">
         <i class="fa-solid fa-bullseye"></i>
-        <div><b>Input Sesuai Kolom Excel</b><small>ADG target, pakan kumulatif, tebar, F/D, FR, populasi index, dan index.</small></div>
+        <div><b>Parameter Input Excel</b><small>Diisi dari data lapangan/pakan. Field lain akan dihitung otomatis oleh sistem.</small></div>
       </div>
       <div class="row g-3">
         <div class="col-md-3">
-          <label class="form-label">ADG Weekly Target (gr/hari)</label>
+          <label class="form-label">ADG Weekly Target</label>
           <input class="form-control calc-input numeric-decimal" type="text" inputmode="decimal" name="adg_weekly_target" id="adg_weekly_target" value="{{ obj.adg_weekly_target|default:'0.250'|unlocalize }}">
         </div>
         <div class="col-md-3">
-          <label class="form-label">Pakan Kumulatif (kg)</label>
+          <label class="form-label">Pakan Kumulatif (Kg)</label>
           <input class="form-control calc-input numeric-decimal" type="text" inputmode="decimal" name="cumulative_feed_kg" id="cumulative_feed_kg" value="{{ obj.cumulative_feed_kg|default:0|unlocalize }}">
         </div>
         <div class="col-md-3">
-          <label class="form-label">Tebar (ekor)</label>
+          <label class="form-label">Tebar</label>
           <input class="form-control calc-input numeric-int" type="text" inputmode="numeric" name="stocking_count" id="stocking_count" value="{{ obj.stocking_count|default:0|unlocalize }}">
         </div>
         <div class="col-md-3">
-          <label class="form-label">F/D - Pakan Harian (kg)</label>
+          <label class="form-label">F/D - Pakan Harian</label>
           <input class="form-control calc-input numeric-decimal" type="text" inputmode="decimal" name="daily_feed_kg" id="daily_feed_kg" value="{{ obj.daily_feed_kg|default:0|unlocalize }}">
         </div>
         <div class="col-md-3">
@@ -70,12 +70,16 @@
           <input class="form-control calc-input numeric-decimal" type="text" inputmode="decimal" name="fr_percent" id="fr_percent" value="{{ obj.fr_percent|default:'0.50'|unlocalize }}">
         </div>
         <div class="col-md-3">
-          <label class="form-label">Populasi Index (ekor)</label>
+          <label class="form-label">Populasi Index</label>
           <input class="form-control calc-input numeric-int" type="text" inputmode="numeric" name="population_index" id="population_index" value="{{ obj.population_index|default:0|unlocalize }}">
         </div>
         <div class="col-md-3">
           <label class="form-label">Index</label>
           <input class="form-control calc-input numeric-decimal" type="text" inputmode="decimal" name="index_score" id="index_score" value="{{ obj.index_score|default:'0.500'|unlocalize }}">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Estimasi Panen Manual</label>
+          <input class="form-control" name="harvest_estimation" id="harvest_estimation" value="{{ obj.harvest_estimation|default:'' }}">
         </div>
       </div>
 
@@ -97,8 +101,6 @@
         <div class="result-box"><span>Biomassa Index</span><b id="out_biomass_index">0.00</b><small>kg</small></div>
         <div class="result-box"><span>FCR</span><b id="out_fcr">0.000</b><small>ratio</small></div>
         <div class="result-box"><span>Populasi FR</span><b id="out_population_fr">0</b><small>ekor</small></div>
-        <div class="result-box"><span>Populasi Index</span><b id="out_population_index">0</b><small>ekor</small></div>
-        <div class="result-box"><span>Index</span><b id="out_index_score">0.000</b><small>nilai input</small></div>
         <div class="result-box"><span>Interval Sampling</span><b id="out_interval">0</b><small>hari</small></div>
       </div>
 
@@ -115,18 +117,16 @@
 
     <aside class="cardx ops-help sampling-help">
       <h3>Mapping Rumus Excel</h3>
-      <p><b>ABW Today</b> = Berat SHRIMP ÷ Jumlah SHRIMP.</p>
-      <p><b>ABW Target</b> = ABW Last + (ADG Target × interval hari).</p>
-      <p><b>Size Today/Target</b> = 1000 ÷ ABW.</p>
-      <p><b>ADG Actual</b> = (ABW Today − ABW Last) ÷ interval hari.</p>
-      <p><b>ADG Accum</b> = ABW Today ÷ DOC.</p>
-      <p><b>Biomassa FR</b> = F/D ÷ FR × 100.</p>
-      <p><b>Populasi FR</b> = Biomassa FR × Size Today.</p>
-      <p><b>SR FR</b> = Populasi FR ÷ Tebar × 100.</p>
-      <p><b>Biomassa Index</b> = Populasi Index ÷ Size Today.</p>
-      <p><b>SR Index</b> = Populasi Index ÷ Tebar × 100.</p>
-      <p><b>FCR</b> = Pakan Kumulatif ÷ Biomassa FR.</p>
-      <div class="alert alert-info small mb-0"><b>Catatan:</b> ABW Last diambil dari sampling sebelumnya pada kolam dan siklus yang sama. Pakan, DOC, dan tebar mengikuti data sampai tanggal sampling yang dipilih.</div>
+      <p><b>ABW Today</b> = Berat SHRIMP / Jumlah SHRIMP.</p>
+      <p><b>Size</b> = 1000 / ABW Today.</p>
+      <p><b>ADG Actual</b> = (ABW Today - ABW Last) / interval hari.</p>
+      <p><b>ADG Accum</b> = ABW Today / DOC.</p>
+      <p><b>Biomassa FR</b> = F/D / FR × 100.</p>
+      <p><b>Populasi FR</b> = Biomassa FR × Size.</p>
+      <p><b>SR FR</b> = Populasi FR / Tebar × 100.</p>
+      <p><b>Biomassa Index</b> = Populasi Index / Size.</p>
+      <p><b>FCR</b> = Pakan Kumulatif / Biomassa FR.</p>
+      <div class="alert alert-info small mb-0"><b>Catatan:</b> ABW Last, F/D, Pakan Kumulatif, dan Tebar akan otomatis diisi dari data sebelumnya jika tersedia.</div>
     </aside>
   </div>
 </form>
@@ -138,50 +138,20 @@
   const num = id => parseFloat(($(id)?.value || '0').toString().replace(',', '.')) || 0;
   const set = (id, val, digits=2) => { const el = $(id); if(el) el.textContent = Number.isFinite(val) ? val.toLocaleString('id-ID', {minimumFractionDigits: digits, maximumFractionDigits: digits}) : '0'; };
   const setInt = (id, val) => { const el = $(id); if(el) el.textContent = Number.isFinite(val) ? Math.round(val).toLocaleString('id-ID') : '0'; };
-  const currentRecordId = Number('{{ obj.id|default:0 }}') || 0;
   function daysBetween(a, b){
     if(!a || !b) return 0;
-    const da = new Date(a+'T00:00:00');
-    const db = new Date(b+'T00:00:00');
+    const da = new Date(a+'T00:00:00'); const db = new Date(b+'T00:00:00');
     return Math.max(Math.round((da-db)/(1000*60*60*24)), 1);
-  }
-  function rowsUpToDate(rows, selectedDate){
-    return (rows || []).filter(row => row.date && row.date <= selectedDate);
-  }
-  function previousSample(m, selectedDate){
-    const rows = (m.history || [])
-      .filter(row => row.date < selectedDate && Number(row.id) !== currentRecordId)
-      .sort((a,b) => a.date.localeCompare(b.date));
-    return rows.length ? rows[rows.length - 1] : null;
-  }
-  function defaultsForDate(m, selectedDate){
-    const dailyRows = rowsUpToDate(m.daily_history, selectedDate)
-      .sort((a,b) => a.date.localeCompare(b.date));
-    const stockingRows = rowsUpToDate(m.stocking_history, selectedDate)
-      .sort((a,b) => a.date.localeCompare(b.date));
-    const latestDaily = dailyRows.length ? dailyRows[dailyRows.length - 1] : null;
-    const latestStocking = stockingRows.length ? stockingRows[stockingRows.length - 1] : null;
-    const cumulativeFeed = dailyRows.reduce((sum, row) => sum + (parseFloat(row.daily_feed_kg || 0) || 0), 0);
-    return {
-      doc: latestDaily ? Number(latestDaily.doc || 0) : 0,
-      stocking: latestStocking ? Number(latestStocking.seed_count || 0) : 0,
-      dailyFeed: latestDaily ? Number(latestDaily.daily_feed_kg || 0) : 0,
-      cumulativeFeed,
-    };
   }
   function applyPondDefaults(){
     const m = meta[$('pond').value] || {};
-    const selectedDate = $('date').value;
-    const defaults = defaultsForDate(m, selectedDate);
-    if(num('doc') === 0 && defaults.doc) $('doc').value = defaults.doc;
-    if(num('stocking_count') === 0 && defaults.stocking) $('stocking_count').value = defaults.stocking;
-    if(num('daily_feed_kg') === 0 && defaults.dailyFeed) $('daily_feed_kg').value = defaults.dailyFeed;
-    if(num('cumulative_feed_kg') === 0 && defaults.cumulativeFeed) $('cumulative_feed_kg').value = defaults.cumulativeFeed.toFixed(2);
+    if(num('doc') === 0 && m.latest_doc) $('doc').value = m.latest_doc;
+    if(num('stocking_count') === 0 && m.stocking_count) $('stocking_count').value = m.stocking_count;
+    if(num('daily_feed_kg') === 0 && m.daily_feed_kg) $('daily_feed_kg').value = m.daily_feed_kg;
+    if(num('cumulative_feed_kg') === 0 && m.cumulative_feed_kg) $('cumulative_feed_kg').value = m.cumulative_feed_kg;
   }
   function calc(){
     const m = meta[$('pond').value] || {};
-    const selectedDate = $('date').value;
-    const previous = previousSample(m, selectedDate);
     const weight = num('sample_weight_g');
     const count = num('sample_count');
     const doc = num('doc');
@@ -190,22 +160,21 @@
     const stocking = num('stocking_count');
     const fd = num('daily_feed_kg');
     const fr = num('fr_percent');
-    const popIndex = num('population_index');
-    const indexScore = num('index_score');
-    const abwLast = previous ? (parseFloat(previous.abw || 0) || 0) : 0;
-    const interval = previous ? daysBetween(selectedDate, previous.date) : 0;
-    const calculationInterval = interval || 7;
+    let popIndex = num('population_index');
+    const abwLast = parseFloat(m.last_abw || 0) || 0;
+    const interval = daysBetween($('date').value, m.last_date) || 7;
     const abwToday = count > 0 ? weight / count : 0;
-    const abwTarget = abwLast > 0 ? abwLast + (adgTarget * calculationInterval) : 0;
+    const abwTarget = abwLast > 0 ? abwLast + (adgTarget * interval) : 0;
     const size = abwToday > 0 ? 1000 / abwToday : 0;
     const targetSize = abwTarget > 0 ? 1000 / abwTarget : 0;
-    const adgActual = (abwLast > 0 && interval > 0) ? (abwToday - abwLast) / interval : 0;
+    const adgActual = abwLast > 0 ? (abwToday - abwLast) / interval : 0;
     const adgAccum = doc > 0 ? abwToday / doc : 0;
     const biomassFR = (fd > 0 && fr > 0) ? fd / fr * 100 : 0;
     const populationFR = biomassFR * size;
+    if(popIndex === 0) popIndex = populationFR;
     const srFR = stocking > 0 ? populationFR / stocking * 100 : 0;
-    const biomassIndex = (size > 0 && popIndex > 0) ? popIndex / size : 0;
-    const srIndex = (stocking > 0 && popIndex > 0) ? popIndex / stocking * 100 : 0;
+    const biomassIndex = size > 0 ? popIndex / size : 0;
+    const srIndex = stocking > 0 ? popIndex / stocking * 100 : 0;
     const fcr = biomassFR > 0 ? feedCum / biomassFR : 0;
     set('out_abw_last', abwLast, 2);
     set('out_abw_today', abwToday, 2);
@@ -220,8 +189,6 @@
     set('out_biomass_index', biomassIndex, 2);
     set('out_fcr', fcr, 3);
     setInt('out_population_fr', populationFR);
-    setInt('out_population_index', popIndex);
-    set('out_index_score', indexScore, 3);
     setInt('out_interval', interval);
   }
   const decimalInputs = document.querySelectorAll('.numeric-decimal');
@@ -242,7 +209,6 @@
   });
   document.querySelectorAll('.calc-input').forEach(el => el.addEventListener('input', calc));
   $('pond').addEventListener('change', () => { applyPondDefaults(); calc(); });
-  $('date').addEventListener('change', () => { applyPondDefaults(); calc(); });
 
   document.getElementById('samplingForm').addEventListener('submit', function(event){
     const invalidMessages = [];
