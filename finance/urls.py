@@ -12,6 +12,7 @@ urlpatterns = [
     path('periodic-report/', views.periodic_report, name='periodic_report'),
     path('periodic-report/export/excel/', views.export_periodic_report_excel, name='export_periodic_report_excel'),
     path('periodic-report/export/pdf/', views.export_periodic_report_pdf, name='export_periodic_report_pdf'),
+    path('expenses/<int:pk>/', views.expense_detail, name='expense_detail'),
     path('expenses/<int:pk>/edit/', views.edit_expense, name='edit_expense'),
     path('expenses/<int:pk>/delete/', views.delete_expense, name='delete_expense'),
 ]

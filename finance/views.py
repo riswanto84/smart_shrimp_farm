@@ -781,3 +781,9 @@ def edit_expense(request, pk):
 def delete_expense(request, pk):
     get_object_or_404(OperationalExpense, pk=pk).delete()
     return redirect('finance:expenses')
+
+@login_required
+@permission_required('finance.expenses')
+def expense_detail(request, pk):
+    obj=get_object_or_404(OperationalExpense.objects.select_related('pond','cycle'),pk=pk)
+    return render(request,'finance/expense_detail.html',{'obj':obj})

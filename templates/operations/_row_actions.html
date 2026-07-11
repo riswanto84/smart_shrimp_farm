@@ -1,8 +1,5 @@
-<div class="d-flex gap-2 flex-wrap justify-content-end">
-  {% if detail_url %}<a class="btn btn-sm btn-outline-primary" href="{{ detail_url }}"><i class="fa-solid fa-eye"></i> Detail</a>{% endif %}
-  <a class="btn btn-sm btn-warning text-dark" href="{{ edit_url }}"><i class="fa-solid fa-pen-to-square"></i> Edit</a>
-  <form method="post" action="{{ delete_url }}" onsubmit="return confirm('Hapus data ini? Tindakan ini tidak dapat dibatalkan.');">
-    {% csrf_token %}
-    <button class="btn btn-sm btn-outline-danger" type="submit"><i class="fa-solid fa-trash"></i> Hapus</button>
-  </form>
+<div class="icon-toolbar justify-content-end">
+{% if detail_url %}<a class="icon-btn sm" href="{{ detail_url }}" data-tip="Detail"><i class="fa-solid fa-eye"></i></a>{% endif %}
+<a class="icon-btn sm edit" href="{{ edit_url }}" data-tip="Edit"><i class="fa-solid fa-pen"></i></a>
+<form method="post" action="{{ delete_url }}" onsubmit="return confirm('Hapus data ini? Tindakan ini tidak dapat dibatalkan.');">{% csrf_token %}<button class="icon-btn sm danger" type="submit" data-tip="Hapus"><i class="fa-solid fa-trash"></i></button></form>
 </div>
