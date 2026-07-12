@@ -92,3 +92,25 @@
 .activity-table td{vertical-align:middle}.activity-type{display:inline-flex;padding:.25rem .55rem;border-radius:999px;font-size:.72rem;font-weight:800;background:#eef4ff;color:#0b5ed7}
 .activity-login,.activity-logout{background:#efe8ff;color:#673ab7}.activity-create{background:#e5f8ef;color:#138a55}.activity-update{background:#fff4d8;color:#9a6500}.activity-delete,.activity-failed{background:#ffe8ec;color:#c62842}.activity-export{background:#e6f7fb;color:#087b91}
 .detail-value{font-weight:700;color:#102b57;padding:.55rem 0;border-bottom:1px solid #edf2f8;min-height:40px}.activity-meta dt{font-size:.75rem;color:#71809a;margin-top:.8rem}.activity-meta dd{font-weight:650;overflow-wrap:anywhere}.activity-json{background:#0c1d35;color:#dceaff;border-radius:14px;padding:1rem;white-space:pre-wrap;overflow:auto;max-height:360px}
+
+/* Parameter Harian: tombol aksi ikon yang ringkas dan profesional */
+.parameter-actions .icon-only-btn {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  line-height: 1;
+}
+.parameter-actions form { margin: 0; }
+@media (max-width: 576px) {
+  .parameter-actions { gap: .35rem !important; }
+  .parameter-actions .icon-only-btn {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+  }
+}

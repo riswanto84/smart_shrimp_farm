@@ -2,6 +2,8 @@ from django.urls import path
 from . import views
 app_name = 'operations'
 urlpatterns = [
+    path('import/<str:module>/', views.import_excel, name='import_excel'),
+    path('import/<str:module>/template/', views.download_import_template, name='download_import_template'),
     path('production-dashboard/', views.production_dashboard, name='production_dashboard'),
     path('parameter-dashboard/', views.parameter_dashboard, name='parameter_dashboard'),
     path('daily-records/', views.daily_records, name='daily_records'),

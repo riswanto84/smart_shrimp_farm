@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-head">
+  <div><span class="eyebrow"><i class="fa-solid fa-file-excel"></i> IMPORT DATA</span><h1>Import Excel {{ module_label }}</h1><p>Upload, periksa hasil validasi, lalu konfirmasi sebelum data disimpan ke siklus aktif.</p></div>
+  <a class="btn btn-outline-primary" href="{% url 'operations:download_import_template' module %}" title="Unduh template"><i class="fa-solid fa-download"></i> Template</a>
+</div>
+<div class="cardx mb-3">
+  <form method="post" enctype="multipart/form-data" class="row g-3 align-items-end">{% csrf_token %}
+    <div class="col-md-8"><label class="form-label fw-bold">File Excel (.xlsx)</label><input class="form-control" type="file" name="excel_file" accept=".xlsx" required><small class="text-muted">Format teknisi dan template aplikasi didukung.</small></div>
+    <div class="col-md-4"><button class="btn btn-primary w-100" type="submit"><i class="fa-solid fa-cloud-arrow-up"></i> Upload & Preview</button></div>
+  </form>
+</div>
+{% if rows %}
+<div class="kpi-grid mb-3"><div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-circle-check"></i></div><div><span>Valid</span><strong>{{ valid_count }}</strong><small>Siap diimpor</small></div></div><div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-triangle-exclamation"></i></div><div><span>Error</span><strong>{{ error_count }}</strong><small>Baris tidak disimpan</small></div></div></div>
+<div class="cardx table-responsive mb-3"><table class="table app-table align-middle"><thead><tr><th>Baris</th><th>Status</th><th>Kolam</th><th>Tanggal</th><th>DOC</th><th>Ringkasan</th><th>Error</th></tr></thead><tbody>{% for row in rows %}<tr><td>{{ row.row }}</td><td>{% if row.valid %}<span class="badge-soft">Valid</span>{% else %}<span class="badge-soft warning">Error</span>{% endif %}</td><td>{{ row.data.pond|default:'-' }}</td><td>{{ row.data.date|default:'-' }}</td><td>{{ row.data.doc|default:'0' }}</td><td class="small">{{ row.data }}</td><td class="text-danger small">{{ row.error }}</td></tr>{% endfor %}</tbody></table></div>
+{% if valid_count %}<div class="cardx"><form method="post" class="row g-3 align-items-end">{% csrf_token %}<input type="hidden" name="action" value="confirm"><div class="col-md-8"><label class="form-label fw-bold">Jika data kolam dan tanggal sudah ada</label><select class="form-select" name="duplicate_mode"><option value="update">Perbarui data lama</option><option value="skip">Lewati data duplikat</option></select></div><div class="col-md-4"><button class="btn btn-success w-100" type="submit"><i class="fa-solid fa-check"></i> Konfirmasi Import</button></div></form></div>{% endif %}
+{% endif %}
+{% endblock %}

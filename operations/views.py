@@ -359,15 +359,15 @@ def production_dashboard(request):
     avg_fcr = sum(fcr_values, 0.0) / len(fcr_values) if fcr_values else 0
     estimated_biomass = sum((_float(x.biomass_kg) for x in latest_samples), 0.0)
 
-    # Populasi tebar: prioritas modul Stocking, fallback ke nilai Tebar pada
-    # sampling terbaru setiap kolam. Ini mencegah kartu 0 ketika data sampling
-    # sudah lengkap tetapi modul tebar belum pernah digunakan.
-    stocking_qs = cycle_qs(Stocking.objects.all())
-    active_stocking = stocking_qs.aggregate(s=Sum('seed_count'))['s'] or 0
-    stocking_source = 'Data tebar'
-    if not active_stocking:
-        active_stocking = sum((int(x.stocking_count or 0) for x in latest_samples), 0)
-        stocking_source = 'Sampling terbaru' if active_stocking else 'Belum ada data'
+    # Populasi tebar pada Dashboard Produksi berasal langsung dari kapasitas
+    # tebar di Master Kolam. Dengan demikian angka pada dashboard selalu sama
+    # dengan total kolom `capacity_seed` yang dilihat pengguna di menu Master
+    # Kolam, dan tidak berubah hanya karena data sampling/stocking belum diisi.
+    #
+    # Catatan: ini adalah kapasitas/populasi tebar yang ditetapkan pada master,
+    # bukan estimasi populasi hidup dari sampling.
+    active_stocking = ponds.aggregate(s=Sum('capacity_seed'))['s'] or 0
+    stocking_source = 'Master Kolam'
 
     # Pakan memakai satu sumber prioritas agar tidak terjadi hitung ganda.
     feed_sources = [
@@ -1375,3 +1375,138 @@ def delete_harvest(request, pk):
     get_object_or_404(Harvest, pk=pk).delete()
     messages.success(request, 'Data panen berhasil dihapus.')
     return redirect('operations:harvests')
+
+# ---------------------------------------------------------------------
+# Import Excel operasional: Anco, Sampling, Siphon, Parameter Harian
+# ---------------------------------------------------------------------
+import os
+import tempfile
+from io import BytesIO
+from django.http import HttpResponse
+from django.db import transaction
+from accounts.rbac import normalized_roles, is_owner
+from .excel_import import parse_workbook, build_template, MODULE_LABELS
+
+
+def _excel_import_allowed(user):
+    if is_owner(user):
+        return True
+    return 'teknisi' in normalized_roles(user)
+
+
+def _excel_import_forbidden(request):
+    messages.error(request, 'Import Excel hanya dapat digunakan oleh Root, Owner, atau Teknisi.')
+    return render(request, 'accounts/forbidden.html', status=403)
+
+
+def _dec_or_none(value):
+    if value in (None, ''): return None
+    try: return Decimal(str(value))
+    except Exception: return None
+
+
+def _save_import_rows(request, module, rows, duplicate_mode):
+    cycle=get_selected_cycle(request,required=True)
+    created=updated=skipped=0
+    with transaction.atomic():
+        for item in rows:
+            if not item.get('valid'): continue
+            d=item['data']; lookup={'pond_id':d['pond_id'],'date':d['date']}
+            if module in ('anco','sampling','parameter'):
+                lookup['cycle']=cycle
+            if module=='anco':
+                defaults={k:d.get(k) for k in ['doc','feed_code','daily_feed_kg','treatment','notes','anco1_morning','anco2_morning','anco1_noon','anco2_noon','anco1_evening','anco2_evening']}
+                defaults['technician']=request.user
+                obj=AncoCheck.objects.filter(**lookup).first()
+                if obj and duplicate_mode=='skip': skipped+=1; continue
+                if obj:
+                    for k,v in defaults.items(): setattr(obj,k,v)
+                    obj.save(); updated+=1
+                else:
+                    AncoCheck.objects.create(**lookup,**defaults); created+=1
+            elif module=='sampling':
+                defaults={k:d.get(k) for k in ['doc','sample_weight_g','sample_count','adg_weekly_target','cumulative_feed_kg','stocking_count','daily_feed_kg','fr_percent','population_index','index_score','notes']}
+                obj=SamplingRecord.objects.filter(**lookup).first()
+                if obj and duplicate_mode=='skip': skipped+=1; continue
+                if obj:
+                    for k,v in defaults.items(): setattr(obj,k,v)
+                    obj.save(); updated+=1
+                else:
+                    SamplingRecord.objects.create(**lookup,**defaults); created+=1
+            elif module=='siphon':
+                # Constraint lama unik pond+date, sehingga record lama dipakai kembali.
+                obj=SiphonRecord.objects.filter(pond_id=d['pond_id'],date=d['date']).first()
+                if obj and duplicate_mode=='skip': skipped+=1; continue
+                defaults={'cycle':cycle,'technician':request.user,'doc':d['doc'],'dead_count':d['dead_count'],'live_count':d['live_count'],'notes':d.get('notes','')}
+                if obj:
+                    for k,v in defaults.items(): setattr(obj,k,v)
+                    obj.save(); updated+=1
+                else:
+                    SiphonRecord.objects.create(pond_id=d['pond_id'],date=d['date'],**defaults); created+=1
+            elif module=='parameter':
+                defaults={'technician':request.user,'doc':d['doc'],'water_level_morning_cm':_dec_or_none(d.get('water_level_morning_cm')),
+                    'water_level_evening_cm':_dec_or_none(d.get('water_level_evening_cm')),'ph_morning':_dec_or_none(d.get('ph_morning')),
+                    'ph_evening':_dec_or_none(d.get('ph_evening')),'salinity':_dec_or_none(d.get('salinity')),
+                    'water_color_morning':d.get('water_color_morning',''),'water_color_evening':d.get('water_color_evening',''),
+                    'transparency_morning':_dec_or_none(d.get('transparency_morning')),'transparency_evening':_dec_or_none(d.get('transparency_evening')),
+                    'temperature':_dec_or_none(d.get('temperature')),'do_morning':_dec_or_none(d.get('do_morning')),
+                    'do_night':_dec_or_none(d.get('do_night')),'alkalinity':_dec_or_none(d.get('alkalinity')),'notes':d.get('notes','')}
+                defaults['water_level_cm']=defaults['water_level_morning_cm'] or defaults['water_level_evening_cm']
+                defaults['transparency']=defaults['transparency_morning'] or defaults['transparency_evening']
+                defaults['water_color']=defaults['water_color_morning'] or defaults['water_color_evening']
+                obj=DailyParameter.objects.filter(**lookup).first()
+                if obj and duplicate_mode=='skip': skipped+=1; continue
+                if obj:
+                    for k,v in defaults.items(): setattr(obj,k,v)
+                    obj.save(); updated+=1
+                else:
+                    DailyParameter.objects.create(**lookup,**defaults); created+=1
+    return created,updated,skipped
+
+
+@login_required
+def import_excel(request, module):
+    if module not in MODULE_LABELS:
+        return redirect('operations:production_dashboard')
+    if not _excel_import_allowed(request.user):
+        return _excel_import_forbidden(request)
+    session_key=f'excel_import_{module}'
+    rows=request.session.get(session_key,[])
+    if request.method=='POST' and request.POST.get('action')=='confirm':
+        mode=request.POST.get('duplicate_mode','update')
+        created,updated,skipped=_save_import_rows(request,module,rows,mode)
+        request.session.pop(session_key,None)
+        messages.success(request,f'Import selesai: {created} dibuat, {updated} diperbarui, {skipped} dilewati.')
+        target={'anco':'anco_checks','sampling':'sampling_records','siphon':'siphon_records','parameter':'parameters'}[module]
+        return redirect(f'operations:{target}')
+    if request.method=='POST' and request.FILES.get('excel_file'):
+        upload=request.FILES['excel_file']
+        if not upload.name.lower().endswith('.xlsx'):
+            messages.error(request,'File harus berformat .xlsx')
+        else:
+            tmp=None
+            try:
+                with tempfile.NamedTemporaryFile(suffix='.xlsx',delete=False) as fh:
+                    for chunk in upload.chunks(): fh.write(chunk)
+                    tmp=fh.name
+                rows=parse_workbook(module,tmp)
+                request.session[session_key]=rows
+                request.session.modified=True
+            except Exception as exc:
+                rows=[]; messages.error(request,f'File tidak dapat dibaca: {exc}')
+            finally:
+                if tmp and os.path.exists(tmp): os.unlink(tmp)
+    valid_count=sum(1 for x in rows if x.get('valid')); error_count=len(rows)-valid_count
+    return render(request,'operations/import_excel.html',{'module':module,'module_label':MODULE_LABELS[module],'rows':rows,'valid_count':valid_count,'error_count':error_count})
+
+
+@login_required
+def download_import_template(request,module):
+    if module not in MODULE_LABELS:
+        return redirect('operations:production_dashboard')
+    if not _excel_import_allowed(request.user):
+        return _excel_import_forbidden(request)
+    wb=build_template(module); stream=BytesIO(); wb.save(stream); stream.seek(0)
+    response=HttpResponse(stream.getvalue(),content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition']=f'attachment; filename="template_import_{module}.xlsx"'
+    return response
