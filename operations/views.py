@@ -818,18 +818,29 @@ def _sampling_rows(items):
 def sampling_records(request):
     items = SamplingRecord.objects.select_related('pond').order_by('-date')
     items, date_from, date_to, pond = _apply_common_filters(request, items)
-    avg_abw = items.aggregate(a=Avg('abw_g'))['a'] or 0
+    # Pertahankan formula ABW kondisi terkini: rata-rata satu sampling
+    # terbaru dari setiap kolam. Jangan merata-ratakan seluruh histori.
+    latest_samples_by_pond = []
+    for pond_id in items.values_list('pond_id', flat=True).distinct():
+        latest_sample = items.filter(pond_id=pond_id).order_by('-date', '-pk').first()
+        if latest_sample is not None:
+            latest_samples_by_pond.append(latest_sample)
+
+    avg_abw = (
+        sum((Decimal(str(sample.abw_g or 0)) for sample in latest_samples_by_pond), Decimal('0'))
+        / Decimal(len(latest_samples_by_pond))
+        if latest_samples_by_pond else Decimal('0')
+    )
     avg_fcr = items.aggregate(a=Avg('fcr'))['a'] or 0
     avg_adg = items.aggregate(a=Avg('adg_weekly'))['a'] or 0
     # Kartu Biomassa FR harus mencerminkan kondisi TERBARU tiap kolam,
     # bukan menjumlahkan seluruh riwayat sampling. Ambil satu record paling
     # baru (tanggal terbesar, lalu PK terbesar) untuk setiap kolam dari
     # queryset yang sudah mengikuti filter tanggal, kolam, dan siklus aktif.
-    latest_biomass_by_pond = []
-    for pond_id in items.values_list('pond_id', flat=True).distinct():
-        latest_sample = items.filter(pond_id=pond_id).order_by('-date', '-pk').first()
-        if latest_sample is not None:
-            latest_biomass_by_pond.append(latest_sample.biomass_kg or Decimal('0'))
+    latest_biomass_by_pond = [
+        sample.biomass_kg or Decimal('0')
+        for sample in latest_samples_by_pond
+    ]
     biomass = sum(latest_biomass_by_pond, Decimal('0'))
 
     page_obj = paginate_queryset(request, items, per_page=10)
