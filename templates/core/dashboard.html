@@ -32,19 +32,41 @@
     <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>Luas</th><th>Status</th><th>Padat Tebar</th><th>Umur (Hari)</th><th>Estimasi Panen</th></tr></thead><tbody>{% for p in ponds %}<tr><td><b>{{p.name}}</b></td><td>{{p.area_m2|ribuan}} m²</td><td><span class="status status-{{p.status|lower}}">{{p.status}}</span></td><td>{% if p.status == 'Budidaya' %}80 ekor/m²{% else %}0 ekor/m²{% endif %}</td><td>{% if p.status == 'Budidaya' %}{{ forloop.counter|add:42 }}{% elif p.status == 'Panen' %}90{% else %}0{% endif %}</td><td>{% if p.status == 'Budidaya' %}{{ forloop.counter|add:14 }} Agt 2026{% elif p.status == 'Panen' %}Hari Ini{% else %}-{% endif %}</td></tr>{% endfor %}</tbody></table></div>
   </section>
   <section class="panel parameters-panel">
-    <div class="panel-head"><h2>Parameter Terbaru <span>(Kolam 2)</span></h2><a href="/operations/parameters/">Lihat Detail</a></div>
+    <div class="panel-head"><h2>Parameter Terbaru {% if latest %}<span>({{ latest.pond.name }} · {{ latest.date|date:"d M Y" }})</span>{% endif %}</h2><a href="/operations/parameters/">Lihat Detail</a></div>
     <div class="param-grid">
-      <div class="param-card"><i class="fa-solid fa-temperature-half"></i><span>Suhu Air</span><strong>{% if latest %}{{latest.temperature}}{% else %}28.4{% endif %} <small>°C</small></strong><em>Normal</em><div class="spark"></div></div>
-      <div class="param-card"><i class="fa-solid fa-droplet"></i><span>pH</span><strong>{% if latest %}{{latest.ph_evening}}{% else %}7.8{% endif %}</strong><em>Normal</em><div class="spark"></div></div>
-      <div class="param-card"><i class="fa-solid fa-o"></i><span>DO (Oksigen)</span><strong>{% if latest %}{{latest.do_night}}{% else %}5.6{% endif %} <small>mg/L</small></strong><em>Normal</em><div class="spark"></div></div>
-      <div class="param-card"><i class="fa-solid fa-grip"></i><span>Salinitas</span><strong>{% if latest %}{{latest.salinity}}{% else %}18{% endif %} <small>ppt</small></strong><em>Normal</em><div class="spark"></div></div>
-      <div class="param-card"><i class="fa-solid fa-flask"></i><span>Amonia (NH₃)</span><strong>0.02 <small>mg/L</small></strong><em>Normal</em><div class="spark"></div></div>
-      <div class="param-card"><i class="fa-solid fa-water"></i><span>Kecerahan</span><strong>{% if latest %}{{latest.transparency}}{% else %}35{% endif %} <small>cm</small></strong><em>Normal</em><div class="spark"></div></div>
+      <div class="param-card"><i class="fa-solid fa-temperature-half"></i><span>Suhu Air</span><strong>{% if latest_temperature is not None %}{{ latest_temperature|floatformat:2 }} <small>°C</small>{% else %}—{% endif %}</strong><em>{% if latest_temperature is not None %}Data aktual{% else %}Belum ada data{% endif %}</em><div class="spark"></div></div>
+      <div class="param-card"><i class="fa-solid fa-droplet"></i><span>pH</span><strong>{% if latest_ph is not None %}{{ latest_ph|floatformat:2 }}{% else %}—{% endif %}</strong><em>{% if latest_ph is not None %}Data aktual{% else %}Belum ada data{% endif %}</em><div class="spark"></div></div>
+      <div class="param-card"><i class="fa-solid fa-o"></i><span>DO (Oksigen)</span><strong>{% if latest_do is not None %}{{ latest_do|floatformat:2 }} <small>mg/L</small>{% else %}—{% endif %}</strong><em>{% if latest_do is not None %}Data aktual{% else %}Belum ada data{% endif %}</em><div class="spark"></div></div>
+      <div class="param-card"><i class="fa-solid fa-grip"></i><span>Salinitas</span><strong>{% if latest_salinity is not None %}{{ latest_salinity|floatformat:2 }} <small>ppt</small>{% else %}—{% endif %}</strong><em>{% if latest_salinity is not None %}Data aktual{% else %}Belum ada data{% endif %}</em><div class="spark"></div></div>
+      <div class="param-card"><i class="fa-solid fa-flask"></i><span>Amonia (NH₃)</span><strong>—</strong><em>Belum tersedia</em><div class="spark"></div></div>
+      <div class="param-card"><i class="fa-solid fa-water"></i><span>Kecerahan</span><strong>{% if latest_transparency is not None %}{{ latest_transparency|floatformat:2 }} <small>cm</small>{% else %}—{% endif %}</strong><em>{% if latest_transparency is not None %}Data aktual{% else %}Belum ada data{% endif %}</em><div class="spark"></div></div>
     </div>
   </section>
-  <section class="panel chart-panel"><div class="panel-head"><h2>Grafik Suhu Air <span>(7 Hari Terakhir)</span></h2><select><option>Kolam 2</option></select></div><div class="fake-chart"><svg viewBox="0 0 600 220" preserveAspectRatio="none"><path d="M0 150 L70 162 L140 130 L210 148 L280 175 L350 145 L420 170 L490 112 L600 125" fill="none" stroke="#0d6efd" stroke-width="5"/><g stroke="#e7eef8">{% for i in '123456' %}<line x1="{{forloop.counter0|add:1}}00" y1="0" x2="{{forloop.counter0|add:1}}00" y2="220"/>{% endfor %}</g></svg></div></section>
-  <section class="panel production-panel"><h2>Produksi <span>(Ton)</span></h2><div class="donut"><span>Total<br><b>24.8</b><br>Ton</span></div><ul><li><b style="--c:#2d7ff9"></b> Kolam 1 <span>4.2 Ton</span></li><li><b style="--c:#f59e0b"></b> Kolam 2 <span>6.8 Ton</span></li><li><b style="--c:#22c55e"></b> Kolam 3 <span>5.6 Ton</span></li><li><b style="--c:#ef4444"></b> Kolam 4 <span>4.1 Ton</span></li></ul></section>
-  <section class="panel activity-panel"><div class="panel-head"><h2>Aktivitas Terbaru</h2><a href="#">Lihat Semua</a></div><div class="activity-list"><div><i class="fa-solid fa-flask"></i><p><b>Pencatatan parameter Kolam 2</b><small>Suhu: 28.4°C, pH: 7.8, DO: 5.6 mg/L</small></p><span>10:15 WIB</span></div><div><i class="fa-solid fa-bowl-food"></i><p><b>Pemberian pakan Kolam 3</b><small>Pelet 781-2: 40 kg</small></p><span>09:30 WIB</span></div><div><i class="fa-solid fa-cash-register"></i><p><b>Penjualan udang 120 kg</b><small>Pelanggan: PT Bahari Sentosa</small></p><span>09:00 WIB</span></div><div><i class="fa-solid fa-shrimp"></i><p><b>Panen Kolam 5</b><small>Total produksi 4.100 kg</small></p><span>Kemarin</span></div></div></section>
+  <section class="panel chart-panel">
+    <div class="panel-head"><h2>Grafik Suhu Air <span>(maks. 7 pencatatan terakhir)</span></h2>{% if latest %}<span>{{ latest.pond.name }}</span>{% endif %}</div>
+    <div class="fake-chart">
+      {% if temperature_points %}
+      <svg viewBox="0 0 600 180" preserveAspectRatio="none" aria-label="Grafik suhu air aktual">
+        <g stroke="#e7eef8">{% for i in '123456' %}<line x1="{{ forloop.counter }}00" y1="0" x2="{{ forloop.counter }}00" y2="180"/>{% endfor %}</g>
+        <polyline points="{{ temperature_points }}" fill="none" stroke="#0d6efd" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      {% else %}
+      <div style="height:100%;display:flex;align-items:center;justify-content:center;text-align:center;color:#64748b;font-weight:700;">Belum ada data suhu air yang pernah diinput.</div>
+      {% endif %}
+    </div>
+  </section>
+  <section class="panel production-panel">
+    <h2>Biomassa Produksi <span>(Ton){% if latest_sampling_date %} · Sampling {{ latest_sampling_date|date:"d M Y" }}{% endif %}</span></h2>
+    <div class="donut" style="background:conic-gradient({{ production_gradient }});"><span>Total<br><b>{{ production_total_ton|floatformat:2 }}</b><br>Ton</span></div>
+    <ul>
+      {% for item in production_items %}
+      <li><b style="--c:{{ item.color }}"></b> {{ item.pond.name }} <span>{{ item.biomass_ton|floatformat:2 }} Ton</span></li>
+      {% empty %}
+      <li>Belum ada data sampling.</li>
+      {% endfor %}
+    </ul>
+  </section>
+  <section class="panel activity-panel"><div class="panel-head"><h2>Aktivitas Terbaru</h2></div><div class="activity-list"><div><i class="fa-solid fa-circle-info"></i><p><b>Belum ada sumber aktivitas terintegrasi</b><small>Panel ini tidak lagi menampilkan data contoh.</small></p></div></div></section>
 </div>
 <script>
 (function () {

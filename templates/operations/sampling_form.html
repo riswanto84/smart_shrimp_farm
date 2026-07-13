@@ -175,7 +175,7 @@
     const srFR = stocking > 0 ? populationFR / stocking * 100 : 0;
     const biomassIndex = size > 0 ? popIndex / size : 0;
     const srIndex = stocking > 0 ? popIndex / stocking * 100 : 0;
-    const fcr = biomassFR > 0 ? feedCum / biomassFR : 0;
+    const fcr = biomassIndex > 0 ? feedCum / biomassIndex : 0;
     set('out_abw_last', abwLast, 2);
     set('out_abw_today', abwToday, 2);
     set('out_abw_target', abwTarget, 2);

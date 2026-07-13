@@ -223,7 +223,7 @@ class SamplingRecord(models.Model):
     sr_index_percent = models.DecimalField(max_digits=8, decimal_places=2, default=0, help_text='Estimasi SR% Index = Populasi Index / Tebar x 100')
     biomass_kg = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text='Biomassa FR = F/D / FR x 100')
     biomass_index_kg = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text='Biomassa Index = Populasi Index / Size')
-    fcr = models.DecimalField(max_digits=8, decimal_places=3, default=0, help_text='FCR = Pakan Kumulatif / Biomassa FR')
+    fcr = models.DecimalField(max_digits=8, decimal_places=3, default=0, help_text='FCR = Pakan Kumulatif / Biomassa Index')
     population = models.PositiveIntegerField(default=0, help_text='Populasi FR = Biomassa FR x Size')
     population_index = models.PositiveIntegerField(default=0, help_text='Populasi Index')
 
@@ -257,8 +257,11 @@ class SamplingRecord(models.Model):
 
         weight = _d(self.sample_weight_g)
         count = self.sample_count or 0
-        self.abw_g = (weight / Decimal(count)).quantize(Decimal('0.01')) if count else Decimal('0')
-        self.size = (Decimal('1000') / _d(self.abw_g, '1')).quantize(Decimal('0.01')) if self.abw_g else Decimal('0')
+        # Gunakan ABW presisi penuh untuk seluruh perhitungan turunan. Nilai
+        # 2 desimal hanya dipakai untuk tampilan/penyimpanan kolom ABW.
+        raw_abw = (weight / Decimal(count)) if count else Decimal('0')
+        self.abw_g = raw_abw.quantize(Decimal('0.01')) if raw_abw else Decimal('0')
+        self.size = (Decimal('1000') / raw_abw).quantize(Decimal('0.01')) if raw_abw else Decimal('0')
 
         prev = SamplingRecord.objects.filter(pond=self.pond, date__lt=self.date).order_by('-date').first()
         if prev:
@@ -301,7 +304,10 @@ class SamplingRecord(models.Model):
         fd = _d(self.daily_feed_kg)
         fr = _d(self.fr_percent)
         self.biomass_kg = (fd / fr * Decimal('100')).quantize(Decimal('0.01')) if fd and fr else Decimal('0')
-        self.population = int((_d(self.biomass_kg) * _d(self.size)).quantize(Decimal('1'))) if self.biomass_kg and self.size else 0
+        # Populasi FR dihitung memakai size presisi penuh (1000 / raw ABW)
+        # agar konsisten dengan Excel, bukan dari ABW yang sudah dibulatkan.
+        raw_size = (Decimal('1000') / raw_abw) if raw_abw else Decimal('0')
+        self.population = int((_d(self.biomass_kg) * raw_size).quantize(Decimal('1'))) if self.biomass_kg and raw_size else 0
         if self.stocking_count:
             self.estimated_sr = (_d(self.population) / Decimal(self.stocking_count) * Decimal('100')).quantize(Decimal('0.01'))
         else:
@@ -309,13 +315,23 @@ class SamplingRecord(models.Model):
 
         if not self.population_index:
             self.population_index = self.population
-        self.biomass_index_kg = (_d(self.population_index) / _d(self.size, '1')).quantize(Decimal('0.01')) if self.population_index and self.size else Decimal('0')
+        # Biomassa Index = Populasi Index x ABW presisi / 1000.
+        # Bentuk ini ekuivalen dengan Populasi Index / Size, tetapi menghindari
+        # selisih akibat pembulatan Size menjadi 2 desimal.
+        self.biomass_index_kg = (
+            (_d(self.population_index) * raw_abw / Decimal('1000')).quantize(Decimal('0.01'))
+            if self.population_index and raw_abw else Decimal('0')
+        )
         if self.stocking_count:
             self.sr_index_percent = (_d(self.population_index) / Decimal(self.stocking_count) * Decimal('100')).quantize(Decimal('0.01'))
         else:
             self.sr_index_percent = Decimal('0')
 
-        self.fcr = (_d(self.cumulative_feed_kg) / _d(self.biomass_kg, '1')).quantize(Decimal('0.001')) if self.biomass_kg and self.cumulative_feed_kg else Decimal('0')
+        # Sesuai tabel sampling Excel: FCR memakai Biomassa Index.
+        self.fcr = (
+            (_d(self.cumulative_feed_kg) / _d(self.biomass_index_kg, '1')).quantize(Decimal('0.001'))
+            if self.biomass_index_kg and self.cumulative_feed_kg else Decimal('0')
+        )
 
         if not self.harvest_estimation:
             target_size = Decimal('50')

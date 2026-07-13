@@ -860,18 +860,16 @@ def sampling_records(request):
             if sample is not None:
                 latest_batch_samples.append(sample)
 
-    # Hitung FCR kartu dari data dasar pada batch sampling terakhir:
-    # FCR = Pakan Kumulatif / Biomassa FR. Cara ini memastikan kartu selalu
-    # sama dengan nilai FCR pada tabel sampling terakhir, meskipun field FCR
-    # lama pada database pernah tersimpan tidak konsisten.
+    # Hitung FCR kartu dari batch sampling terakhir dengan rumus yang sama
+    # seperti Excel: FCR = Pakan Kumulatif / Biomassa Index.
     latest_fcr_values = []
     for sample in latest_batch_samples:
         feed = Decimal(str(sample.cumulative_feed_kg or 0))
-        biomass_fr = Decimal(str(sample.biomass_kg or 0))
-        if feed > 0 and biomass_fr > 0:
-            latest_fcr_values.append(feed / biomass_fr)
+        biomass_index = Decimal(str(sample.biomass_index_kg or 0))
+        if feed > 0 and biomass_index > 0:
+            latest_fcr_values.append(feed / biomass_index)
         elif sample.fcr is not None and Decimal(str(sample.fcr or 0)) > 0:
-            # Fallback hanya untuk record lama yang tidak memiliki data dasar.
+            # Fallback untuk record lama yang belum memiliki Biomassa Index.
             latest_fcr_values.append(Decimal(str(sample.fcr)))
 
     avg_fcr = (
