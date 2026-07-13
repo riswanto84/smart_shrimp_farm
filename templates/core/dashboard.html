@@ -29,7 +29,7 @@
 <div class="dashboard-grid">
   <section class="panel pond-summary">
     <div class="panel-head"><h2>Ringkasan Kolam</h2><a href="/ponds/">Lihat Semua Kolam <i class="fa-solid fa-arrow-right"></i></a></div>
-    <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>Luas</th><th>Status</th><th>Padat Tebar</th><th>DOC</th><th>Estimasi Panen Size 30</th></tr></thead><tbody>{% for p in ponds %}<tr><td><b>{{p.name}}</b></td><td>{{p.area_m2|ribuan}} m²</td><td><span class="status status-{{p.status|lower}}">{{p.status}}</span></td><td>{% if p.dashboard_stocking_density is not None %}{{ p.dashboard_stocking_density|floatformat:2 }} ekor/m²{% else %}<span class="text-muted">Belum ada data</span>{% endif %}</td><td>{% if p.dashboard_doc is not None %}{{ p.dashboard_doc }}{% else %}<span class="text-muted">—</span>{% endif %}</td><td>{% if p.dashboard_size30_date %}<b>{{ p.dashboard_size30_date|date:"d M Y" }}</b><br><small class="text-muted">{% if p.dashboard_size30_days == 0 %}Target tercapai{% else %}± {{ p.dashboard_size30_days }} hari lagi · ABW target 33,33 g{% endif %}</small>{% else %}<span class="text-muted">{{ p.dashboard_size30_status }}</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+    <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>Luas</th><th>Status</th><th>Padat Tebar</th><th>DOC</th><th>Estimasi Panen Size 30</th><th>Estimasi DOC 120</th></tr></thead><tbody>{% for p in ponds %}<tr><td><b>{{p.name}}</b></td><td>{{p.area_m2|ribuan}} m²</td><td><span class="status status-{{p.status|lower}}">{{p.status}}</span></td><td>{% if p.dashboard_stocking_density is not None %}{{ p.dashboard_stocking_density|floatformat:2 }} ekor/m²{% else %}<span class="text-muted">Belum ada data</span>{% endif %}</td><td>{% if p.dashboard_doc is not None %}{{ p.dashboard_doc }}{% else %}<span class="text-muted">—</span>{% endif %}</td><td>{% if p.dashboard_size30_date %}<b>{{ p.dashboard_size30_date|date:"d M Y" }}</b><br><small class="text-muted">{% if p.dashboard_size30_days == 0 %}Target tercapai{% else %}± {{ p.dashboard_size30_days }} hari lagi · ABW target 33,33 g{% endif %}</small>{% else %}<span class="text-muted">{{ p.dashboard_size30_status }}</span>{% endif %}</td><td>{% if p.dashboard_doc120_biomass_ton is not None %}<b>{{ p.dashboard_doc120_biomass_ton|floatformat:2 }} ton</b><br><small class="text-muted">ABW {{ p.dashboard_doc120_abw|floatformat:2 }} g · size {{ p.dashboard_doc120_size|floatformat:0 }} · {{ p.dashboard_doc120_days }} hari</small>{% else %}<span class="text-muted">{{ p.dashboard_doc120_status }}</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
   </section>
   <section class="panel parameters-panel">
     <div class="panel-head"><h2>Parameter Terbaru {% if latest %}<span>({{ latest.pond.name }} · {{ latest.date|date:"d M Y" }})</span>{% endif %}</h2><a href="/operations/parameters/">Lihat Detail</a></div>
@@ -65,6 +65,15 @@
       <li>Belum ada data sampling.</li>
       {% endfor %}
     </ul>
+  </section>
+  <section class="panel doc120-panel" style="grid-column:1 / -1;">
+    <div class="panel-head"><h2>Estimasi Total Panen DOC 120 <span>{% if latest_sampling_date %}berdasarkan sampling {{ latest_sampling_date|date:"d M Y" }}{% endif %}</span></h2></div>
+    <div class="kpi-grid" style="margin-bottom:0;">
+      <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-scale-balanced"></i></div><div><span>Proyeksi Teoritis</span><strong>{{ doc120_total_ton|floatformat:2 }} ton</strong><small>ADG aktual · populasi FR tetap</small></div></div>
+      <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-chart-line"></i></div><div><span>Skenario Normal</span><strong>{{ doc120_normal_ton|floatformat:2 }} ton</strong><small>95% dari proyeksi</small></div></div>
+      <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-shield-halved"></i></div><div><span>Skenario Konservatif</span><strong>{{ doc120_conservative_ton|floatformat:2 }} ton</strong><small>90% dari proyeksi</small></div></div>
+    </div>
+    <p class="text-muted" style="margin:12px 0 0;">Asumsi: ADG aktual tetap, tidak ada panen parsial, dan populasi FR tidak berkurang sampai DOC 120.</p>
   </section>
   <section class="panel activity-panel"><div class="panel-head"><h2>Aktivitas Terbaru</h2></div><div class="activity-list"><div><i class="fa-solid fa-circle-info"></i><p><b>Belum ada sumber aktivitas terintegrasi</b><small>Panel ini tidak lagi menampilkan data contoh.</small></p></div></div></section>
 </div>

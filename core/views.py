@@ -99,6 +99,12 @@ def dashboard(request):
     target_size_30 = Decimal('30')
     target_abw_30 = Decimal('1000') / target_size_30
 
+    # Estimasi produksi pada DOC 120. Proyeksi memakai ABW dan ADG Actual
+    # dari batch sampling terakhir serta populasi FR saat sampling. Asumsi: tidak
+    # ada panen parsial dan populasi tetap sampai DOC 120.
+    doc120_target = 120
+    doc120_total_kg = Decimal('0')
+
     for pond in ponds:
         record = selected_sampling_records.get(pond.id)
         stocking_count = int(record.stocking_count or 0) if record else 0
@@ -111,6 +117,12 @@ def dashboard(request):
         pond.dashboard_size30_days = None
         pond.dashboard_size30_status = 'Belum ada data sampling'
         pond.dashboard_size30_abw = target_abw_30
+        pond.dashboard_doc120_abw = None
+        pond.dashboard_doc120_size = None
+        pond.dashboard_doc120_biomass_kg = None
+        pond.dashboard_doc120_biomass_ton = None
+        pond.dashboard_doc120_days = None
+        pond.dashboard_doc120_status = 'Belum ada data sampling'
 
         if record:
             current_abw = Decimal(str(record.abw_g or 0))
@@ -127,6 +139,29 @@ def dashboard(request):
                 pond.dashboard_size30_status = 'Proyeksi berdasarkan ADG aktual'
             elif current_abw > 0:
                 pond.dashboard_size30_status = 'ADG aktual belum tersedia'
+
+            current_doc = int(record.doc or 0)
+            population_fr = int(record.population or 0)
+            remaining_doc_days = max(doc120_target - current_doc, 0)
+            pond.dashboard_doc120_days = remaining_doc_days
+            if current_abw > 0 and adg_actual > 0 and population_fr > 0:
+                projected_abw = current_abw + (adg_actual * Decimal(remaining_doc_days))
+                projected_size = (Decimal('1000') / projected_abw) if projected_abw > 0 else Decimal('0')
+                projected_biomass = (Decimal(population_fr) * projected_abw / Decimal('1000'))
+                pond.dashboard_doc120_abw = projected_abw.quantize(Decimal('0.01'))
+                pond.dashboard_doc120_size = projected_size.quantize(Decimal('0.01'))
+                pond.dashboard_doc120_biomass_kg = projected_biomass.quantize(Decimal('0.01'))
+                pond.dashboard_doc120_biomass_ton = (projected_biomass / Decimal('1000')).quantize(Decimal('0.01'))
+                pond.dashboard_doc120_status = 'Proyeksi berdasarkan ADG aktual dan populasi FR'
+                doc120_total_kg += projected_biomass
+            elif population_fr <= 0:
+                pond.dashboard_doc120_status = 'Populasi FR belum tersedia'
+            elif adg_actual <= 0:
+                pond.dashboard_doc120_status = 'ADG aktual belum tersedia'
+
+    doc120_total_ton = doc120_total_kg / Decimal('1000')
+    doc120_normal_ton = doc120_total_ton * Decimal('0.95')
+    doc120_conservative_ton = doc120_total_ton * Decimal('0.90')
 
     palette = ['#2d7ff9', '#f59e0b', '#22c55e', '#ef4444', '#8b5cf6', '#06b6d4', '#64748b']
     gradient_parts = []
@@ -173,6 +208,10 @@ def dashboard(request):
         'production_total_ton': production_total_ton,
         'production_gradient': production_gradient,
         'latest_sampling_date': latest_sampling_date,
+        'doc120_target': doc120_target,
+        'doc120_total_ton': doc120_total_ton,
+        'doc120_normal_ton': doc120_normal_ton,
+        'doc120_conservative_ton': doc120_conservative_ton,
         'ollama_status': ollama_status,
     }
     return render(request, 'core/dashboard.html', context)
