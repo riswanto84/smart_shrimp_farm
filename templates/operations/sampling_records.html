@@ -34,7 +34,7 @@
         <td>{{i.estimated_sr|angka:2}}</td><td>{{i.sr_index_percent|angka:2}}</td>
         <td>{{i.biomass_kg|angka:2}}</td><td>{{i.biomass_index_kg|angka:2}}</td>
         <td><span class="badge-soft">{{i.fcr|angka:2}}</span></td><td>{{i.population|ribuan}}</td><td>{{i.population_index|ribuan}}</td>
-        <td>{{i.cumulative_feed_kg|angka:2}}</td><td>{{i.stocking_count|ribuan}}</td><td>{{i.daily_feed_kg|angka:2}}</td><td>{{i.fr_percent|angka:2}}</td><td>{{i.index_score|angka:2}}</td><td>{{i.harvest_estimation}}</td><td>{% url 'operations:sampling_detail' i.id as detail_url %}{% url 'operations:edit_sampling_record' i.id as edit_url %}{% url 'operations:delete_sampling_record' i.id as delete_url %}{% include 'operations/_row_actions.html' %}</td>
+        <td>{{i.cumulative_feed_kg|angka:2}}</td><td>{{i.stocking_count|ribuan}}</td><td>{{i.daily_feed_kg|angka:2}}</td><td>{{i.fr_percent|angka:2}}</td><td>{{i.index_score|angka:2}}</td><td>{{i.harvest_estimation}}</td><td>{% url 'operations:sampling_detail' i.id as detail_url %}{% url 'operations:edit_sampling_record' i.id as edit_url %}{% url 'operations:delete_sampling_record' i.id as delete_url %}{% include 'operations/_row_actions_icon_only.html' %}</td>
       </tr>
       {% empty %}<tr><td colspan="26" class="text-center text-muted">Belum ada data sampling.</td></tr>{% endfor %}
     </tbody>

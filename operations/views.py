@@ -355,9 +355,43 @@ def production_dashboard(request):
         sum((_float(x.abw_g) for x in latest_samples), 0.0) / len(latest_samples)
         if latest_samples else 0
     )
-    fcr_values = [_float(x.fcr) for x in latest_samples if _float(x.fcr) > 0]
+    # Gunakan nilai tersimpan bila tersedia. Untuk data lama/import yang belum
+    # menyimpan hasil turunan, hitung ulang FCR dan biomassa dari data dasar.
+    def effective_sampling_metrics(sample):
+        abw = _float(getattr(sample, 'abw_g', 0))
+
+        biomass = _float(getattr(sample, 'biomass_kg', 0))
+        if biomass <= 0:
+            biomass = _float(getattr(sample, 'biomass_index_kg', 0))
+
+        population = _float(getattr(sample, 'population', 0))
+        if population <= 0:
+            population = _float(getattr(sample, 'population_index', 0))
+
+        # Fallback terakhir: estimasi populasi hidup dari tebar dan SR.
+        if population <= 0:
+            stocking = _float(getattr(sample, 'stocking_count', 0))
+            sr = _float(getattr(sample, 'estimated_sr', 0)) or _float(getattr(sample, 'sr_index_percent', 0))
+            if stocking > 0 and sr > 0:
+                population = stocking * sr / 100.0
+
+        if biomass <= 0 and population > 0 and abw > 0:
+            biomass = population * abw / 1000.0
+
+        fcr = _float(getattr(sample, 'fcr', 0))
+        cumulative_feed = _float(getattr(sample, 'cumulative_feed_kg', 0))
+        if fcr <= 0 and cumulative_feed > 0 and biomass > 0:
+            fcr = cumulative_feed / biomass
+
+        # Atribut runtime untuk digunakan langsung di template dashboard.
+        sample.dashboard_biomass_kg = biomass
+        sample.dashboard_fcr = fcr
+        return biomass, fcr
+
+    effective_metrics = [effective_sampling_metrics(x) for x in latest_samples]
+    fcr_values = [fcr for _, fcr in effective_metrics if fcr > 0]
     avg_fcr = sum(fcr_values, 0.0) / len(fcr_values) if fcr_values else 0
-    estimated_biomass = sum((_float(x.biomass_kg) for x in latest_samples), 0.0)
+    estimated_biomass = sum((biomass for biomass, _ in effective_metrics), 0.0)
 
     # Populasi tebar pada Dashboard Produksi berasal langsung dari kapasitas
     # tebar di Master Kolam. Dengan demikian angka pada dashboard selalu sama
