@@ -1531,7 +1531,8 @@ def _save_import_rows(request, module, rows, duplicate_mode):
             if module in ('anco','sampling','parameter'):
                 lookup['cycle']=cycle
             if module=='anco':
-                defaults={k:d.get(k) for k in ['doc','feed_code','daily_feed_kg','treatment','notes','anco1_morning','anco2_morning','anco1_noon','anco2_noon','anco1_evening','anco2_evening']}
+                defaults={k:d.get(k) for k in ['doc','feed_code','daily_feed_kg','water_in_cm','weather','treatment','notes','anco1_morning','anco2_morning','anco1_noon','anco2_noon','anco1_evening','anco2_evening']}
+                defaults['water_in_cm'] = _dec_or_none(defaults.get('water_in_cm'))
                 defaults['technician']=request.user
                 obj=AncoCheck.objects.filter(**lookup).first()
                 if obj and duplicate_mode=='skip': skipped+=1; continue

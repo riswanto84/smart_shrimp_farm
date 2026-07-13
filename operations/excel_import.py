@@ -446,10 +446,14 @@ def parse_anco(path):
             if not dt: continue
             pond_raw=ws.cell(r,getcol('kolam','no') or 2).value
             pond=find_pond(pond_raw)
+            water_col=getcol('airmasukcm','airmasuk','waterincm','waterin')
+            weather_col=getcol('cuaca','weather')
             data={'pond_id':pond.id if pond else None,'pond':pond.name if pond else _text(pond_raw),
                   'date':dt.isoformat(),'doc':_integer(ws.cell(r,getcol('doc') or 3).value,0),
                   'feed_code':_text(ws.cell(r,getcol('kodepakan') or 0).value) if getcol('kodepakan') else '',
-                  'daily_feed_kg':str(_decimal(ws.cell(r,getcol('ph','pakanharian') or 0).value,Decimal('0'))) if getcol('ph','pakanharian') else '0',
+                  'daily_feed_kg':str(_decimal(ws.cell(r,getcol('ph','pakanharian','pakanhariankg') or 0).value,Decimal('0'))) if getcol('ph','pakanharian','pakanhariankg') else '0',
+                  'water_in_cm':str(_decimal(ws.cell(r,water_col).value,Decimal('0'))) if water_col else '',
+                  'weather':_text(ws.cell(r,weather_col).value) if weather_col else '',
                   'treatment':_text(ws.cell(r,getcol('treatment') or 0).value) if getcol('treatment') else '',
                   'notes':_text(ws.cell(r,getcol('catatan','notes') or 0).value) if getcol('catatan','notes') else ''}
             errors=[]
@@ -483,8 +487,11 @@ def build_template(module):
         headers=['Tanggal','Kolam','DOC','Tinggi Air P/S','pH P/S','Salinitas','Warna Air P/S','Kecerahan P/S','Suhu','DO Pagi','DO Malam','Alkalinitas','Catatan']
         example=[date.today(),'K1',30,'90/91','7.6/7.8',28,'C/CH','35/30',28,4.5,5.0,120,'']
     else:
-        headers=['Tanggal','Kolam','DOC','Kode Pakan','P/H','Pagi A1','Pagi A2','Siang A1','Siang A2','Sore A1','Sore A2','Treatment','Catatan']
-        example=[date.today(),'K1',30,'6003',85,'H','H','H','H','SS','H','','']
+        # Template mengikuti seluruh data input pada tabel Cek Anco Harian.
+        # Status nafsu makan dan rekomendasi tidak dimasukkan karena dihitung
+        # otomatis oleh model dari enam status anco.
+        headers=['Tanggal','Kolam','Kode Pakan','DOC','P/H','Pagi A1','Pagi A2','Siang A1','Siang A2','Sore A1','Sore A2','Air Masuk (cm)','Cuaca','Treatment','Catatan']
+        example=[date.today(),'K1','6003',30,85,'H','H','H','H','SS','H',3,'Cerah','','']
     ws.append(headers); ws.append(example)
     fill=PatternFill('solid',fgColor='0B3568'); font=Font(color='FFFFFF',bold=True)
     thin=Side(style='thin',color='D9E4F2')
