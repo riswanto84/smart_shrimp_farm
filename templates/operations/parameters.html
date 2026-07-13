@@ -2,7 +2,7 @@
 {% load currency %}
 {% block content %}
 <div class="page-head">
-  <div><h1>Parameter Harian</h1><p>Catatan parameter harian meliputi kode pakan, tinggi air pagi/sore, pH, salinitas, warna air pagi/sore, kecerahan pagi/sore, DO, dan analisa AI Ollama.</p></div>
+  <div><h1>Parameter Harian</h1><p>Catatan parameter harian meliputi tinggi air pagi/sore, pH, salinitas, warna air pagi/sore, kecerahan pagi/sore, DO, dan analisa AI Ollama.</p></div>
   <a class="btn btn-primary" href="{% url 'operations:add_parameter' %}"><i class="fa-solid fa-plus"></i> Input Parameter</a>
 </div>
 <div class="cardx mb-3"><form method="get" class="row g-2 align-items-end"><div class="col-md-3"><label class="form-label">Tanggal Mulai</label><input class="form-control" type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"></div><div class="col-md-3"><label class="form-label">Tanggal Selesai</label><input class="form-control" type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></div><div class="col-md-3"><label class="form-label">Kolam</label><select class="form-select" name="pond"><option value="">Semua Kolam</option>{% for p in ponds %}<option value="{{p.id}}" {% if request.GET.pond == p.id|stringformat:'s' %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></div><div class="col-md-3 d-grid"><button class="btn btn-outline-primary"><i class="fa-solid fa-filter"></i> Terapkan Filter</button></div></form><div class="mt-3 d-flex gap-2 flex-wrap"><a class="btn btn-outline-primary" href="{% url 'operations:import_excel' 'parameter' %}" title="Import Excel"><i class="fa-solid fa-file-import"></i> Import Excel</a><a class="btn btn-outline-secondary" href="{% url 'operations:download_import_template' 'parameter' %}" title="Unduh Template"><i class="fa-solid fa-download"></i> Template</a><a class="btn btn-success" href="{% url 'operations:export_parameters_excel' %}?{{ request.GET.urlencode }}"><i class="fa-solid fa-file-excel"></i> Export Excel</a><a class="btn btn-danger" href="{% url 'operations:export_parameters_pdf' %}?{{ request.GET.urlencode }}"><i class="fa-solid fa-file-pdf"></i> Export PDF</a></div></div>
@@ -10,7 +10,7 @@
   <table class="table app-table align-middle">
     <thead>
       <tr>
-        <th>Tanggal</th><th>Kolam</th><th>DOC</th><th>Kode Pakan</th><th>Tinggi Air</th><th>pH</th><th>Salinitas</th><th>Warna Air</th><th>Kecerahan</th><th>DO</th><th>AI</th><th class="text-end">Aksi</th>
+        <th>Tanggal</th><th>Kolam</th><th>DOC</th><th>Tinggi Air</th><th>pH</th><th>Salinitas</th><th>Warna Air</th><th>Kecerahan</th><th>DO</th><th>AI</th><th class="text-end">Aksi</th>
       </tr>
     </thead>
     <tbody>
@@ -19,7 +19,6 @@
         <td>{{i.date}}</td>
         <td><b>{{i.pond.name}}</b></td>
         <td>{{i.doc|ribuan}}</td>
-        <td><span class="badge-soft">{{ i.feed_code|default:"-" }}</span></td>
         <td><span class="badge bg-primary-subtle text-primary">P {% if i.water_level_morning_cm %}{{ i.water_level_morning_cm|angka:2 }}{% else %}{{ i.water_level_cm|angka:2 }}{% endif %} cm</span><br><span class="badge bg-info-subtle text-info">S {% if i.water_level_evening_cm %}{{ i.water_level_evening_cm|angka:2 }}{% else %}{{ i.water_level_cm|angka:2 }}{% endif %} cm</span></td>
         <td><small>Pagi</small> {{i.ph_morning|angka:2}}<br><small>Sore</small> {{i.ph_evening|angka:2}}</td>
         <td>{{i.salinity|angka:2}} ppt</td>
@@ -44,7 +43,7 @@
           </div>
         </td>
       </tr>
-      {% empty %}<tr><td colspan="12" class="text-center text-muted">Tidak ada data pada filter ini.</td></tr>{% endfor %}
+      {% empty %}<tr><td colspan="11" class="text-center text-muted">Tidak ada data pada filter ini.</td></tr>{% endfor %}
     </tbody>
   </table>
 </div>
