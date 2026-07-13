@@ -821,7 +821,17 @@ def sampling_records(request):
     avg_abw = items.aggregate(a=Avg('abw_g'))['a'] or 0
     avg_fcr = items.aggregate(a=Avg('fcr'))['a'] or 0
     avg_adg = items.aggregate(a=Avg('adg_weekly'))['a'] or 0
-    biomass = items.aggregate(s=Sum('biomass_kg'))['s'] or 0
+    # Kartu Biomassa FR harus mencerminkan kondisi TERBARU tiap kolam,
+    # bukan menjumlahkan seluruh riwayat sampling. Ambil satu record paling
+    # baru (tanggal terbesar, lalu PK terbesar) untuk setiap kolam dari
+    # queryset yang sudah mengikuti filter tanggal, kolam, dan siklus aktif.
+    latest_biomass_by_pond = []
+    for pond_id in items.values_list('pond_id', flat=True).distinct():
+        latest_sample = items.filter(pond_id=pond_id).order_by('-date', '-pk').first()
+        if latest_sample is not None:
+            latest_biomass_by_pond.append(latest_sample.biomass_kg or Decimal('0'))
+    biomass = sum(latest_biomass_by_pond, Decimal('0'))
+
     page_obj = paginate_queryset(request, items, per_page=10)
     return render(request, 'operations/sampling_records.html', {
         'items': page_obj, 'page_obj': page_obj, 'date_from': date_from, 'date_to': date_to, 'ponds': Pond.objects.all(),
@@ -1459,14 +1469,45 @@ def _save_import_rows(request, module, rows, duplicate_mode):
                 else:
                     AncoCheck.objects.create(**lookup,**defaults); created+=1
             elif module=='sampling':
-                defaults={k:d.get(k) for k in ['doc','sample_weight_g','sample_count','adg_weekly_target','cumulative_feed_kg','stocking_count','daily_feed_kg','fr_percent','population_index','index_score','notes']}
-                obj=SamplingRecord.objects.filter(**lookup).first()
-                if obj and duplicate_mode=='skip': skipped+=1; continue
+                # Normalisasi tipe data sebelum disimpan. Nilai dari session
+                # berasal dari JSON sehingga angka Decimal tersimpan sebagai string.
+                defaults = {
+                    'doc': int(d.get('doc') or 0),
+                    'sample_weight_g': _dec_or_none(d.get('sample_weight_g')) or Decimal('0'),
+                    'sample_count': int(d.get('sample_count') or 0),
+                    'adg_weekly_target': _dec_or_none(d.get('adg_weekly_target')) or Decimal('0'),
+                    'cumulative_feed_kg': _dec_or_none(d.get('cumulative_feed_kg')) or Decimal('0'),
+                    'stocking_count': int(d.get('stocking_count') or 0),
+                    'daily_feed_kg': _dec_or_none(d.get('daily_feed_kg')) or Decimal('0'),
+                    'fr_percent': _dec_or_none(d.get('fr_percent')) or Decimal('0'),
+                    'population_index': int(d.get('population_index') or 0),
+                    'index_score': _dec_or_none(d.get('index_score')) or Decimal('0'),
+                    'notes': d.get('notes') or '',
+                }
+
+                # Data sampling lama dapat memiliki cycle NULL atau cycle berbeda.
+                # Cari dahulu berdasarkan kolam+tanggal agar import benar-benar
+                # memperbarui baris yang tampil, bukan membuat duplikat tersembunyi.
+                obj = SamplingRecord.objects.filter(
+                    pond_id=d['pond_id'], date=d['date']
+                ).order_by('-id').first()
+                if obj and duplicate_mode == 'skip':
+                    skipped += 1
+                    continue
                 if obj:
-                    for k,v in defaults.items(): setattr(obj,k,v)
-                    obj.save(); updated+=1
+                    obj.cycle = cycle
+                    for k, v in defaults.items():
+                        setattr(obj, k, v)
+                    obj.save()
+                    updated += 1
                 else:
-                    SamplingRecord.objects.create(**lookup,**defaults); created+=1
+                    SamplingRecord.objects.create(
+                        cycle=cycle,
+                        pond_id=d['pond_id'],
+                        date=d['date'],
+                        **defaults,
+                    )
+                    created += 1
             elif module=='siphon':
                 # Constraint lama unik pond+date, sehingga record lama dipakai kembali.
                 obj=SiphonRecord.objects.filter(pond_id=d['pond_id'],date=d['date']).first()
