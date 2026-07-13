@@ -816,13 +816,23 @@ def _sampling_rows(items):
 @login_required
 @permission_required('operations.sampling')
 def sampling_records(request):
-    items = SamplingRecord.objects.select_related('pond').order_by('-date')
+    items = SamplingRecord.objects.select_related('pond').order_by('-date', 'pk')
     items, date_from, date_to, pond = _apply_common_filters(request, items)
     # Pertahankan formula ABW kondisi terkini: rata-rata satu sampling
     # terbaru dari setiap kolam. Jangan merata-ratakan seluruh histori.
     latest_samples_by_pond = []
     for pond_id in items.values_list('pond_id', flat=True).distinct():
-        latest_sample = items.filter(pond_id=pond_id).order_by('-date', '-pk').first()
+        # Tentukan tanggal sampling paling baru untuk kolam tersebut, lalu
+        # gunakan record kanonik (PK paling kecil) bila pernah terbentuk
+        # duplikat pada kolam+tanggal yang sama. Tabel juga diurutkan dengan
+        # aturan yang sama sehingga nilai kartu selalu sama dengan baris yang
+        # ditampilkan kepada pengguna.
+        pond_items = items.filter(pond_id=pond_id)
+        latest_date = pond_items.order_by('-date').values_list('date', flat=True).first()
+        latest_sample = (
+            pond_items.filter(date=latest_date).order_by('pk').first()
+            if latest_date else None
+        )
         if latest_sample is not None:
             latest_samples_by_pond.append(latest_sample)
 
@@ -917,7 +927,7 @@ def add_sampling_record(request):
 @login_required
 @permission_required('operations.sampling')
 def export_sampling_excel(request):
-    items = SamplingRecord.objects.select_related('pond').order_by('-date')
+    items = SamplingRecord.objects.select_related('pond').order_by('-date', 'pk')
     items, date_from, date_to, pond = _apply_common_filters(request, items)
     headers = ['Tanggal','Kolam','DOC','SHRIMP Berat (gr)','SHRIMP Jumlah (ekor)','ABW Last','ABW Today','ABW Target','Target Size','Size','ADG Target','ADG Actual','ADG Accum','SR% FR','SR% Index','Biomassa FR','Biomassa Index','FCR','Populasi FR','Populasi Index','Pakan Kumulatif','Tebar','F/D','FR','Index','Estimasi Panen','Catatan']
     return export_excel('laporan_sampling', 'Laporan Sampling Pertumbuhan', f'Periode: {format_date_range(date_from, date_to)}', headers, _sampling_rows(items))
@@ -926,7 +936,7 @@ def export_sampling_excel(request):
 @login_required
 @permission_required('operations.sampling')
 def export_sampling_pdf(request):
-    items = SamplingRecord.objects.select_related('pond').order_by('-date')
+    items = SamplingRecord.objects.select_related('pond').order_by('-date', 'pk')
     items, date_from, date_to, pond = _apply_common_filters(request, items)
     return export_pdf('laporan_sampling', 'Laporan Sampling Pertumbuhan', f'Periode: {format_date_range(date_from, date_to)}', ['Tanggal','Kolam','DOC','ABW','Size','ADG','SR FR','Biomassa','FCR','Estimasi'], [[r[0],r[1],r[2],r[6],r[9],r[11],r[13],r[15],r[17],r[25]] for r in _sampling_rows(items)])
 
@@ -1523,9 +1533,13 @@ def _save_import_rows(request, module, rows, duplicate_mode):
                 # Data sampling lama dapat memiliki cycle NULL atau cycle berbeda.
                 # Cari dahulu berdasarkan kolam+tanggal agar import benar-benar
                 # memperbarui baris yang tampil, bukan membuat duplikat tersembunyi.
-                obj = SamplingRecord.objects.filter(
+                # Gunakan satu record kanonik untuk kombinasi kolam+tanggal.
+                # Versi sebelumnya memilih ID paling besar sehingga kartu dapat
+                # membaca duplikat yang berbeda dari baris pertama pada tabel.
+                matches = SamplingRecord.objects.filter(
                     pond_id=d['pond_id'], date=d['date']
-                ).order_by('-id').first()
+                ).order_by('id')
+                obj = matches.first()
                 if obj and duplicate_mode == 'skip':
                     skipped += 1
                     continue
@@ -1533,10 +1547,12 @@ def _save_import_rows(request, module, rows, duplicate_mode):
                     obj.cycle = cycle
                     for k, v in defaults.items():
                         setattr(obj, k, v)
-                    # Jangan hitung ulang ADG Actual dari selisih ABW ketika
-                    # nilai Actual memang tersedia pada file Excel.
+                    # Nilai ADG Weekly Actual dari Excel harus dipertahankan.
                     obj._preserve_imported_adg_weekly = bool(d.get('has_adg_weekly'))
                     obj.save()
+                    # Hapus duplikat lama setelah record kanonik berhasil disimpan,
+                    # agar tabel, kartu, ekspor, dan dashboard membaca data yang sama.
+                    matches.exclude(pk=obj.pk).delete()
                     updated += 1
                 else:
                     obj = SamplingRecord(
