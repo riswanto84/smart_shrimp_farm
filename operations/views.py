@@ -831,8 +831,26 @@ def sampling_records(request):
         / Decimal(len(latest_samples_by_pond))
         if latest_samples_by_pond else Decimal('0')
     )
-    avg_fcr = items.aggregate(a=Avg('fcr'))['a'] or 0
-    avg_adg = items.aggregate(a=Avg('adg_weekly'))['a'] or 0
+    # FCR dan ADG pada kartu ringkasan harus memakai kondisi sampling
+    # TERBARU tiap kolam, sama seperti ringkasan ABW. Untuk ADG gunakan
+    # kolom ADG mingguan/Actual (adg_weekly), bukan ADG akumulatif.
+    latest_fcr_values = [
+        Decimal(str(sample.fcr or 0))
+        for sample in latest_samples_by_pond
+    ]
+    avg_fcr = (
+        sum(latest_fcr_values, Decimal('0')) / Decimal(len(latest_fcr_values))
+        if latest_fcr_values else Decimal('0')
+    )
+
+    latest_adg_weekly_values = [
+        Decimal(str(sample.adg_weekly or 0))
+        for sample in latest_samples_by_pond
+    ]
+    avg_adg = (
+        sum(latest_adg_weekly_values, Decimal('0')) / Decimal(len(latest_adg_weekly_values))
+        if latest_adg_weekly_values else Decimal('0')
+    )
     # Kartu Biomassa FR harus mencerminkan kondisi TERBARU tiap kolam,
     # bukan menjumlahkan seluruh riwayat sampling. Ambil satu record paling
     # baru (tanggal terbesar, lalu PK terbesar) untuk setiap kolam dari
