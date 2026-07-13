@@ -1515,12 +1515,31 @@ def _save_import_rows(request, module, rows, duplicate_mode):
             elif module=='sampling':
                 # Normalisasi tipe data sebelum disimpan. Nilai dari session
                 # berasal dari JSON sehingga angka Decimal tersimpan sebagai string.
+                provided_fields = set(d.get('provided_fields') or [])
                 defaults = {
                     'doc': int(d.get('doc') or 0),
                     'sample_weight_g': _dec_or_none(d.get('sample_weight_g')) or Decimal('0'),
                     'sample_count': int(d.get('sample_count') or 0),
+                    'abw_last_g': _dec_or_none(d.get('abw_last_g')) or Decimal('0'),
+                    'abw_g': _dec_or_none(d.get('abw_g')) or Decimal('0'),
+                    'abw_target_g': _dec_or_none(d.get('abw_target_g')) or Decimal('0'),
+                    'size': _dec_or_none(d.get('size')) or Decimal('0'),
                     'adg_weekly_target': _dec_or_none(d.get('adg_weekly_target')) or Decimal('0'),
-                    'adg_weekly': _dec_or_none(d.get('adg_weekly')) or Decimal('0'),
+                    # Import wajib memakai rumus (ABW Today - ABW Last) / 7.
+                    'adg_weekly': (
+                        ((_dec_or_none(d.get('abw_g')) or Decimal('0')) -
+                         (_dec_or_none(d.get('abw_last_g')) or Decimal('0'))) / Decimal('7')
+                    ).quantize(Decimal('0.001')) if (
+                        (_dec_or_none(d.get('abw_g')) or Decimal('0')) and
+                        (_dec_or_none(d.get('abw_last_g')) or Decimal('0'))
+                    ) else Decimal('0'),
+                    'adg_cumulative': _dec_or_none(d.get('adg_cumulative')) or Decimal('0'),
+                    'estimated_sr': _dec_or_none(d.get('estimated_sr')) or Decimal('0'),
+                    'sr_index_percent': _dec_or_none(d.get('sr_index_percent')) or Decimal('0'),
+                    'biomass_kg': _dec_or_none(d.get('biomass_kg')) or Decimal('0'),
+                    'biomass_index_kg': _dec_or_none(d.get('biomass_index_kg')) or Decimal('0'),
+                    'fcr': _dec_or_none(d.get('fcr')) or Decimal('0'),
+                    'population': int(d.get('population') or 0),
                     'cumulative_feed_kg': _dec_or_none(d.get('cumulative_feed_kg')) or Decimal('0'),
                     'stocking_count': int(d.get('stocking_count') or 0),
                     'daily_feed_kg': _dec_or_none(d.get('daily_feed_kg')) or Decimal('0'),
@@ -1529,6 +1548,20 @@ def _save_import_rows(request, module, rows, duplicate_mode):
                     'index_score': _dec_or_none(d.get('index_score')) or Decimal('0'),
                     'notes': d.get('notes') or '',
                 }
+
+                # Jangan mengosongkan kolom yang tidak tersedia pada template
+                # ringkas. Kolom turunan akan dihitung ulang oleh model; kolom
+                # tambahan yang tidak dikirim tetap mempertahankan nilai lama.
+                if not d.get('preserve_imported_metrics'):
+                    keep_when_missing = {
+                        'abw_last_g', 'abw_g', 'abw_target_g', 'size',
+                        'adg_weekly', 'adg_cumulative', 'estimated_sr',
+                        'sr_index_percent', 'biomass_kg', 'biomass_index_kg',
+                        'fcr', 'population'
+                    }
+                    for field in keep_when_missing:
+                        if field not in provided_fields:
+                            defaults.pop(field, None)
 
                 # Data sampling lama dapat memiliki cycle NULL atau cycle berbeda.
                 # Cari dahulu berdasarkan kolam+tanggal agar import benar-benar
@@ -1547,8 +1580,8 @@ def _save_import_rows(request, module, rows, duplicate_mode):
                     obj.cycle = cycle
                     for k, v in defaults.items():
                         setattr(obj, k, v)
-                    # Nilai ADG Weekly Actual dari Excel harus dipertahankan.
-                    obj._preserve_imported_adg_weekly = bool(d.get('has_adg_weekly'))
+                    # ADG telah dihitung ulang dari ABW Today dan ABW Last / 7.
+                    obj._preserve_imported_metrics = bool(d.get('preserve_imported_metrics'))
                     obj.save()
                     # Hapus duplikat lama setelah record kanonik berhasil disimpan,
                     # agar tabel, kartu, ekspor, dan dashboard membaca data yang sama.
@@ -1561,7 +1594,7 @@ def _save_import_rows(request, module, rows, duplicate_mode):
                         date=d['date'],
                         **defaults,
                     )
-                    obj._preserve_imported_adg_weekly = bool(d.get('has_adg_weekly'))
+                    obj._preserve_imported_metrics = bool(d.get('preserve_imported_metrics'))
                     obj.save()
                     created += 1
             elif module=='siphon':

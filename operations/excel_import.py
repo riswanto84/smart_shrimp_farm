@@ -119,8 +119,19 @@ def parse_sampling(path):
         'doc': {'doc'},
         'sample_weight_g': {'beratshrimpgr', 'beratshrimp', 'shrimpberatgr', 'beratsampelgr', 'beratsampel'},
         'sample_count': {'jumlahshrimpekor', 'jumlahshrimp', 'shrimpjumlahekor', 'jumlahsampel', 'jumlahsampelekor'},
+        'abw_last_g': {'abwlast', 'lastabw'},
+        'abw_g': {'abwtoday', 'abwtodaygr', 'abwgrtoday'},
+        'abw_target_g': {'abwtarget', 'targetabw'},
+        'size': {'sizepcskg', 'size'},
         'adg_weekly_target': {'adgweeklytarget', 'adgtarget', 'targetadg'},
         'adg_weekly': {'adgweeklyactual', 'adgactual', 'actualadg'},
+        'adg_cumulative': {'adgaccumgrday', 'adgaccum', 'adgcumulative'},
+        'estimated_sr': {'estimasitodaysrfr', 'srfr', 'estimatedsr'},
+        'sr_index_percent': {'estimasitodaysrindex', 'srindex', 'srindexpercent'},
+        'biomass_kg': {'biomasskgfr', 'biomassafr', 'biomassfr'},
+        'biomass_index_kg': {'biomasskgindex', 'biomassaindex', 'biomassindex'},
+        'fcr': {'fcr'},
+        'population': {'populasifr', 'populationfr'},
         'cumulative_feed_kg': {'pakankumulatifkg', 'pakankumulatif', 'pakankomulatif', 'cumulativefeedkg', 'cumulativefeed'},
         'stocking_count': {'tebar', 'jumlahtebar', 'stocking', 'stockingcount'},
         'daily_feed_kg': {'fdpakanharian', 'fd', 'pakanharian', 'pakanhariankg', 'dailyfeedkg'},
@@ -167,11 +178,26 @@ def parse_sampling(path):
             if parent.startswith('shrimp'):
                 if sub_key.startswith('berat'): mapping['sample_weight_g'] = idx
                 elif sub_key.startswith('jumlah'): mapping['sample_count'] = idx
+            elif parent.startswith('abw'):
+                if sub_key == 'last': mapping['abw_last_g'] = idx
+                elif sub_key in {'today', 'todaygr', 'todayg'}: mapping['abw_g'] = idx
+                elif sub_key == 'target': mapping['abw_target_g'] = idx
+            elif parent.startswith('size'):
+                mapping['size'] = idx
             elif parent.startswith('adgweekly'):
                 if sub_key == 'target': mapping['adg_weekly_target'] = idx
                 elif sub_key == 'actual': mapping['adg_weekly'] = idx
+            elif parent.startswith('adgaccum'):
+                mapping['adg_cumulative'] = idx
+            elif parent.startswith('estimasi'):
+                if sub_key in {'srfr', 'fr'}: mapping['estimated_sr'] = idx
+                elif sub_key in {'srindex', 'index'}: mapping['sr_index_percent'] = idx
+            elif parent.startswith('biomassa') or parent.startswith('biomass'):
+                if sub_key == 'fr': mapping['biomass_kg'] = idx
+                elif sub_key == 'index': mapping['biomass_index_kg'] = idx
             elif parent.startswith('populasi'):
-                if sub_key.startswith('index'): mapping['population_index'] = idx
+                if sub_key == 'fr': mapping['population'] = idx
+                elif sub_key.startswith('index'): mapping['population_index'] = idx
         return mapping
 
     def append_data(ws, r, col):
@@ -203,9 +229,13 @@ def parse_sampling(path):
             c = col.get(field)
             return ws.cell(r, c).value if c else None
 
-        adg_actual_raw = value('adg_weekly')
-        adg_actual = _decimal(adg_actual_raw, Decimal('0'))
-        has_adg_actual = adg_actual_raw not in (None, '', '-')
+        # ADG Actual tidak dipercaya sebagai angka bebas dari Excel.
+        # Hitung ulang secara konsisten dari ABW Today dan ABW Last / 7.
+        abw_last = _decimal(value('abw_last_g'), Decimal('0'))
+        abw_today = _decimal(value('abw_g'), Decimal('0'))
+        adg_actual = (
+            (abw_today - abw_last) / Decimal('7')
+        ).quantize(Decimal('0.001')) if abw_last and abw_today else Decimal('0')
 
         data = {
             'pond_id': pond.id if pond else None,
@@ -214,9 +244,20 @@ def parse_sampling(path):
             'doc': max(doc, 0),
             'sample_weight_g': str(weight or 0),
             'sample_count': max(count, 0),
+            'abw_last_g': str(abw_last),
+            'abw_g': str(abw_today),
+            'abw_target_g': str(_decimal(value('abw_target_g'), Decimal('0'))),
+            'size': str(_decimal(value('size'), Decimal('0'))),
             'adg_weekly_target': str(_decimal(value('adg_weekly_target'), Decimal('0'))),
             'adg_weekly': str(adg_actual),
-            'has_adg_weekly': has_adg_actual,
+            'has_adg_weekly': True,
+            'adg_cumulative': str(_decimal(value('adg_cumulative'), Decimal('0'))),
+            'estimated_sr': str(_decimal(value('estimated_sr'), Decimal('0'))),
+            'sr_index_percent': str(_decimal(value('sr_index_percent'), Decimal('0'))),
+            'biomass_kg': str(_decimal(value('biomass_kg'), Decimal('0'))),
+            'biomass_index_kg': str(_decimal(value('biomass_index_kg'), Decimal('0'))),
+            'fcr': str(_decimal(value('fcr'), Decimal('0'))),
+            'population': max(_integer(value('population'), 0), 0),
             'population_index': max(_integer(value('population_index'), 0), 0),
             'cumulative_feed_kg': str(_decimal(value('cumulative_feed_kg'), Decimal('0'))),
             'stocking_count': max(_integer(value('stocking_count'), 0), 0),
@@ -224,6 +265,16 @@ def parse_sampling(path):
             'fr_percent': str(_decimal(value('fr_percent'), Decimal('0'))),
             'index_score': str(_decimal(value('index_score'), Decimal('0'))),
             'notes': _text(value('notes')),
+            # Template lebar membawa seluruh metrik final. Template ringkas hanya
+            # membawa data dasar sehingga metrik harus dihitung ulang oleh model.
+            'preserve_imported_metrics': any(
+                field in col for field in (
+                    'abw_last_g', 'abw_g', 'abw_target_g', 'size',
+                    'adg_weekly', 'adg_cumulative', 'estimated_sr',
+                    'biomass_kg', 'fcr', 'population'
+                )
+            ),
+            'provided_fields': sorted(col.keys()),
         }
         rows.append(_result(f'{ws.title}!{r}', data, '; '.join(errors)))
         return True

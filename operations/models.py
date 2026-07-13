@@ -214,7 +214,7 @@ class SamplingRecord(models.Model):
     target_size = models.DecimalField(max_digits=8, decimal_places=2, default=0, help_text='Target Size = 1000 / ABW Target')
     size = models.DecimalField(max_digits=8, decimal_places=2, default=0, help_text='Size = 1000 / ABW Today')
     adg_weekly_target = models.DecimalField(max_digits=8, decimal_places=3, default=0, help_text='ADG Weekly Target')
-    adg_weekly = models.DecimalField(max_digits=8, decimal_places=3, default=0, help_text='ADG Weekly Actual = (ABW Today - ABW Last) / interval hari')
+    adg_weekly = models.DecimalField(max_digits=8, decimal_places=3, default=0, help_text='ADG Weekly Actual = (ABW Today - ABW Last) / 7')
     adg_cumulative = models.DecimalField(max_digits=8, decimal_places=3, default=0, help_text='ADG Accum = ABW Today / DOC')
     sampling_interval_days = models.PositiveIntegerField(default=0, help_text='Interval hari dari sampling sebelumnya')
 
@@ -244,6 +244,17 @@ class SamplingRecord(models.Model):
     def save(self, *args, **kwargs):
         self.date = _date_value(self.date)
 
+        # Import laporan sampling lebar berisi angka final yang telah dihitung
+        # dan disahkan pada Excel (ABW, ADG Actual, SR, Biomassa, FCR, Populasi,
+        # dan seterusnya). Saat flag ini aktif, jangan menimpa angka tersebut
+        # dengan kalkulasi otomatis model. Kalkulasi otomatis tetap berlaku
+        # untuk input manual dari aplikasi.
+        if getattr(self, '_preserve_imported_metrics', False):
+            if not self.harvest_estimation:
+                self.harvest_estimation = 'Mengikuti data sampling impor.'
+            super().save(*args, **kwargs)
+            return
+
         weight = _d(self.sample_weight_g)
         count = self.sample_count or 0
         self.abw_g = (weight / Decimal(count)).quantize(Decimal('0.01')) if count else Decimal('0')
@@ -265,15 +276,15 @@ class SamplingRecord(models.Model):
             self.abw_target_g = Decimal('0')
             self.target_size = Decimal('0')
 
-        # Secara normal ADG Weekly dihitung otomatis dari selisih ABW.
-        # Saat import Excel, nilai kolom ADG Weekly Actual harus dipertahankan
-        # agar sama dengan laporan operasional yang diunggah. Importer memberi
-        # penanda sementara _preserve_imported_adg_weekly sebelum save().
-        if not getattr(self, '_preserve_imported_adg_weekly', False):
-            if prev and self.abw_g:
-                self.adg_weekly = ((_d(self.abw_g) - _d(self.abw_last_g)) / days).quantize(Decimal('0.001'))
-            else:
-                self.adg_weekly = Decimal('0')
+        # ADG Weekly Actual selalu memakai standar periode 7 hari:
+        # (ABW Today - ABW Last) / 7. Sampling interval tidak digunakan
+        # sebagai pembagi agar hasil konsisten dengan laporan Excel.
+        if self.abw_last_g and self.abw_g:
+            self.adg_weekly = (
+                (_d(self.abw_g) - _d(self.abw_last_g)) / Decimal('7')
+            ).quantize(Decimal('0.001'))
+        else:
+            self.adg_weekly = Decimal('0')
         self.adg_cumulative = (_d(self.abw_g) / Decimal(self.doc)).quantize(Decimal('0.001')) if self.doc and self.abw_g else Decimal('0')
 
         stocking = Stocking.objects.filter(pond=self.pond, date__lte=self.date).order_by('-date').first()
