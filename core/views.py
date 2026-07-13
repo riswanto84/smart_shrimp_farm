@@ -8,6 +8,9 @@ from operations.models import DailyParameter, SamplingRecord
 from sales.models import Sale
 from finance.models import OperationalExpense
 from django.db.models import Sum
+from decimal import Decimal
+from datetime import timedelta
+import math
 from chat_ai.services import ollama_health
 from cultivation.utils import filter_selected_cycle
 
@@ -91,6 +94,11 @@ def dashboard(request):
             if record.pond_id not in selected_sampling_records:
                 selected_sampling_records[record.pond_id] = record
 
+    # Target panen size 30 = ABW 33,33 gram/ekor. Estimasi memakai
+    # ABW dan ADG Actual dari sampling terakhir pada batch aktif.
+    target_size_30 = Decimal('30')
+    target_abw_30 = Decimal('1000') / target_size_30
+
     for pond in ponds:
         record = selected_sampling_records.get(pond.id)
         stocking_count = int(record.stocking_count or 0) if record else 0
@@ -98,6 +106,27 @@ def dashboard(request):
         pond.dashboard_stocking_count = stocking_count
         pond.dashboard_stocking_density = (stocking_count / area_m2) if stocking_count and area_m2 else None
         pond.dashboard_stocking_date = record.date if record else None
+        pond.dashboard_doc = int(record.doc or 0) if record else None
+        pond.dashboard_size30_date = None
+        pond.dashboard_size30_days = None
+        pond.dashboard_size30_status = 'Belum ada data sampling'
+        pond.dashboard_size30_abw = target_abw_30
+
+        if record:
+            current_abw = Decimal(str(record.abw_g or 0))
+            adg_actual = Decimal(str(record.adg_weekly or 0))
+            if current_abw >= target_abw_30:
+                pond.dashboard_size30_date = record.date
+                pond.dashboard_size30_days = 0
+                pond.dashboard_size30_status = 'Target size 30 telah tercapai'
+            elif current_abw > 0 and adg_actual > 0:
+                remaining = (target_abw_30 - current_abw) / adg_actual
+                days_needed = max(0, math.ceil(float(remaining)))
+                pond.dashboard_size30_days = days_needed
+                pond.dashboard_size30_date = record.date + timedelta(days=days_needed)
+                pond.dashboard_size30_status = 'Proyeksi berdasarkan ADG aktual'
+            elif current_abw > 0:
+                pond.dashboard_size30_status = 'ADG aktual belum tersedia'
 
     palette = ['#2d7ff9', '#f59e0b', '#22c55e', '#ef4444', '#8b5cf6', '#06b6d4', '#64748b']
     gradient_parts = []
