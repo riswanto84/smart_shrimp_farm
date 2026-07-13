@@ -103,41 +103,100 @@ def _result(row_no, data=None, error=''):
 
 
 def parse_sampling(path):
+    """Baca template sampling berdasarkan nama header, bukan nomor kolom tetap.
+
+    Mendukung dua format:
+    1. Template ringkas aplikasi (13 kolom).
+    2. Format laporan sampling lama/lebar (hingga 27 kolom).
+
+    Dengan pemetaan header, perubahan posisi kolom tidak lagi menyebabkan nilai
+    Pakan Kumulatif, Tebar, F/D, FR, Populasi Index, dan Index menjadi nol.
+    """
     wb = load_workbook(path, data_only=True)
     rows = []
+
+    aliases = {
+        'pond': {'kolam', 'pond', 'kodekolam'},
+        'date': {'tanggal', 'date', 'tgl'},
+        'doc': {'doc'},
+        'sample_weight_g': {'beratshrimpgr', 'beratshrimp', 'shrimpberatgr', 'beratsampelgr', 'beratsampel'},
+        'sample_count': {'jumlahshrimpekor', 'jumlahshrimp', 'shrimpjumlahekor', 'jumlahsampel', 'jumlahsampel ekor'.replace(' ', '')},
+        'adg_weekly_target': {'adgweeklytarget', 'adgtarget', 'targetadg'},
+        'cumulative_feed_kg': {'pakankumulatifkg', 'pakankumulatif', 'cumulativefeedkg', 'cumulativefeed'},
+        'stocking_count': {'tebar', 'jumlahtebar', 'stocking', 'stockingcount'},
+        'daily_feed_kg': {'fdpakanharian', 'fd', 'pakanharian', 'pakanhariankg', 'dailyfeedkg'},
+        'fr_percent': {'fr', 'frpersen', 'frpercent'},
+        'population_index': {'populasiindex', 'populationindex'},
+        'index_score': {'index', 'indeks', 'indexscore'},
+        'notes': {'catatan', 'notes', 'keterangan'},
+    }
+
+    def header_map(ws):
+        # Cari baris header pada 20 baris teratas agar tetap mendukung file yang
+        # memiliki judul/keterangan sebelum tabel.
+        for r in range(1, min(ws.max_row, 20) + 1):
+            normalized = {_key(ws.cell(r, c).value): c for c in range(1, ws.max_column + 1) if _key(ws.cell(r, c).value)}
+            mapping = {}
+            for field, names in aliases.items():
+                for name in names:
+                    if name in normalized:
+                        mapping[field] = normalized[name]
+                        break
+            if {'pond', 'date', 'doc', 'sample_weight_g', 'sample_count'}.issubset(mapping):
+                return r, mapping
+        return None, {}
+
     for ws in wb.worksheets:
-        for r in range(1, ws.max_row + 1):
-            pond_raw = ws.cell(r, 1).value
-            date_raw = ws.cell(r, 2).value
-            doc_raw = ws.cell(r, 3).value
-            if not pond_raw or _key(pond_raw) in {'kolam', 'total'}:
+        header_row, col = header_map(ws)
+        if not header_row:
+            continue
+
+        for r in range(header_row + 1, ws.max_row + 1):
+            pond_raw = ws.cell(r, col['pond']).value
+            date_raw = ws.cell(r, col['date']).value
+            doc_raw = ws.cell(r, col['doc']).value
+            weight_raw = ws.cell(r, col['sample_weight_g']).value
+            count_raw = ws.cell(r, col['sample_count']).value
+
+            # Lewati baris benar-benar kosong, tetapi tetap tampilkan baris data
+            # yang salah agar pengguna mendapat pesan validasi pada preview.
+            if all(v in (None, '') for v in (pond_raw, date_raw, doc_raw, weight_raw, count_raw)):
                 continue
+            if _key(pond_raw) in {'kolam', 'total'}:
+                continue
+
             pond = find_pond(pond_raw)
             dt = _date(date_raw)
             doc = _integer(doc_raw, -1)
-            weight = _decimal(ws.cell(r, 4).value)
-            count = _integer(ws.cell(r, 5).value, -1)
-            # Hanya baris data sampling yang lengkap.
-            if dt is None and weight is None and count < 0:
-                continue
+            weight = _decimal(weight_raw)
+            count = _integer(count_raw, -1)
+
             errors = []
             if not pond: errors.append(f'Kolam {pond_raw!s} tidak ditemukan')
             if not dt: errors.append('Tanggal tidak valid')
             if doc < 0: errors.append('DOC tidak valid')
             if weight is None or weight <= 0: errors.append('Berat SHRIMP harus > 0')
             if count <= 0: errors.append('Jumlah SHRIMP harus > 0')
+
+            def value(field):
+                c = col.get(field)
+                return ws.cell(r, c).value if c else None
+
             data = {
-                'pond_id': pond.id if pond else None, 'pond': pond.name if pond else _text(pond_raw),
-                'date': dt.isoformat() if dt else '', 'doc': max(doc, 0),
-                'sample_weight_g': str(weight or 0), 'sample_count': max(count, 0),
-                'adg_weekly_target': str(_decimal(ws.cell(r, 10).value, Decimal('0'))),
-                'population_index': max(_integer(ws.cell(r, 19).value, 0), 0),
-                'cumulative_feed_kg': str(_decimal(ws.cell(r, 20).value, Decimal('0'))),
-                'stocking_count': max(_integer(ws.cell(r, 21).value, 0), 0),
-                'daily_feed_kg': str(_decimal(ws.cell(r, 22).value, Decimal('0'))),
-                'fr_percent': str(_decimal(ws.cell(r, 23).value, Decimal('0'))),
-                'index_score': str(_decimal(ws.cell(r, 24).value, Decimal('0'))),
-                'notes': '',
+                'pond_id': pond.id if pond else None,
+                'pond': pond.name if pond else _text(pond_raw),
+                'date': dt.isoformat() if dt else '',
+                'doc': max(doc, 0),
+                'sample_weight_g': str(weight or 0),
+                'sample_count': max(count, 0),
+                'adg_weekly_target': str(_decimal(value('adg_weekly_target'), Decimal('0'))),
+                'population_index': max(_integer(value('population_index'), 0), 0),
+                'cumulative_feed_kg': str(_decimal(value('cumulative_feed_kg'), Decimal('0'))),
+                'stocking_count': max(_integer(value('stocking_count'), 0), 0),
+                'daily_feed_kg': str(_decimal(value('daily_feed_kg'), Decimal('0'))),
+                'fr_percent': str(_decimal(value('fr_percent'), Decimal('0'))),
+                'index_score': str(_decimal(value('index_score'), Decimal('0'))),
+                'notes': _text(value('notes')),
             }
             rows.append(_result(f'{ws.title}!{r}', data, '; '.join(errors)))
     return rows
