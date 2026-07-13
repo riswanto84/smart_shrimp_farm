@@ -841,13 +841,39 @@ def sampling_records(request):
         / Decimal(len(latest_samples_by_pond))
         if latest_samples_by_pond else Decimal('0')
     )
-    # FCR dan ADG pada kartu ringkasan harus memakai kondisi sampling
-    # TERBARU tiap kolam, sama seperti ringkasan ABW. Untuk ADG gunakan
-    # kolom ADG mingguan/Actual (adg_weekly), bukan ADG akumulatif.
-    latest_fcr_values = [
-        Decimal(str(sample.fcr or 0))
-        for sample in latest_samples_by_pond
-    ]
+    # FCR pada kartu harus dihitung dari SATU BATCH/TANGGAL sampling
+    # terakhir yang sama, sesuai tabel Excel. Jangan mencampur tanggal
+    # sampling terakhir yang berbeda antar-kolam karena hasil rata-ratanya
+    # dapat berubah (misalnya menjadi 1,12, padahal batch 12/07/2026 = 1,09).
+    latest_batch_date = items.order_by('-date').values_list('date', flat=True).first()
+    selected_cycle = get_selected_cycle(request)
+    latest_batch_samples = []
+    if latest_batch_date:
+        latest_batch = items.filter(date=latest_batch_date)
+        for pond_id in latest_batch.values_list('pond_id', flat=True).distinct():
+            pond_batch = latest_batch.filter(pond_id=pond_id)
+            sample = None
+            if selected_cycle is not None:
+                sample = pond_batch.filter(cycle=selected_cycle).order_by('pk').first()
+            if sample is None:
+                sample = pond_batch.order_by('pk').first()
+            if sample is not None:
+                latest_batch_samples.append(sample)
+
+    # Hitung FCR kartu dari data dasar pada batch sampling terakhir:
+    # FCR = Pakan Kumulatif / Biomassa FR. Cara ini memastikan kartu selalu
+    # sama dengan nilai FCR pada tabel sampling terakhir, meskipun field FCR
+    # lama pada database pernah tersimpan tidak konsisten.
+    latest_fcr_values = []
+    for sample in latest_batch_samples:
+        feed = Decimal(str(sample.cumulative_feed_kg or 0))
+        biomass_fr = Decimal(str(sample.biomass_kg or 0))
+        if feed > 0 and biomass_fr > 0:
+            latest_fcr_values.append(feed / biomass_fr)
+        elif sample.fcr is not None and Decimal(str(sample.fcr or 0)) > 0:
+            # Fallback hanya untuk record lama yang tidak memiliki data dasar.
+            latest_fcr_values.append(Decimal(str(sample.fcr)))
+
     avg_fcr = (
         sum(latest_fcr_values, Decimal('0')) / Decimal(len(latest_fcr_values))
         if latest_fcr_values else Decimal('0')
@@ -866,15 +892,19 @@ def sampling_records(request):
         / Decimal(len(latest_adg_actual_values))
         if latest_adg_actual_values else Decimal('0')
     )
-    # Kartu Biomassa FR harus mencerminkan kondisi TERBARU tiap kolam,
-    # bukan menjumlahkan seluruh riwayat sampling. Ambil satu record paling
-    # baru (tanggal terbesar, lalu PK terbesar) untuk setiap kolam dari
-    # queryset yang sudah mengikuti filter tanggal, kolam, dan siklus aktif.
-    latest_biomass_by_pond = [
-        sample.biomass_kg or Decimal('0')
-        for sample in latest_samples_by_pond
-    ]
-    biomass = sum(latest_biomass_by_pond, Decimal('0'))
+    # Kartu Biomassa FR mengikuti satu BATCH sampling terakhir, bukan
+    # sampling terakhir masing-masing kolam yang tanggalnya dapat berbeda.
+    # Contoh: jika batch terbaru adalah 12/07/2026, jumlahkan Biomassa FR
+    # K1, K2, K3, K5, K6, dan K7 hanya pada tanggal tersebut.
+    #
+    # Saat masih ada record legacy (cycle=NULL), prioritaskan record yang
+    # sudah terikat ke siklus terpilih. Jika terdapat duplikat dalam batch
+    # yang sama, gunakan PK terkecil agar konsisten dengan urutan tabel
+    # (.order_by('-date', 'pk')).
+    biomass = sum(
+        (Decimal(str(sample.biomass_kg or 0)) for sample in latest_batch_samples),
+        Decimal('0'),
+    )
 
     page_obj = paginate_queryset(request, items, per_page=10)
     return render(request, 'operations/sampling_records.html', {
