@@ -76,6 +76,29 @@ def dashboard(request):
             production_total_kg += biomass_kg
 
     production_total_ton = production_total_kg / 1000
+
+    # Padat tebar aktual untuk Ringkasan Kolam.
+    # Sumber utama adalah nilai Tebar pada satu batch/tanggal sampling terbaru
+    # yang sama dengan grafik biomassa. Jangan memakai nilai default/hardcode.
+    latest_sampling_by_pond = {
+        item['pond'].id: item for item in production_items
+    }
+    # production_items hanya menyimpan biomassa; ambil kembali record sampling
+    # terpilih agar stocking_count dapat digunakan untuk menghitung ekor/m2.
+    selected_sampling_records = {}
+    if latest_sampling_date:
+        for record in sampling_qs.filter(date=latest_sampling_date).order_by('pond__name', '-created_at', '-id'):
+            if record.pond_id not in selected_sampling_records:
+                selected_sampling_records[record.pond_id] = record
+
+    for pond in ponds:
+        record = selected_sampling_records.get(pond.id)
+        stocking_count = int(record.stocking_count or 0) if record else 0
+        area_m2 = float(pond.area_m2 or 0)
+        pond.dashboard_stocking_count = stocking_count
+        pond.dashboard_stocking_density = (stocking_count / area_m2) if stocking_count and area_m2 else None
+        pond.dashboard_stocking_date = record.date if record else None
+
     palette = ['#2d7ff9', '#f59e0b', '#22c55e', '#ef4444', '#8b5cf6', '#06b6d4', '#64748b']
     gradient_parts = []
     cumulative = 0.0
