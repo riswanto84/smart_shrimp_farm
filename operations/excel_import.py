@@ -103,26 +103,25 @@ def _result(row_no, data=None, error=''):
 
 
 def parse_sampling(path):
-    """Baca template sampling berdasarkan nama header, bukan nomor kolom tetap.
+    """Baca template sampling ringkas maupun laporan sampling lebar.
 
-    Mendukung dua format:
-    1. Template ringkas aplikasi (13 kolom).
-    2. Format laporan sampling lama/lebar (hingga 27 kolom).
-
-    Dengan pemetaan header, perubahan posisi kolom tidak lagi menyebabkan nilai
-    Pakan Kumulatif, Tebar, F/D, FR, Populasi Index, dan Index menjadi nol.
+    Format lebar memakai dua baris header, misalnya:
+    ``ADG Weekly (Gr/Day)`` pada baris atas dan ``Actual`` pada baris bawah.
+    Nilai Actual tersebut disimpan sebagai ``adg_weekly`` dan tidak dihitung
+    ulang oleh model ketika proses import dikonfirmasi.
     """
     wb = load_workbook(path, data_only=True)
     rows = []
 
-    aliases = {
+    direct_aliases = {
         'pond': {'kolam', 'pond', 'kodekolam'},
         'date': {'tanggal', 'date', 'tgl'},
         'doc': {'doc'},
         'sample_weight_g': {'beratshrimpgr', 'beratshrimp', 'shrimpberatgr', 'beratsampelgr', 'beratsampel'},
-        'sample_count': {'jumlahshrimpekor', 'jumlahshrimp', 'shrimpjumlahekor', 'jumlahsampel', 'jumlahsampel ekor'.replace(' ', '')},
+        'sample_count': {'jumlahshrimpekor', 'jumlahshrimp', 'shrimpjumlahekor', 'jumlahsampel', 'jumlahsampelekor'},
         'adg_weekly_target': {'adgweeklytarget', 'adgtarget', 'targetadg'},
-        'cumulative_feed_kg': {'pakankumulatifkg', 'pakankumulatif', 'cumulativefeedkg', 'cumulativefeed'},
+        'adg_weekly': {'adgweeklyactual', 'adgactual', 'actualadg'},
+        'cumulative_feed_kg': {'pakankumulatifkg', 'pakankumulatif', 'pakankomulatif', 'cumulativefeedkg', 'cumulativefeed'},
         'stocking_count': {'tebar', 'jumlahtebar', 'stocking', 'stockingcount'},
         'daily_feed_kg': {'fdpakanharian', 'fd', 'pakanharian', 'pakanhariankg', 'dailyfeedkg'},
         'fr_percent': {'fr', 'frpersen', 'frpercent'},
@@ -131,76 +130,146 @@ def parse_sampling(path):
         'notes': {'catatan', 'notes', 'keterangan'},
     }
 
-    def header_map(ws):
-        # Cari baris header pada 20 baris teratas agar tetap mendukung file yang
-        # memiliki judul/keterangan sebelum tabel.
-        for r in range(1, min(ws.max_row, 20) + 1):
-            normalized = {_key(ws.cell(r, c).value): c for c in range(1, ws.max_column + 1) if _key(ws.cell(r, c).value)}
-            mapping = {}
-            for field, names in aliases.items():
-                for name in names:
-                    if name in normalized:
-                        mapping[field] = normalized[name]
-                        break
-            if {'pond', 'date', 'doc', 'sample_weight_g', 'sample_count'}.issubset(mapping):
-                return r, mapping
-        return None, {}
+    def find_direct(normalized):
+        mapping = {}
+        for field, names in direct_aliases.items():
+            for name in names:
+                if name in normalized:
+                    mapping[field] = normalized[name]
+                    break
+        return mapping
+
+    def wide_mapping(ws, header_row):
+        """Bangun mapping dari dua baris header laporan lebar."""
+        top = [ws.cell(header_row, c).value for c in range(1, ws.max_column + 1)]
+        sub = [ws.cell(header_row + 1, c).value for c in range(1, ws.max_column + 1)]
+        mapping = {}
+        parent = ''
+        for idx, (top_value, sub_value) in enumerate(zip(top, sub), start=1):
+            top_key = _key(top_value)
+            sub_key = _key(sub_value)
+            if top_key:
+                parent = top_key
+
+            # Kolom langsung pada baris atas.
+            if top_key in {'kolam', 'pond'}: mapping['pond'] = idx
+            elif top_key in {'tanggal', 'date', 'tgl'}: mapping['date'] = idx
+            elif top_key == 'doc': mapping['doc'] = idx
+            elif top_key in {'fcr'}: mapping['fcr'] = idx
+            elif top_key in {'pakankomulatif', 'pakankumulatif', 'pakankumulatifkg'}: mapping['cumulative_feed_kg'] = idx
+            elif top_key in {'tebar', 'jumlahtebar'}: mapping['stocking_count'] = idx
+            elif top_key in {'fd', 'fdpakanharian'}: mapping['daily_feed_kg'] = idx
+            elif top_key in {'fr', 'frpersen'}: mapping['fr_percent'] = idx
+            elif top_key in {'index', 'indeks'}: mapping['index_score'] = idx
+            elif top_key in {'catatan', 'notes', 'keterangan'}: mapping['notes'] = idx
+
+            # Kolom turunan berdasarkan grup header.
+            if parent.startswith('shrimp'):
+                if sub_key.startswith('berat'): mapping['sample_weight_g'] = idx
+                elif sub_key.startswith('jumlah'): mapping['sample_count'] = idx
+            elif parent.startswith('adgweekly'):
+                if sub_key == 'target': mapping['adg_weekly_target'] = idx
+                elif sub_key == 'actual': mapping['adg_weekly'] = idx
+            elif parent.startswith('populasi'):
+                if sub_key.startswith('index'): mapping['population_index'] = idx
+        return mapping
+
+    def append_data(ws, r, col):
+        pond_raw = ws.cell(r, col['pond']).value
+        date_raw = ws.cell(r, col['date']).value
+        doc_raw = ws.cell(r, col['doc']).value
+        weight_raw = ws.cell(r, col['sample_weight_g']).value
+        count_raw = ws.cell(r, col['sample_count']).value
+
+        if all(v in (None, '') for v in (pond_raw, date_raw, doc_raw, weight_raw, count_raw)):
+            return False
+        if _key(pond_raw) in {'kolam', 'total'}:
+            return False
+
+        pond = find_pond(pond_raw)
+        dt = _date(date_raw)
+        doc = _integer(doc_raw, -1)
+        weight = _decimal(weight_raw)
+        count = _integer(count_raw, -1)
+
+        errors = []
+        if not pond: errors.append(f'Kolam {pond_raw!s} tidak ditemukan')
+        if not dt: errors.append('Tanggal tidak valid')
+        if doc < 0: errors.append('DOC tidak valid')
+        if weight is None or weight <= 0: errors.append('Berat SHRIMP harus > 0')
+        if count <= 0: errors.append('Jumlah SHRIMP harus > 0')
+
+        def value(field):
+            c = col.get(field)
+            return ws.cell(r, c).value if c else None
+
+        adg_actual_raw = value('adg_weekly')
+        adg_actual = _decimal(adg_actual_raw, Decimal('0'))
+        has_adg_actual = adg_actual_raw not in (None, '', '-')
+
+        data = {
+            'pond_id': pond.id if pond else None,
+            'pond': pond.name if pond else _text(pond_raw),
+            'date': dt.isoformat() if dt else '',
+            'doc': max(doc, 0),
+            'sample_weight_g': str(weight or 0),
+            'sample_count': max(count, 0),
+            'adg_weekly_target': str(_decimal(value('adg_weekly_target'), Decimal('0'))),
+            'adg_weekly': str(adg_actual),
+            'has_adg_weekly': has_adg_actual,
+            'population_index': max(_integer(value('population_index'), 0), 0),
+            'cumulative_feed_kg': str(_decimal(value('cumulative_feed_kg'), Decimal('0'))),
+            'stocking_count': max(_integer(value('stocking_count'), 0), 0),
+            'daily_feed_kg': str(_decimal(value('daily_feed_kg'), Decimal('0'))),
+            'fr_percent': str(_decimal(value('fr_percent'), Decimal('0'))),
+            'index_score': str(_decimal(value('index_score'), Decimal('0'))),
+            'notes': _text(value('notes')),
+        }
+        rows.append(_result(f'{ws.title}!{r}', data, '; '.join(errors)))
+        return True
 
     for ws in wb.worksheets:
-        header_row, col = header_map(ws)
-        if not header_row:
-            continue
-
-        for r in range(header_row + 1, ws.max_row + 1):
-            pond_raw = ws.cell(r, col['pond']).value
-            date_raw = ws.cell(r, col['date']).value
-            doc_raw = ws.cell(r, col['doc']).value
-            weight_raw = ws.cell(r, col['sample_weight_g']).value
-            count_raw = ws.cell(r, col['sample_count']).value
-
-            # Lewati baris benar-benar kosong, tetapi tetap tampilkan baris data
-            # yang salah agar pengguna mendapat pesan validasi pada preview.
-            if all(v in (None, '') for v in (pond_raw, date_raw, doc_raw, weight_raw, count_raw)):
-                continue
-            if _key(pond_raw) in {'kolam', 'total'}:
-                continue
-
-            pond = find_pond(pond_raw)
-            dt = _date(date_raw)
-            doc = _integer(doc_raw, -1)
-            weight = _decimal(weight_raw)
-            count = _integer(count_raw, -1)
-
-            errors = []
-            if not pond: errors.append(f'Kolam {pond_raw!s} tidak ditemukan')
-            if not dt: errors.append('Tanggal tidak valid')
-            if doc < 0: errors.append('DOC tidak valid')
-            if weight is None or weight <= 0: errors.append('Berat SHRIMP harus > 0')
-            if count <= 0: errors.append('Jumlah SHRIMP harus > 0')
-
-            def value(field):
-                c = col.get(field)
-                return ws.cell(r, c).value if c else None
-
-            data = {
-                'pond_id': pond.id if pond else None,
-                'pond': pond.name if pond else _text(pond_raw),
-                'date': dt.isoformat() if dt else '',
-                'doc': max(doc, 0),
-                'sample_weight_g': str(weight or 0),
-                'sample_count': max(count, 0),
-                'adg_weekly_target': str(_decimal(value('adg_weekly_target'), Decimal('0'))),
-                'population_index': max(_integer(value('population_index'), 0), 0),
-                'cumulative_feed_kg': str(_decimal(value('cumulative_feed_kg'), Decimal('0'))),
-                'stocking_count': max(_integer(value('stocking_count'), 0), 0),
-                'daily_feed_kg': str(_decimal(value('daily_feed_kg'), Decimal('0'))),
-                'fr_percent': str(_decimal(value('fr_percent'), Decimal('0'))),
-                'index_score': str(_decimal(value('index_score'), Decimal('0'))),
-                'notes': _text(value('notes')),
+        r = 1
+        while r <= ws.max_row:
+            normalized = {
+                _key(ws.cell(r, c).value): c
+                for c in range(1, ws.max_column + 1)
+                if _key(ws.cell(r, c).value)
             }
-            rows.append(_result(f'{ws.title}!{r}', data, '; '.join(errors)))
-    return rows
+            direct = find_direct(normalized)
 
+            # Template ringkas: seluruh header berada pada satu baris.
+            if {'pond', 'date', 'doc', 'sample_weight_g', 'sample_count'}.issubset(direct):
+                rr = r + 1
+                while rr <= ws.max_row:
+                    first = ws.cell(rr, direct['pond']).value
+                    if first in (None, ''):
+                        break
+                    if _key(first) == 'kolam':
+                        break
+                    append_data(ws, rr, direct)
+                    rr += 1
+                r = max(rr, r + 1)
+                continue
+
+            # Laporan lebar: header grup pada baris r, subheader pada r+1.
+            if {'kolam', 'tanggal', 'doc'}.issubset(normalized) and r < ws.max_row:
+                wide = wide_mapping(ws, r)
+                if {'pond', 'date', 'doc', 'sample_weight_g', 'sample_count'}.issubset(wide):
+                    rr = r + 2
+                    while rr <= ws.max_row:
+                        first = ws.cell(rr, wide['pond']).value
+                        if first in (None, ''):
+                            break
+                        if _key(first) == 'kolam':
+                            break
+                        append_data(ws, rr, wide)
+                        rr += 1
+                    r = max(rr, r + 1)
+                    continue
+            r += 1
+
+    return rows
 
 def parse_siphon(path):
     wb = load_workbook(path, data_only=True)

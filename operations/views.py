@@ -1505,6 +1505,7 @@ def _save_import_rows(request, module, rows, duplicate_mode):
                     'sample_weight_g': _dec_or_none(d.get('sample_weight_g')) or Decimal('0'),
                     'sample_count': int(d.get('sample_count') or 0),
                     'adg_weekly_target': _dec_or_none(d.get('adg_weekly_target')) or Decimal('0'),
+                    'adg_weekly': _dec_or_none(d.get('adg_weekly')) or Decimal('0'),
                     'cumulative_feed_kg': _dec_or_none(d.get('cumulative_feed_kg')) or Decimal('0'),
                     'stocking_count': int(d.get('stocking_count') or 0),
                     'daily_feed_kg': _dec_or_none(d.get('daily_feed_kg')) or Decimal('0'),
@@ -1527,15 +1528,20 @@ def _save_import_rows(request, module, rows, duplicate_mode):
                     obj.cycle = cycle
                     for k, v in defaults.items():
                         setattr(obj, k, v)
+                    # Jangan hitung ulang ADG Actual dari selisih ABW ketika
+                    # nilai Actual memang tersedia pada file Excel.
+                    obj._preserve_imported_adg_weekly = bool(d.get('has_adg_weekly'))
                     obj.save()
                     updated += 1
                 else:
-                    SamplingRecord.objects.create(
+                    obj = SamplingRecord(
                         cycle=cycle,
                         pond_id=d['pond_id'],
                         date=d['date'],
                         **defaults,
                     )
+                    obj._preserve_imported_adg_weekly = bool(d.get('has_adg_weekly'))
+                    obj.save()
                     created += 1
             elif module=='siphon':
                 # Constraint lama unik pond+date, sehingga record lama dipakai kembali.

@@ -265,10 +265,15 @@ class SamplingRecord(models.Model):
             self.abw_target_g = Decimal('0')
             self.target_size = Decimal('0')
 
-        if prev and self.abw_g:
-            self.adg_weekly = ((_d(self.abw_g) - _d(self.abw_last_g)) / days).quantize(Decimal('0.001'))
-        else:
-            self.adg_weekly = Decimal('0')
+        # Secara normal ADG Weekly dihitung otomatis dari selisih ABW.
+        # Saat import Excel, nilai kolom ADG Weekly Actual harus dipertahankan
+        # agar sama dengan laporan operasional yang diunggah. Importer memberi
+        # penanda sementara _preserve_imported_adg_weekly sebelum save().
+        if not getattr(self, '_preserve_imported_adg_weekly', False):
+            if prev and self.abw_g:
+                self.adg_weekly = ((_d(self.abw_g) - _d(self.abw_last_g)) / days).quantize(Decimal('0.001'))
+            else:
+                self.adg_weekly = Decimal('0')
         self.adg_cumulative = (_d(self.abw_g) / Decimal(self.doc)).quantize(Decimal('0.001')) if self.doc and self.abw_g else Decimal('0')
 
         stocking = Stocking.objects.filter(pond=self.pond, date__lte=self.date).order_by('-date').first()
