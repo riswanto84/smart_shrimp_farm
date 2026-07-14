@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load currency %}
 {% block content %}
 <style>
 .production-v2{--navy:#0b2f62;--blue:#2d7ff9;--muted:#64748b}.production-v2 .hero{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:18px}.production-v2 .hero h1{margin:0;font-size:30px;color:#0f2344}.production-v2 .hero p{margin:5px 0;color:var(--muted)}.production-v2 .cycle-chip{background:#fff;border:1px solid #dce7f5;border-radius:14px;padding:10px 15px;box-shadow:0 8px 25px rgba(15,35,68,.05)}
@@ -15,9 +16,9 @@
   </div>
 
   <div class="metric-grid">
-    <div class="metric"><div class="icon"><i class="fa-solid fa-weight-hanging"></i></div><span>Biomassa Saat Ini</span><strong>{{ estimated_biomass|floatformat:2 }} kg</strong><small>Sampling terbaru per kolam</small></div>
+    <div class="metric"><div class="icon"><i class="fa-solid fa-weight-hanging"></i></div><span>Biomassa Saat Ini</span><strong>{{ estimated_biomass|angka2 }} kg</strong><small>Sampling terbaru per kolam</small></div>
     <div class="metric"><div class="icon"><i class="fa-solid fa-bullseye"></i></div><span>Target Panen</span><strong>{{ target_harvest_ton|floatformat:2 }} ton</strong><small>Progress {{ biomass_progress|floatformat:1 }}%</small><div class="progress-track"><div class="progress-fill" style="width:{{ biomass_progress|floatformat:0 }}%"></div></div></div>
-    <div class="metric"><div class="icon"><i class="fa-solid fa-chart-line"></i></div><span>Estimasi DOC {{ target_doc }}</span><strong>{% if doc120_projection_ton %}{{ doc120_projection_ton|floatformat:2 }} ton{% else %}-{% endif %}</strong><small>Proyeksi berdasarkan target siklus</small></div>
+    <div class="metric"><div class="icon"><i class="fa-solid fa-chart-line"></i></div><span>Estimasi DOC {{ target_doc }}</span><strong>{% if doc120_projection_ton %}{{ doc120_projection_ton|angka2 }} ton{% else %}-{% endif %}</strong><small>Proyeksi berdasarkan target siklus</small></div>
     <div class="metric"><div class="icon"><i class="fa-solid fa-calendar-check"></i></div><span>Estimasi Size {{ target_size|floatformat:0 }}</span><strong>{% if estimated_size30_date %}{{ estimated_size30_date|date:"d M Y" }}{% else %}-{% endif %}</strong><small>ABW target berdasarkan size siklus</small></div>
     <div class="metric"><div class="icon"><i class="fa-solid fa-scale-balanced"></i></div><span>FCR Saat Ini</span><strong>{{ avg_fcr|floatformat:2 }}</strong><small>Rata-rata sampling terakhir</small></div>
     <div class="metric"><div class="icon"><i class="fa-solid fa-shield-halved"></i></div><span>SR Rata-rata</span><strong>{{ avg_sr|floatformat:2 }}%</strong><small>Estimasi populasi bertahan</small></div>
@@ -34,7 +35,7 @@
     <div class="mini-card"><b>ADG Actual</b><strong>{{ avg_adg|floatformat:3 }} g/hari</strong><small>Rata-rata pertumbuhan mingguan</small></div>
     <div class="mini-card"><b>FCR</b><strong>{{ avg_fcr|floatformat:2 }}</strong><small>Efisiensi pakan terkini</small></div>
     <div class="mini-card"><b>SR</b><strong>{{ avg_sr|floatformat:2 }}%</strong><small>Estimasi survival rate</small></div>
-    <div class="mini-card"><b>Populasi Hidup</b><strong>{{ current_population|default:0 }}</strong><small>Ekor dari sampling terbaru</small></div>
+    <div class="mini-card"><b>Populasi Hidup</b><strong>{{ current_population|angka0 }}</strong><small>Ekor dari sampling terbaru</small></div>
   </div>
 
   <section class="panel-v2" style="margin-top:16px">
@@ -53,7 +54,7 @@
       <div class="panel-title"><h2>Proyeksi Panen</h2></div>
       <div class="gauge" style="--gauge:{{ biomass_progress|floatformat:1 }}%"><div class="gauge-label"><strong>{{ biomass_progress|floatformat:1 }}%</strong><small>menuju {{ target_harvest_ton|floatformat:2 }} ton</small></div></div>
       <div class="summary-list">
-        <div class="summary-row"><span>Biomassa saat ini</span><b>{{ estimated_biomass|floatformat:2 }} kg</b></div>
+        <div class="summary-row"><span>Biomassa saat ini</span><b>{{ estimated_biomass|angka2 }} kg</b></div>
         <div class="summary-row"><span>Target produksi</span><b>{{ target_harvest_ton|floatformat:2 }} ton</b></div>
         <div class="summary-row"><span>Estimasi size {{ target_size|floatformat:0 }}</span><b>{% if estimated_size30_date %}{{ estimated_size30_date|date:"d M Y" }}{% else %}Belum cukup data{% endif %}</b></div>
         {% if estimated_price_per_kg %}<div class="summary-row"><span>Harga estimasi/kg</span><b>Rp {{ estimated_price_per_kg|floatformat:0 }}</b></div><div class="summary-row"><span>Target omzet</span><b>Rp {{ target_revenue|floatformat:0 }}</b></div>{% endif %}
@@ -62,7 +63,7 @@
     </section>
     <section class="panel-v2">
       <div class="panel-title"><h2>Kondisi Terbaru Per Kolam</h2><a href="{% url 'operations:sampling_records' %}">Lihat data sampling</a></div>
-      <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>DOC</th><th>Biomassa</th><th>ABW</th><th>ADG</th><th>FCR</th><th>SR</th></tr></thead><tbody>{% for row in pond_cards %}<tr><td><b>{{ row.pond.name }}</b></td><td>{{ row.latest_doc|default:"-" }}</td><td>{% if row.sample %}{{ row.sample.dashboard_biomass_kg|floatformat:2 }} kg{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.abw_g|floatformat:2 }} g{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.adg_weekly|floatformat:3 }}{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.dashboard_fcr|floatformat:2 }}{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.estimated_sr|floatformat:2 }}%{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="7" class="text-center text-muted">Belum ada data sampling.</td></tr>{% endfor %}</tbody></table></div>
+      <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>DOC</th><th>Biomassa</th><th>ABW</th><th>ADG</th><th>FCR</th><th>SR</th></tr></thead><tbody>{% for row in pond_cards %}<tr><td><b>{{ row.pond.name }}</b></td><td>{{ row.latest_doc|default:"-" }}</td><td>{% if row.sample %}{{ row.sample.dashboard_biomass_kg|angka2 }} kg{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.abw_g|floatformat:2 }} g{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.adg_weekly|floatformat:3 }}{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.dashboard_fcr|floatformat:2 }}{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.estimated_sr|floatformat:2 }}%{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="7" class="text-center text-muted">Belum ada data sampling.</td></tr>{% endfor %}</tbody></table></div>
     </section>
   </div>
 </div>
@@ -95,7 +96,7 @@
       {label:'Prediksi DOC {{ target_doc }} (ton)',data:projectedValues,borderColor:'#62a7ff',borderDash:[8,6],tension:.35,pointRadius:4,borderWidth:3,spanGaps:true},
       {label:'Target panen (ton)',data:targetValues,borderColor:'#ef4444',borderDash:[4,4],pointRadius:0,borderWidth:2}
     ]},
-    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{afterBody:(items)=>{const idx=items[0].dataIndex;if(idx<actual.length){const x=actual[idx];return [`ABW: ${x.abw} g`,`ADG: ${x.adg} g/hari`,`FCR: ${x.fcr}`,`SR: ${x.sr}%`,`Populasi: ${x.population.toLocaleString('id-ID')} ekor`];}return [];}}}},scales:{x:{grid:{display:false},ticks:{color:'#61718a',font:{weight:'600'}}},y:{beginAtZero:true,title:{display:true,text:'Biomassa (Ton)'},grid:{color:'#e9eef6'},ticks:{callback:v=>v+' t'}}}}
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{afterBody:(items)=>{const idx=items[0].dataIndex;if(idx<actual.length){const x=actual[idx];return [`Biomassa: ${Number(x.biomass_ton).toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2})} ton`,`ABW: ${Number(x.abw).toLocaleString('id-ID')} g`,`ADG: ${Number(x.adg).toLocaleString('id-ID')} g/hari`,`FCR: ${Number(x.fcr).toLocaleString('id-ID')}`,`SR: ${Number(x.sr).toLocaleString('id-ID')}%`,`Populasi: ${x.population.toLocaleString('id-ID')} ekor`];}return [];}}}},scales:{x:{grid:{display:false},ticks:{color:'#61718a',font:{weight:'600'}}},y:{beginAtZero:true,title:{display:true,text:'Biomassa (Ton)'},grid:{color:'#e9eef6'},ticks:{callback:v=>Number(v).toLocaleString('id-ID',{maximumFractionDigits:2})+' t'}}}}
   });
 })();
 </script>

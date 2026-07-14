@@ -545,7 +545,25 @@ def production_dashboard(request):
             'population': bucket['population'],
         })
 
-    avg_adg_values = [_float(x.adg_weekly) for x in latest_samples if _float(x.adg_weekly) > 0]
+    # ADG untuk dashboard dihitung ulang dari rumus baku agar nilai impor lama
+    # yang keliru (misalnya selisih ABW tanpa dibagi 7) tidak membuat proyeksi
+    # biomassa melonjak tidak realistis.
+    def safe_actual_adg(sample):
+        current_abw = (
+            _float(sample.sample_weight_g) / int(sample.sample_count)
+            if int(sample.sample_count or 0) > 0 and _float(sample.sample_weight_g) > 0
+            else _float(sample.abw_g)
+        )
+        last_abw = _float(sample.abw_last_g)
+        calculated = (current_abw - last_abw) / 7.0 if current_abw > 0 and last_abw > 0 else 0
+        stored = _float(sample.adg_weekly)
+        adg = calculated if calculated > 0 else stored
+        # Rentang pengaman operasional. Nilai di luar rentang ini biasanya
+        # menunjukkan data lama/import yang salah, bukan pertumbuhan biologis.
+        return adg if 0 < adg <= 0.50 else 0
+
+    avg_adg_values = [safe_actual_adg(x) for x in latest_samples]
+    avg_adg_values = [x for x in avg_adg_values if x > 0]
     avg_adg = sum(avg_adg_values) / len(avg_adg_values) if avg_adg_values else 0
     avg_sr_values = [(_float(x.estimated_sr) or _float(x.sr_index_percent)) for x in latest_samples]
     avg_sr_values = [x for x in avg_sr_values if x > 0]
@@ -579,19 +597,34 @@ def production_dashboard(request):
             projection_docs.append(target_doc)
 
     biomass_projection = []
-    for target_doc in projection_docs:
+    target_abw_limit = (1000.0 / target_size) if target_size > 0 else 40.0
+    valid_adgs = [safe_actual_adg(x) for x in latest_samples]
+    valid_adgs = sorted(x for x in valid_adgs if x > 0)
+    fallback_adg = (
+        valid_adgs[len(valid_adgs) // 2]
+        if valid_adgs else min(max(target_adg, 0.0), 0.50)
+    )
+
+    for projection_doc in projection_docs:
         total_kg = 0.0
         for sample in latest_samples:
-            current_abw = _float(sample.abw_g)
-            adg = _float(sample.adg_weekly)
+            current_abw = (
+                _float(sample.sample_weight_g) / int(sample.sample_count)
+                if int(sample.sample_count or 0) > 0 and _float(sample.sample_weight_g) > 0
+                else _float(sample.abw_g)
+            )
+            adg = safe_actual_adg(sample) or fallback_adg
             population = int(sample.population or sample.population_index or 0)
-            remaining = max(target_doc - int(sample.doc or 0), 0)
+            remaining = max(projection_doc - int(sample.doc or 0), 0)
             if current_abw > 0 and population > 0:
-                projected_abw = current_abw + max(adg, 0) * remaining
+                projected_abw = current_abw + adg * remaining
+                # Target size pada siklus menjadi batas panen. Ini mencegah
+                # proyeksi terus tumbuh sampai 80 ton akibat ADG lama yang salah.
+                projected_abw = min(projected_abw, target_abw_limit)
                 total_kg += population * projected_abw / 1000.0
         biomass_projection.append({
-            'label': f'DOC {target_doc}',
-            'doc': target_doc,
+            'label': f'DOC {projection_doc}',
+            'doc': projection_doc,
             'biomass_ton': round(total_kg / 1000.0, 3),
         })
 
