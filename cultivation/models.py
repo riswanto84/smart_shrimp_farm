@@ -18,6 +18,15 @@ class CultivationCycle(models.Model):
     name = models.CharField(max_length=120, unique=True)
     start_date = models.DateField(default=timezone.localdate)
     target_duration_days = models.PositiveIntegerField(default=135)
+    target_doc = models.PositiveIntegerField(default=120, help_text='Target DOC panen.')
+    target_size = models.DecimalField(max_digits=6, decimal_places=2, default=30, help_text='Target size panen (ekor/kg).')
+    target_biomass_ton = models.DecimalField(max_digits=10, decimal_places=2, default=25, help_text='Target biomassa/produksi dalam ton.')
+    target_sr_percent = models.DecimalField(max_digits=6, decimal_places=2, default=85, help_text='Target survival rate dalam persen.')
+    target_fcr = models.DecimalField(max_digits=6, decimal_places=2, default=1.20, help_text='Target feed conversion ratio.')
+    target_adg = models.DecimalField(max_digits=7, decimal_places=3, default=0.25, help_text='Target ADG gram per hari.')
+    target_population = models.PositiveBigIntegerField(default=0, blank=True, help_text='Target populasi hidup saat panen; 0 berarti tidak ditetapkan.')
+    estimated_price_per_kg = models.DecimalField(max_digits=14, decimal_places=2, default=0, blank=True, help_text='Harga jual estimasi per kilogram.')
+    target_cost = models.DecimalField(max_digits=18, decimal_places=2, default=0, blank=True, help_text='Target biaya produksi satu siklus.')
     target_end_date = models.DateField(blank=True, null=True)
     actual_end_date = models.DateField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PREPARATION)
@@ -96,6 +105,14 @@ class CultivationCycle(models.Model):
         today = self.actual_end_date or timezone.localdate()
         elapsed = (today - self.start_date).days + 1
         return max(0, min(100, round(elapsed / max(self.target_duration_days, 1) * 100)))
+
+    @property
+    def target_revenue(self):
+        return self.target_biomass_ton * 1000 * self.estimated_price_per_kg
+
+    @property
+    def target_profit(self):
+        return self.target_revenue - self.target_cost
 
     def __str__(self):
         return self.name

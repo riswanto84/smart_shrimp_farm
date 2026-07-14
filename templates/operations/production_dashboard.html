@@ -1,56 +1,102 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="ops-page">
-  <div class="page-head ops-hero-head">
-    <div>
-      <h1>Dashboard Produksi</h1>
-      <p>Alur data aktual: Tebar → Pakan → Cek Anco → Sampling → Siphon → Estimasi Panen.</p>
-      {% if selected_cycle %}<small class="text-muted"><i class="fa-solid fa-arrows-rotate"></i> Siklus: <b>{{ selected_cycle.name }}</b></small>{% endif %}
+<style>
+.production-v2{--navy:#0b2f62;--blue:#2d7ff9;--muted:#64748b}.production-v2 .hero{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:18px}.production-v2 .hero h1{margin:0;font-size:30px;color:#0f2344}.production-v2 .hero p{margin:5px 0;color:var(--muted)}.production-v2 .cycle-chip{background:#fff;border:1px solid #dce7f5;border-radius:14px;padding:10px 15px;box-shadow:0 8px 25px rgba(15,35,68,.05)}
+.production-v2 .metric-grid{display:grid;grid-template-columns:repeat(6,minmax(150px,1fr));gap:12px;margin-bottom:16px}.production-v2 .metric{background:#fff;border:1px solid #e3ebf6;border-radius:16px;padding:17px;min-height:132px;box-shadow:0 8px 24px rgba(17,49,91,.05)}.production-v2 .metric .icon{width:39px;height:39px;border-radius:12px;display:grid;place-items:center;background:#eef5ff;color:var(--blue);margin-bottom:12px}.production-v2 .metric span{font-size:12px;font-weight:800;color:#52647e}.production-v2 .metric strong{display:block;font-size:24px;color:#102849;margin:4px 0}.production-v2 .metric small{color:var(--muted)}.production-v2 .progress-track{height:7px;background:#e9f0fa;border-radius:99px;margin-top:9px;overflow:hidden}.production-v2 .progress-fill{height:100%;background:linear-gradient(90deg,#2d7ff9,#61a6ff);border-radius:99px}
+.production-v2 .panel-v2{background:#fff;border:1px solid #e2ebf7;border-radius:18px;padding:18px;box-shadow:0 10px 30px rgba(15,35,68,.05);margin-bottom:16px}.production-v2 .panel-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.production-v2 .panel-title h2{font-size:18px;margin:0;color:#102849}.production-v2 .legend{display:flex;gap:16px;flex-wrap:wrap;color:#52647e;font-size:12px;font-weight:700}.production-v2 .legend i{width:20px;height:3px;display:inline-block;vertical-align:middle;margin-right:5px}.production-v2 .chart-wrap{height:390px;position:relative}.production-v2 .chart-note{background:#eef6ff;border:1px solid #cfe2ff;border-radius:10px;padding:9px 12px;color:#41658f;font-size:12px;margin-top:10px}
+.production-v2 .mini-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}.production-v2 .mini-card{background:#fff;border:1px solid #e2ebf7;border-radius:16px;padding:15px}.production-v2 .mini-card b{font-size:14px;color:#102849}.production-v2 .mini-card strong{display:block;font-size:21px;margin:7px 0;color:#102849}.production-v2 .mini-card small{color:var(--muted)}
+.production-v2 .lower-grid{display:grid;grid-template-columns:1fr 1.1fr;gap:16px}.production-v2 .gauge{width:220px;height:110px;margin:8px auto 16px;border-radius:220px 220px 0 0;background:conic-gradient(from 270deg at 50% 100%,#2d7ff9 0 var(--gauge),#e8eef7 var(--gauge) 50%,transparent 50%);position:relative}.production-v2 .gauge:after{content:"";position:absolute;left:31px;right:31px;bottom:0;height:79px;background:#fff;border-radius:180px 180px 0 0}.production-v2 .gauge-label{position:absolute;z-index:2;left:0;right:0;bottom:8px;text-align:center;color:#102849}.production-v2 .gauge-label strong{font-size:29px;display:block}.production-v2 .summary-list{display:grid;gap:9px}.production-v2 .summary-row{display:flex;justify-content:space-between;padding:10px 12px;border-radius:10px;background:#f7f9fc;color:#425675}.production-v2 .summary-row b{color:#102849}.production-v2 .table td,.production-v2 .table th{white-space:nowrap}
+@media(max-width:1200px){.production-v2 .metric-grid{grid-template-columns:repeat(3,1fr)}}@media(max-width:768px){.production-v2 .hero{display:block}.production-v2 .cycle-chip{margin-top:10px}.production-v2 .metric-grid{grid-template-columns:repeat(2,1fr)}.production-v2 .mini-grid{grid-template-columns:repeat(2,1fr)}.production-v2 .lower-grid{grid-template-columns:1fr}.production-v2 .chart-wrap{height:300px}}@media(max-width:480px){.production-v2 .metric-grid,.production-v2 .mini-grid{grid-template-columns:1fr}}
+</style>
+<div class="production-v2">
+  <div class="hero">
+    <div><h1><i class="fa-solid fa-chart-column"></i> Dashboard Produksi</h1><p>Pantau perkembangan biomassa, efisiensi pakan, pertumbuhan, dan proyeksi panen dari data sampling aktual.</p></div>
+    <div class="cycle-chip"><small>Siklus terpilih</small><br><b>{{ selected_cycle.name|default:"Belum dipilih" }}</b></div>
+  </div>
+
+  <div class="metric-grid">
+    <div class="metric"><div class="icon"><i class="fa-solid fa-weight-hanging"></i></div><span>Biomassa Saat Ini</span><strong>{{ estimated_biomass|floatformat:2 }} kg</strong><small>Sampling terbaru per kolam</small></div>
+    <div class="metric"><div class="icon"><i class="fa-solid fa-bullseye"></i></div><span>Target Panen</span><strong>{{ target_harvest_ton|floatformat:2 }} ton</strong><small>Progress {{ biomass_progress|floatformat:1 }}%</small><div class="progress-track"><div class="progress-fill" style="width:{{ biomass_progress|floatformat:0 }}%"></div></div></div>
+    <div class="metric"><div class="icon"><i class="fa-solid fa-chart-line"></i></div><span>Estimasi DOC {{ target_doc }}</span><strong>{% if doc120_projection_ton %}{{ doc120_projection_ton|floatformat:2 }} ton{% else %}-{% endif %}</strong><small>Proyeksi berdasarkan target siklus</small></div>
+    <div class="metric"><div class="icon"><i class="fa-solid fa-calendar-check"></i></div><span>Estimasi Size {{ target_size|floatformat:0 }}</span><strong>{% if estimated_size30_date %}{{ estimated_size30_date|date:"d M Y" }}{% else %}-{% endif %}</strong><small>ABW target berdasarkan size siklus</small></div>
+    <div class="metric"><div class="icon"><i class="fa-solid fa-scale-balanced"></i></div><span>FCR Saat Ini</span><strong>{{ avg_fcr|floatformat:2 }}</strong><small>Rata-rata sampling terakhir</small></div>
+    <div class="metric"><div class="icon"><i class="fa-solid fa-shield-halved"></i></div><span>SR Rata-rata</span><strong>{{ avg_sr|floatformat:2 }}%</strong><small>Estimasi populasi bertahan</small></div>
+  </div>
+
+  <section class="panel-v2">
+    <div class="panel-title"><h2>Grafik Perkembangan Biomassa</h2><div class="legend"><span><i style="background:#2d7ff9"></i>Aktual</span><span><i style="background:#62a7ff;border-top:2px dashed #62a7ff;background:transparent"></i>Prediksi DOC {{ target_doc }}</span><span><i style="background:#ef4444"></i>Target {{ target_harvest_ton|floatformat:2 }} ton</span></div></div>
+    <div class="chart-wrap"><canvas id="biomassTrendChart"></canvas></div>
+    <div class="chart-note"><i class="fa-solid fa-circle-info"></i> Data aktual berasal dari total Biomassa FR setiap batch sampling. Prediksi memakai ADG aktual, populasi terbaru, dan target yang disimpan pada siklus; bukan data dummy.</div>
+  </section>
+
+  <div class="mini-grid">
+    <div class="mini-card"><b>ABW Rata-rata</b><strong>{{ avg_abw|floatformat:2 }} g</strong><small>Sampling terakhir per kolam</small></div>
+    <div class="mini-card"><b>ADG Actual</b><strong>{{ avg_adg|floatformat:3 }} g/hari</strong><small>Rata-rata pertumbuhan mingguan</small></div>
+    <div class="mini-card"><b>FCR</b><strong>{{ avg_fcr|floatformat:2 }}</strong><small>Efisiensi pakan terkini</small></div>
+    <div class="mini-card"><b>SR</b><strong>{{ avg_sr|floatformat:2 }}%</strong><small>Estimasi survival rate</small></div>
+    <div class="mini-card"><b>Populasi Hidup</b><strong>{{ current_population|default:0 }}</strong><small>Ekor dari sampling terbaru</small></div>
+  </div>
+
+  <section class="panel-v2" style="margin-top:16px">
+    <div class="panel-title"><h2>Target Produksi Siklus</h2>{% if selected_cycle %}<a href="{% url 'cultivation:list' %}">Kelola target</a>{% endif %}</div>
+    <div class="mini-grid">
+      <div class="mini-card"><b>Target DOC</b><strong>{{ target_doc }}</strong><small>hari budidaya</small></div>
+      <div class="mini-card"><b>Target Size</b><strong>{{ target_size|floatformat:0 }}</strong><small>ekor/kg</small></div>
+      <div class="mini-card"><b>Target FCR</b><strong>{{ target_fcr|floatformat:2 }}</strong><small>aktual {{ avg_fcr|floatformat:2 }}</small></div>
+      <div class="mini-card"><b>Target SR</b><strong>{{ target_sr|floatformat:1 }}%</strong><small>aktual {{ avg_sr|floatformat:1 }}%</small></div>
+      <div class="mini-card"><b>Target ADG</b><strong>{{ target_adg|floatformat:3 }}</strong><small>g/hari</small></div>
     </div>
-    <div class="ops-head-actions"><a class="btn btn-primary" href="{% url 'operations:add_parameter' %}" title="Input Parameter" aria-label="Input Parameter"><i class="fa-solid fa-plus"></i> Input Parameter</a></div>
-  </div>
+  </section>
 
-  <div class="ops-flow cardx mb-3">
-    <div><i class="fa-solid fa-seedling"></i><b>Data Tebar</b><span>{{ active_stocking|ribuan }} ekor</span></div>
-    <em></em><div><i class="fa-solid fa-bowl-food"></i><b>Pakan Harian</b><span>{{ feed_today|angka:2 }} kg</span></div>
-    <em></em><div><i class="fa-solid fa-clipboard-check"></i><b>Cek Anco</b><span>{{ anco_alerts|ribuan }} alert</span></div>
-    <em></em><div><i class="fa-solid fa-weight-scale"></i><b>Sampling</b><span>ABW {{ avg_abw|angka:2 }} g</span></div>
-    <em></em><div><i class="fa-solid fa-water"></i><b>Siphon</b><span>{{ dead_7d|ribuan }} mati/7 hari</span></div>
-    <em></em><div><i class="fa-solid fa-chart-line"></i><b>Estimasi Panen</b><span>{{ estimated_biomass|angka:2 }} kg</span></div>
-  </div>
-
-  <div class="kpi-grid">
-    <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-fish-fins"></i></div><div><span>Populasi Tebar</span><strong>{{ active_stocking|ribuan }} ekor</strong><small>Sumber: {{ stocking_source }}</small></div></div>
-    <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-bowl-rice"></i></div><div><span>{% if feed_is_today %}Pakan Hari Ini{% else %}Pakan Terbaru{% endif %}</span><strong>{{ feed_today|angka:2 }} Kg</strong><small>{{ feed_source }}{% if feed_date %} · {{ feed_date|date:"d M Y" }}{% endif %}</small></div></div>
-    <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-weight-scale"></i></div><div><span>Rata-rata ABW</span><strong>{{ avg_abw|angka:2 }} g</strong><small>Sampling terbaru per kolam</small></div></div>
-    <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-triangle-exclamation"></i></div><div><span>Alert Anco/Mortalitas</span><strong>{{ anco_alerts|ribuan }} / {{ dead_7d|ribuan }}</strong><small>Anco 3 hari / mati 7 hari</small></div></div>
-  </div>
-
-  {% if not active_stocking or not feed_today %}
-  <div class="alert alert-info mt-3" role="alert">
-    <i class="fa-solid fa-circle-info"></i>
-    {% if not active_stocking %}Populasi tebar belum tersedia pada modul Tebar maupun sampling terbaru. {% endif %}
-    {% if not feed_today %}Pakan belum tersedia pada Cek Anco, Data Harian, Log Pakan, Parameter, maupun Sampling. {% endif %}
-    Data lama dengan siklus kosong tetap dibaca selama masa transisi.
-  </div>
-  {% endif %}
-
-  <div class="ops-grid">
-    <section class="panel ops-panel-wide">
-      <div class="panel-head"><h2>Kondisi Terbaru Per Kolam</h2><a href="{% url 'operations:sampling_records' %}">Lihat Sampling</a></div>
-      <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>DOC</th><th>Pakan Terakhir</th><th>Anco</th><th>ABW / Size</th><th>FCR</th><th>Siphon</th><th>Estimasi</th></tr></thead><tbody>{% for row in pond_cards %}<tr><td><b>{{ row.pond.name }}</b><br><small class="text-muted">{{ row.pond.status }}</small></td><td>{% if row.latest_doc is not None %}{{ row.latest_doc|ribuan }}{% else %}-{% endif %}</td><td>{% if row.latest_feed %}{{ row.latest_feed.1|angka:2 }} Kg<br><small>{{ row.latest_feed.0|date:"d M Y" }} · {{ row.latest_feed.2 }}</small>{% else %}-{% endif %}</td><td>{% if row.anco %}<span class="badge-soft">{{ row.anco.appetite_status }}</span>{% else %}-{% endif %}</td><td>{% if row.sample %}<b>{{ row.sample.abw_g|angka:2 }} g</b><br><small>Size {{ row.sample.size|angka:2 }}</small>{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.dashboard_fcr|angka:2 }}{% else %}-{% endif %}</td><td>{% if row.siphon %}{{ row.siphon.dead_count|ribuan }} mati<br><small>{{ row.siphon.health_indicator }}</small>{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.harvest_estimation|default:"-" }}{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="8" class="text-center text-muted">Belum ada data kolam.</td></tr>{% endfor %}</tbody></table></div>
-    </section>
-    <aside class="panel insight-panel">
-      <div class="ai-management-box mb-3">
-        <h3><i class="fa-solid fa-robot"></i> AI Manajemen Tambak</h3>
-        <p>Status Ollama: {% if ollama_health.ok %}<b>Tersambung</b>{% else %}<b>Belum tersambung</b>{% endif %}. Gunakan Chat AI untuk analisa gabungan sampling, siphon, anco, pakan, dan panen.</p>
-        <a class="btn btn-sm mt-3" href="{% url 'chat_ai:chat' %}">Buka Chat AI</a>
+  <div class="lower-grid" style="margin-top:16px">
+    <section class="panel-v2">
+      <div class="panel-title"><h2>Proyeksi Panen</h2></div>
+      <div class="gauge" style="--gauge:{{ biomass_progress|floatformat:1 }}%"><div class="gauge-label"><strong>{{ biomass_progress|floatformat:1 }}%</strong><small>menuju {{ target_harvest_ton|floatformat:2 }} ton</small></div></div>
+      <div class="summary-list">
+        <div class="summary-row"><span>Biomassa saat ini</span><b>{{ estimated_biomass|floatformat:2 }} kg</b></div>
+        <div class="summary-row"><span>Target produksi</span><b>{{ target_harvest_ton|floatformat:2 }} ton</b></div>
+        <div class="summary-row"><span>Estimasi size {{ target_size|floatformat:0 }}</span><b>{% if estimated_size30_date %}{{ estimated_size30_date|date:"d M Y" }}{% else %}Belum cukup data{% endif %}</b></div>
+        {% if estimated_price_per_kg %}<div class="summary-row"><span>Harga estimasi/kg</span><b>Rp {{ estimated_price_per_kg|floatformat:0 }}</b></div><div class="summary-row"><span>Target omzet</span><b>Rp {{ target_revenue|floatformat:0 }}</b></div>{% endif %}
+        {% if target_cost %}<div class="summary-row"><span>Target biaya</span><b>Rp {{ target_cost|floatformat:0 }}</b></div><div class="summary-row"><span>Target laba</span><b>Rp {{ target_profit|floatformat:0 }}</b></div>{% endif %}
       </div>
-      <div class="panel-head"><h2>Insight Operasional</h2></div>
-      <div class="insight-card green-soft"><i class="fa-solid fa-arrow-trend-up"></i><div><b>FCR Rata-rata</b><p>{{ avg_fcr|angka:2 }} dari sampling terbaru per kolam.</p></div></div>
-      <div class="insight-card orange-soft"><i class="fa-solid fa-shrimp"></i><div><b>Monitoring Siphon</b><p>{{ dead_7d|ribuan }} ekor mati tercatat dalam 7 hari terakhir.</p></div></div>
-      <div class="insight-card blue-soft"><i class="fa-solid fa-chart-column"></i><div><b>Estimasi Biomassa</b><p>{{ estimated_biomass|angka:2 }} kg berdasarkan sampling terbaru per kolam.</p></div></div>
-    </aside>
+    </section>
+    <section class="panel-v2">
+      <div class="panel-title"><h2>Kondisi Terbaru Per Kolam</h2><a href="{% url 'operations:sampling_records' %}">Lihat data sampling</a></div>
+      <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>DOC</th><th>Biomassa</th><th>ABW</th><th>ADG</th><th>FCR</th><th>SR</th></tr></thead><tbody>{% for row in pond_cards %}<tr><td><b>{{ row.pond.name }}</b></td><td>{{ row.latest_doc|default:"-" }}</td><td>{% if row.sample %}{{ row.sample.dashboard_biomass_kg|floatformat:2 }} kg{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.abw_g|floatformat:2 }} g{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.adg_weekly|floatformat:3 }}{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.dashboard_fcr|floatformat:2 }}{% else %}-{% endif %}</td><td>{% if row.sample %}{{ row.sample.estimated_sr|floatformat:2 }}%{% else %}-{% endif %}</td></tr>{% empty %}<tr><td colspan="7" class="text-center text-muted">Belum ada data sampling.</td></tr>{% endfor %}</tbody></table></div>
+    </section>
   </div>
 </div>
+
+{{ biomass_history|json_script:"biomass-history-data" }}
+{{ biomass_projection|json_script:"biomass-projection-data" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function(){
+  const actual = JSON.parse(document.getElementById('biomass-history-data').textContent || '[]');
+  const projection = JSON.parse(document.getElementById('biomass-projection-data').textContent || '[]');
+  const labels = actual.map(x => `DOC ${x.doc}`);
+  const actualValues = actual.map(x => x.biomass_ton);
+  projection.forEach(x => { if (!labels.includes(x.label)) labels.push(x.label); });
+  const projectedValues = labels.map(label => {
+    const item = projection.find(x => x.label === label);
+    return item ? item.biomass_ton : null;
+  });
+  if (actual.length && projection.length) {
+    const firstProjectionLabel = projection[0].label;
+    const index = labels.indexOf(firstProjectionLabel);
+    if (index >= 0 && projectedValues[index] == null) projectedValues[index] = actualValues[actualValues.length - 1];
+  }
+  const targetValues = labels.map(() => {{ target_harvest_ton|default:25 }});
+  const canvas = document.getElementById('biomassTrendChart');
+  new Chart(canvas, {
+    type:'line',
+    data:{labels,datasets:[
+      {label:'Biomassa aktual (ton)',data:labels.map((_,i)=>i<actualValues.length?actualValues[i]:null),borderColor:'#2d7ff9',backgroundColor:'rgba(45,127,249,.12)',fill:true,tension:.35,pointRadius:5,pointHoverRadius:7,borderWidth:3},
+      {label:'Prediksi DOC {{ target_doc }} (ton)',data:projectedValues,borderColor:'#62a7ff',borderDash:[8,6],tension:.35,pointRadius:4,borderWidth:3,spanGaps:true},
+      {label:'Target panen (ton)',data:targetValues,borderColor:'#ef4444',borderDash:[4,4],pointRadius:0,borderWidth:2}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{afterBody:(items)=>{const idx=items[0].dataIndex;if(idx<actual.length){const x=actual[idx];return [`ABW: ${x.abw} g`,`ADG: ${x.adg} g/hari`,`FCR: ${x.fcr}`,`SR: ${x.sr}%`,`Populasi: ${x.population.toLocaleString('id-ID')} ekor`];}return [];}}}},scales:{x:{grid:{display:false},ticks:{color:'#61718a',font:{weight:'600'}}},y:{beginAtZero:true,title:{display:true,text:'Biomassa (Ton)'},grid:{color:'#e9eef6'},ticks:{callback:v=>v+' t'}}}}
+  });
+})();
+</script>
 {% endblock %}

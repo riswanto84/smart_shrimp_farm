@@ -1,3 +1,4 @@
+import math
 from decimal import Decimal, InvalidOperation
 from datetime import timedelta
 
@@ -498,9 +499,137 @@ def production_dashboard(request):
             'latest_doc': latest_doc,
         })
 
+    # ---------------------------------------------------------------
+    # Grafik perkembangan produksi berbasis seluruh histori sampling.
+    # Setiap titik merupakan total satu batch/tanggal sampling, dengan satu
+    # record terbaru per kolam agar duplikat impor tidak menggandakan nilai.
+    # ---------------------------------------------------------------
+    history_by_date = {}
+    history_seen = set()
+    for sample in sampling_qs.select_related('pond').order_by('date', 'pond_id', '-id'):
+        key = (sample.date, sample.pond_id)
+        if key in history_seen:
+            continue
+        history_seen.add(key)
+        biomass, fcr = effective_sampling_metrics(sample)
+        bucket = history_by_date.setdefault(sample.date, {
+            'date': sample.date,
+            'docs': [], 'biomass_kg': 0.0, 'abw': [], 'adg': [],
+            'fcr': [], 'sr': [], 'population': 0,
+        })
+        bucket['docs'].append(int(sample.doc or 0))
+        bucket['biomass_kg'] += max(biomass, 0.0)
+        if _float(sample.abw_g) > 0:
+            bucket['abw'].append(_float(sample.abw_g))
+        if _float(sample.adg_weekly) > 0:
+            bucket['adg'].append(_float(sample.adg_weekly))
+        if fcr > 0:
+            bucket['fcr'].append(fcr)
+        sr_value = _float(sample.estimated_sr) or _float(sample.sr_index_percent)
+        if sr_value > 0:
+            bucket['sr'].append(sr_value)
+        bucket['population'] += int(sample.population or sample.population_index or 0)
+
+    biomass_history = []
+    for date_value, bucket in sorted(history_by_date.items()):
+        avg_doc = round(sum(bucket['docs']) / len(bucket['docs'])) if bucket['docs'] else 0
+        biomass_history.append({
+            'label': date_value.strftime('%d %b'),
+            'date': date_value.isoformat(),
+            'doc': avg_doc,
+            'biomass_ton': round(bucket['biomass_kg'] / 1000.0, 3),
+            'abw': round(sum(bucket['abw']) / len(bucket['abw']), 2) if bucket['abw'] else 0,
+            'adg': round(sum(bucket['adg']) / len(bucket['adg']), 3) if bucket['adg'] else 0,
+            'fcr': round(sum(bucket['fcr']) / len(bucket['fcr']), 2) if bucket['fcr'] else 0,
+            'sr': round(sum(bucket['sr']) / len(bucket['sr']), 2) if bucket['sr'] else 0,
+            'population': bucket['population'],
+        })
+
+    avg_adg_values = [_float(x.adg_weekly) for x in latest_samples if _float(x.adg_weekly) > 0]
+    avg_adg = sum(avg_adg_values) / len(avg_adg_values) if avg_adg_values else 0
+    avg_sr_values = [(_float(x.estimated_sr) or _float(x.sr_index_percent)) for x in latest_samples]
+    avg_sr_values = [x for x in avg_sr_values if x > 0]
+    avg_sr = sum(avg_sr_values) / len(avg_sr_values) if avg_sr_values else 0
+    current_population = sum(int(x.population or x.population_index or 0) for x in latest_samples)
+
+    # Target produksi berasal dari Master Siklus Budidaya, bukan hardcode.
+    target_harvest_ton = _float(getattr(selected_cycle, 'target_biomass_ton', 25)) or 25.0
+    target_doc = int(getattr(selected_cycle, 'target_doc', 120) or 120)
+    target_size = _float(getattr(selected_cycle, 'target_size', 30)) or 30.0
+    target_sr = _float(getattr(selected_cycle, 'target_sr_percent', 85)) or 85.0
+    target_fcr = _float(getattr(selected_cycle, 'target_fcr', 1.20)) or 1.20
+    target_adg = _float(getattr(selected_cycle, 'target_adg', 0.25)) or 0.25
+    target_population = int(getattr(selected_cycle, 'target_population', 0) or 0)
+    estimated_price_per_kg = _float(getattr(selected_cycle, 'estimated_price_per_kg', 0))
+    target_cost = _float(getattr(selected_cycle, 'target_cost', 0))
+    target_revenue = target_harvest_ton * 1000.0 * estimated_price_per_kg
+    target_profit = target_revenue - target_cost
+    biomass_progress = min((estimated_biomass / 1000.0) / target_harvest_ton * 100.0, 100.0) if target_harvest_ton else 0
+
+    # Proyeksi biomassa hingga target DOC menggunakan ADG aktual dan populasi FR
+    # terbaru per kolam. Garis prediksi sengaja dipisahkan dari data aktual.
+    latest_doc = max((int(x.doc or 0) for x in latest_samples), default=0)
+    projection_docs = []
+    if latest_samples and latest_doc:
+        next_doc = latest_doc
+        while next_doc < target_doc:
+            projection_docs.append(next_doc)
+            next_doc += 14
+        if target_doc not in projection_docs:
+            projection_docs.append(target_doc)
+
+    biomass_projection = []
+    for target_doc in projection_docs:
+        total_kg = 0.0
+        for sample in latest_samples:
+            current_abw = _float(sample.abw_g)
+            adg = _float(sample.adg_weekly)
+            population = int(sample.population or sample.population_index or 0)
+            remaining = max(target_doc - int(sample.doc or 0), 0)
+            if current_abw > 0 and population > 0:
+                projected_abw = current_abw + max(adg, 0) * remaining
+                total_kg += population * projected_abw / 1000.0
+        biomass_projection.append({
+            'label': f'DOC {target_doc}',
+            'doc': target_doc,
+            'biomass_ton': round(total_kg / 1000.0, 3),
+        })
+
+    # Estimasi tanggal target size siklus diringkas dari estimasi seluruh kolam.
+    size30_dates = []
+    target_abw = 1000.0 / target_size if target_size > 0 else 0
+    for sample in latest_samples:
+        abw = _float(sample.abw_g)
+        adg = _float(sample.adg_weekly)
+        if abw >= target_abw:
+            size30_dates.append(sample.date)
+        elif abw > 0 and adg > 0:
+            days = math.ceil((target_abw - abw) / adg)
+            size30_dates.append(sample.date + timedelta(days=max(days, 0)))
+    estimated_size30_date = max(size30_dates) if size30_dates else None
+
     context = {
         'ponds': ponds,
         'selected_cycle': selected_cycle,
+        'biomass_history': biomass_history,
+        'biomass_projection': biomass_projection,
+        'doc120_projection_ton': biomass_projection[-1]['biomass_ton'] if biomass_projection else 0,
+        'target_doc': target_doc,
+        'target_size': target_size,
+        'target_sr': target_sr,
+        'target_fcr': target_fcr,
+        'target_adg': target_adg,
+        'target_population': target_population,
+        'estimated_price_per_kg': estimated_price_per_kg,
+        'target_cost': target_cost,
+        'target_revenue': target_revenue,
+        'target_profit': target_profit,
+        'target_harvest_ton': target_harvest_ton,
+        'biomass_progress': biomass_progress,
+        'avg_adg': avg_adg,
+        'avg_sr': avg_sr,
+        'current_population': current_population,
+        'estimated_size30_date': estimated_size30_date,
         'feed_today': feed_value,
         'feed_date': feed_date,
         'feed_source': feed_source,

@@ -88,6 +88,8 @@ def cycle_report_pdf(request, pk):
         ["Periode", f"{cycle.start_date.strftime('%d/%m/%Y')} s.d. {(cycle.actual_end_date or cycle.target_end_date).strftime('%d/%m/%Y')}", f"Durasi target {cycle.target_duration_days} hari"],
         ["Tanggal Selesai Aktual", cycle.actual_end_date.strftime('%d/%m/%Y') if cycle.actual_end_date else "-", "Arsip siklus"],
         ["Jumlah Kolam Sampling Terakhir", snapshot.get("pond_count", 0), f"Sampling {latest_date.strftime('%d/%m/%Y') if latest_date else '-'}"],
+        ["Target Produksi", f"{angka(cycle.target_biomass_ton, 2)} ton", f"DOC {cycle.target_doc} · Size {angka(cycle.target_size, 0)}"],
+        ["Target Kinerja", f"FCR {angka(cycle.target_fcr, 2)} · SR {angka(cycle.target_sr_percent, 1)}%", f"ADG {angka(cycle.target_adg, 3)} g/hari"],
         ["Rata-rata ABW", f"{angka(snapshot.get('average_abw_g', 0), 2)} g", "Sampling terakhir"],
         ["Rata-rata ADG", f"{angka(snapshot.get('average_adg', 0), 3)} g/hari", "Sampling terakhir"],
         ["Rata-rata FCR", angka(snapshot.get("average_fcr", 0), 2), "Sampling terakhir"],
