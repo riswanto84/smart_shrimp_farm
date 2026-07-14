@@ -53,8 +53,10 @@ def app_notifications(request):
 
     try:
         from operations.models import DailyParameter
+        from cultivation.utils import get_selected_cycle
         today = timezone.localdate()
-        if not DailyParameter.objects.filter(date=today).exists():
+        selected_cycle = get_selected_cycle(request)
+        if selected_cycle and selected_cycle.is_open and not DailyParameter.objects.filter(cycle=selected_cycle, date=today).exists():
             attention_count += 1
             items.append({
                 'level': 'warning',

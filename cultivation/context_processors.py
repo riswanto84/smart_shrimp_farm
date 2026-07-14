@@ -1,17 +1,19 @@
 from .models import CultivationCycle
+from .utils import get_selected_cycle
 
 
 def cultivation_cycle_context(request):
+    """Sediakan siklus terpilih dan status kunci pada seluruh template.
+
+    Selalu memakai helper yang sama dengan view agar pilihan pada GET/POST/session
+    tidak berbeda antara backend dan tampilan.
+    """
     cycles = CultivationCycle.objects.all()
-    selected = None
-    selected_id = request.session.get('selected_cycle_id')
-    if selected_id:
-        selected = cycles.filter(pk=selected_id).first()
-    if selected is None:
-        selected = cycles.filter(status__in=['preparation', 'active', 'harvest']).first() or cycles.first()
-        if selected:
-            request.session['selected_cycle_id'] = selected.pk
+    selected = get_selected_cycle(request)
+    locked = bool(selected and selected.status == CultivationCycle.STATUS_COMPLETED)
     return {
         'cultivation_cycles': cycles,
         'selected_cycle': selected,
+        'cycle_is_locked': locked,
+        'cycle_is_open': bool(selected and not locked),
     }

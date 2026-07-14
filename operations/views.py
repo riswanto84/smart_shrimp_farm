@@ -590,7 +590,7 @@ def parameter_dashboard(request):
 def parameters(request):
     items, date_from, date_to = _parameter_queryset(request)
     page_obj = paginate_queryset(request, items, per_page=10)
-    return render(request, 'operations/parameters.html', {'items': page_obj, 'page_obj': page_obj, 'date_from': date_from, 'date_to': date_to, 'ponds': Pond.objects.all()})
+    return render(request, 'operations/parameters.html', {'items': page_obj, 'page_obj': page_obj, 'date_from': date_from, 'date_to': date_to, 'ponds': Pond.objects.all(), 'cycle_is_locked': bool(get_selected_cycle(request) and not get_selected_cycle(request).is_open)})
 
 
 @login_required

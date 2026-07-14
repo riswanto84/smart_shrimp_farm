@@ -24,13 +24,12 @@ def get_selected_cycle(request, required=False):
     return cycle
 
 
-def filter_selected_cycle(request, queryset, include_legacy=True):
+def filter_selected_cycle(request, queryset, include_legacy=False):
     """Filter queryset berdasarkan siklus yang dipilih.
 
-    Selama masa transisi, record lama yang belum mempunyai nilai ``cycle``
-    tetap ditampilkan agar data historis tidak tampak hilang dari aplikasi.
-    Setelah seluruh data lama berhasil dikaitkan ke siklus, pemanggil dapat
-    menggunakan ``include_legacy=False`` bila dibutuhkan.
+    Secara default hanya data yang benar-benar terkait dengan siklus terpilih
+    yang ditampilkan. Ini mencegah data siklus lama muncul pada siklus baru.
+    ``include_legacy=True`` hanya dipakai sementara saat audit/migrasi data lama.
     """
     cycle = get_selected_cycle(request)
     if cycle is not None and hasattr(queryset.model, 'cycle_id'):

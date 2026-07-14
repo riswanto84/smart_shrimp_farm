@@ -1,16 +1,7 @@
-<div class="d-flex gap-2 flex-wrap justify-content-end action-icon-group">
-  {% if detail_url %}
-  <a class="btn btn-sm btn-outline-primary action-icon-btn" href="{{ detail_url }}" title="Detail" aria-label="Detail">
-    <i class="fa-solid fa-eye" aria-hidden="true"></i>
-  </a>
-  {% endif %}
-  <a class="btn btn-sm btn-warning text-dark action-icon-btn" href="{{ edit_url }}" title="Edit" aria-label="Edit">
-    <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
-  </a>
-  <form method="post" action="{{ delete_url }}" onsubmit="return confirm('Hapus data ini? Tindakan ini tidak dapat dibatalkan.');">
-    {% csrf_token %}
-    <button class="btn btn-sm btn-outline-danger action-icon-btn" type="submit" title="Hapus" aria-label="Hapus">
-      <i class="fa-solid fa-trash" aria-hidden="true"></i>
-    </button>
-  </form>
+<div class="d-inline-flex gap-1" role="group" aria-label="Aksi data">
+{% if detail_url %}<a class="btn btn-sm btn-outline-primary icon-only-btn" href="{{ detail_url }}" title="Lihat detail" aria-label="Lihat detail"><i class="fa-solid fa-eye"></i></a>{% endif %}
+{% if not cycle_is_locked %}
+{% if edit_url %}<a class="btn btn-sm btn-warning text-dark icon-only-btn" href="{{ edit_url }}" title="Edit" aria-label="Edit"><i class="fa-solid fa-pen-to-square"></i></a>{% endif %}
+{% if delete_url %}<form method="post" action="{{ delete_url }}" class="d-inline" onsubmit="return confirm('Hapus data ini? Tindakan ini tidak dapat dibatalkan.');">{% csrf_token %}<button class="btn btn-sm btn-outline-danger icon-only-btn" type="submit" title="Hapus" aria-label="Hapus"><i class="fa-solid fa-trash"></i></button></form>{% endif %}
+{% endif %}
 </div>

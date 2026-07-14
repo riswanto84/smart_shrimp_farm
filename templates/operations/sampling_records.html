@@ -2,7 +2,7 @@
 {% block content %}
 <div class="page-head">
   <div><h1>Data Sampling</h1><p>Format mengikuti Excel sampling: SHRIMP, ABW, Size, ADG, SR, Biomassa, FCR, Populasi, Pakan Kumulatif, Tebar, F/D, FR, dan Index.</p></div>
-  <a class="btn btn-primary" href="{% url 'operations:add_sampling_record' %}"><i class="fa-solid fa-plus"></i> Input Sampling</a>
+  {% if not cycle_is_locked %}<a class="btn btn-primary" href="{% url 'operations:add_sampling_record' %}"><i class="fa-solid fa-plus"></i> Input Sampling</a>{% endif %}
 </div>
 <div class="kpi-grid">
   <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-weight-scale"></i></div><div><span>Rata-rata ABW</span><strong>{{ avg_abw|angka:2 }} g</strong><small>Filter aktif</small></div></div>
@@ -11,7 +11,7 @@
   <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-shrimp"></i></div><div><span>Biomassa FR</span><strong>{{ biomass|angka:2 }} Kg</strong><small>Sampling terakhir per kolam</small></div></div>
 </div>
 {% include 'operations/_ops_filter.html' %}
-<div class="cardx mb-3 d-flex gap-2 flex-wrap"><a class="btn btn-outline-primary" href="{% url 'operations:import_excel' 'sampling' %}" title="Import Excel"><i class="fa-solid fa-file-import"></i> Import Excel</a><a class="btn btn-outline-secondary" href="{% url 'operations:download_import_template' 'sampling' %}" title="Unduh Template"><i class="fa-solid fa-download"></i> Template</a><a class="btn btn-success" href="{% url 'operations:export_sampling_excel' %}?{{ request.GET.urlencode }}"><i class="fa-solid fa-file-excel"></i> Export Excel</a><a class="btn btn-danger" href="{% url 'operations:export_sampling_pdf' %}?{{ request.GET.urlencode }}"><i class="fa-solid fa-file-pdf"></i> Export PDF</a></div>
+<div class="cardx mb-3 d-flex gap-2 flex-wrap">{% if not cycle_is_locked %}<a class="btn btn-outline-primary" href="{% url 'operations:import_excel' 'sampling' %}" title="Import Excel"><i class="fa-solid fa-file-import"></i> Import Excel</a>{% endif %}<a class="btn btn-outline-secondary" href="{% url 'operations:download_import_template' 'sampling' %}" title="Unduh Template"><i class="fa-solid fa-download"></i> Template</a><a class="btn btn-success" href="{% url 'operations:export_sampling_excel' %}?{{ request.GET.urlencode }}"><i class="fa-solid fa-file-excel"></i> Export Excel</a><a class="btn btn-danger" href="{% url 'operations:export_sampling_pdf' %}?{{ request.GET.urlencode }}"><i class="fa-solid fa-file-pdf"></i> Export PDF</a></div>
 <div class="cardx table-responsive sampling-table-card">
   <table class="table app-table align-middle sampling-wide-table">
     <thead>

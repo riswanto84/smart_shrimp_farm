@@ -22,6 +22,8 @@ class CultivationCycle(models.Model):
     actual_end_date = models.DateField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PREPARATION)
     notes = models.TextField(blank=True)
+    final_snapshot = models.JSONField(default=dict, blank=True)
+    completed_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -63,10 +65,25 @@ class CultivationCycle(models.Model):
         else:
             self.target_end_date = None
 
+        was_completed = False
+        if self.pk:
+            was_completed = type(self).objects.filter(pk=self.pk, status=self.STATUS_COMPLETED).exists()
+
         if self.status == self.STATUS_COMPLETED and not self.actual_end_date:
             self.actual_end_date = timezone.localdate()
+        if self.status == self.STATUS_COMPLETED and not self.completed_at:
+            self.completed_at = timezone.now()
+        elif self.status != self.STATUS_COMPLETED:
+            self.completed_at = None
 
         super().save(*args, **kwargs)
+
+        # Snapshot hanya dibuat saat transisi pertama menjadi selesai.
+        if self.status == self.STATUS_COMPLETED and not was_completed and not self.final_snapshot:
+            from .services import build_cycle_final_snapshot
+            snapshot = build_cycle_final_snapshot(self)
+            type(self).objects.filter(pk=self.pk).update(final_snapshot=snapshot)
+            self.final_snapshot = snapshot
 
     @property
     def is_open(self):
