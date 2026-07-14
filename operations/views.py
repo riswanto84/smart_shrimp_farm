@@ -16,7 +16,7 @@ from .models import (
     DailyPondRecord, AncoCheck, SamplingRecord, SiphonRecord, Stocking,
 )
 from chat_ai.services import ask_ollama, ollama_health
-from core.reporting import get_date_range, filter_by_date_range, format_date_range, export_excel, export_pdf
+from core.reporting import get_date_range, filter_by_date_range, format_date_range, export_excel, export_pdf, angka
 from core.pagination import paginate_queryset
 from cultivation.utils import get_selected_cycle, filter_selected_cycle
 
@@ -710,6 +710,20 @@ def export_daily_records_excel(request):
 
 
 @login_required
+@permission_required('operations.daily_records')
+def export_daily_records_pdf(request):
+    items = DailyPondRecord.objects.select_related('pond', 'technician').order_by('-date')
+    items, date_from, date_to, pond = _apply_common_filters(request, items)
+    rows = _daily_rows(items)
+    return export_pdf(
+        'laporan_data_harian_kolam', 'Laporan Data Harian Kolam',
+        f'Periode: {format_date_range(date_from, date_to)}',
+        ['Tanggal', 'Kolam', 'DOC', 'Kode Pakan', 'Pakan (Kg)', 'Air Masuk', 'Cuaca', 'Treatment', 'Teknisi'],
+        rows,
+    )
+
+
+@login_required
 @permission_required('operations.anco')
 def anco_checks(request):
     items = AncoCheck.objects.select_related('pond','technician').order_by('-date')
@@ -796,6 +810,36 @@ def export_anco_excel(request):
     return export_excel(
         'laporan_cek_anco', 'Laporan Cek Anco Harian', f'Periode: {format_date_range(date_from, date_to)}',
         ['Tanggal','Kolam','Kode Pakan','DOC','P/H','A1 Pagi','A2 Pagi','A1 Siang','A2 Siang','A1 Sore','A2 Sore','Air Masuk Cm','Cuaca','Treatment','Status','Rekomendasi'], rows
+    )
+
+
+@login_required
+@permission_required('operations.anco')
+def export_anco_pdf(request):
+    items = AncoCheck.objects.select_related('pond', 'technician').order_by('-date', 'pond__name')
+    items, date_from, date_to, pond = _apply_common_filters(request, items)
+    rows = []
+    alert_count = 0
+    for i in items:
+        if i.appetite_status in ['Nafsu makan turun', 'Ada sisa pakan']:
+            alert_count += 1
+        anco_summary = (
+            f'Pagi A1:{i.anco1_morning} A2:{i.anco2_morning}\n'
+            f'Siang A1:{i.anco1_noon} A2:{i.anco2_noon}\n'
+            f'Sore A1:{i.anco1_evening} A2:{i.anco2_evening}'
+        )
+        rows.append([
+            i.date.strftime('%d/%m/%Y'), i.pond.name, i.feed_code or '-', i.doc,
+            angka(i.daily_feed_kg, 2), anco_summary,
+            f'{angka(i.water_in_cm, 2)} cm' if i.water_in_cm is not None else '-',
+            i.weather or '-', i.treatment or '-', i.appetite_status or '-', i.recommendation or '-'
+        ])
+    total_rows = [['', '', '', '', '', '', '', '', 'Ringkasan', f'{len(rows)} cek', f'{alert_count} alert nafsu makan']]
+    return export_pdf(
+        'laporan_cek_anco_harian', 'Laporan Cek Anco Harian',
+        f'Periode: {format_date_range(date_from, date_to)}',
+        ['Tanggal', 'Kolam', 'Kode', 'DOC', 'P/H', 'Cek Anco Pagi/Siang/Sore', 'Air Masuk', 'Cuaca', 'Treatment', 'Status', 'Rekomendasi'],
+        rows, total_rows,
     )
 
 

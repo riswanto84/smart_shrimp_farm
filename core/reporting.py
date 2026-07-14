@@ -1,6 +1,8 @@
 from datetime import date
 from decimal import Decimal
+import os
 
+from django.conf import settings
 from django.http import HttpResponse
 from django.utils.dateparse import parse_date
 from django.utils import timezone
@@ -8,9 +10,15 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4, landscape
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase import pdfmetrics
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, KeepTogether
+)
 
 
 def get_date_range(request):
@@ -132,35 +140,189 @@ def export_excel(filename, title, subtitle, headers, rows, total_rows=None):
     return response
 
 
+def _pdf_logo_path():
+    candidates = [
+        os.path.join(settings.BASE_DIR, 'static', 'img', 'logo_uen.png'),
+        os.path.join(settings.BASE_DIR, 'static', 'img', 'logo_uen_thermal.png'),
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def _page_header_footer(canvas, doc):
+    canvas.saveState()
+    width, height = doc.pagesize
+    navy = colors.HexColor('#082F63')
+    gold = colors.HexColor('#D79A1E')
+    muted = colors.HexColor('#64748B')
+
+    canvas.setStrokeColor(colors.HexColor('#DCE6F2'))
+    canvas.setLineWidth(0.5)
+    canvas.line(doc.leftMargin, 13 * mm, width - doc.rightMargin, 13 * mm)
+    canvas.setFont('Helvetica', 7.5)
+    canvas.setFillColor(muted)
+    canvas.drawString(doc.leftMargin, 8 * mm, 'Smart Shrimp Farm • Udang Emas Nusantara')
+    canvas.drawRightString(width - doc.rightMargin, 8 * mm, f'Halaman {doc.page}')
+
+    canvas.setFillColor(navy)
+    canvas.rect(0, height - 5 * mm, width, 5 * mm, stroke=0, fill=1)
+    canvas.setFillColor(gold)
+    canvas.rect(0, height - 6.5 * mm, width, 1.5 * mm, stroke=0, fill=1)
+    canvas.restoreState()
+
+
+def _make_pdf_paragraph(value, style):
+    text = '' if value is None else str(value)
+    text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+    text = text.replace('\n', '<br/>')
+    return Paragraph(text, style)
+
+
 def export_pdf(filename, title, subtitle, headers, rows, total_rows=None):
-    response = HttpResponse(content_type="application/pdf")
-    response["Content-Disposition"] = f'attachment; filename="{filename}.pdf"'
+    """Generate a branded, print-ready PDF report used by all modules."""
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{filename}.pdf"'
 
-    doc = SimpleDocTemplate(response, pagesize=landscape(A4), rightMargin=24, leftMargin=24, topMargin=24, bottomMargin=24)
+    page_size = landscape(A4) if len(headers) > 7 else A4
+    doc = SimpleDocTemplate(
+        response,
+        pagesize=page_size,
+        rightMargin=12 * mm,
+        leftMargin=12 * mm,
+        topMargin=15 * mm,
+        bottomMargin=18 * mm,
+        title=title,
+        author='Smart Shrimp Farm - Udang Emas Nusantara',
+        subject=subtitle,
+    )
+
     styles = getSampleStyleSheet()
-    elements = []
-    elements.append(Paragraph(title, styles["Title"]))
-    elements.append(Paragraph(subtitle, styles["Normal"]))
-    elements.append(Spacer(1, 12))
+    navy = colors.HexColor('#082F63')
+    blue = colors.HexColor('#1769D2')
+    gold = colors.HexColor('#D79A1E')
+    light_blue = colors.HexColor('#EEF5FF')
+    border = colors.HexColor('#D7E2EF')
+    text_color = colors.HexColor('#14213D')
+    muted = colors.HexColor('#64748B')
 
-    data = [headers]
-    for row in rows:
-        data.append(["" if v is None else str(v) for v in row])
-    if total_rows:
-        data.append(["" for _ in headers])
-        for total in total_rows:
-            data.append(["" if v is None else str(v) for v in total])
+    title_style = ParagraphStyle(
+        'ReportTitle', parent=styles['Title'], fontName='Helvetica-Bold',
+        fontSize=17, leading=20, textColor=navy, alignment=TA_LEFT, spaceAfter=3,
+    )
+    company_style = ParagraphStyle(
+        'Company', parent=styles['Normal'], fontName='Helvetica-Bold',
+        fontSize=9.5, leading=11, textColor=gold,
+    )
+    subtitle_style = ParagraphStyle(
+        'Subtitle', parent=styles['Normal'], fontSize=8.5, leading=11,
+        textColor=muted,
+    )
+    meta_style = ParagraphStyle(
+        'Meta', parent=styles['Normal'], fontSize=7.5, leading=9,
+        textColor=muted, alignment=TA_RIGHT,
+    )
+    header_style = ParagraphStyle(
+        'TableHeader', parent=styles['Normal'], fontName='Helvetica-Bold',
+        fontSize=7, leading=8, textColor=colors.white, alignment=TA_CENTER,
+    )
+    cell_style = ParagraphStyle(
+        'TableCell', parent=styles['Normal'], fontSize=6.8, leading=8.2,
+        textColor=text_color, alignment=TA_LEFT,
+    )
+    total_style = ParagraphStyle(
+        'TableTotal', parent=cell_style, fontName='Helvetica-Bold', textColor=navy,
+    )
 
-    table = Table(data, repeatRows=1)
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0B3A75")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#D9E2F3")),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F7FAFF")]),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("FONTSIZE", (0, 0), (-1, -1), 8),
+    logo = _pdf_logo_path()
+    header_left = []
+    if logo:
+        try:
+            header_left.append(Image(logo, width=26 * mm, height=17 * mm, kind='proportional'))
+        except Exception:
+            pass
+    header_left.extend([
+        Paragraph('UDANG EMAS NUSANTARA', company_style),
+        Paragraph(title, title_style),
+        Paragraph(subtitle, subtitle_style),
+    ])
+    generated = timezone.localtime().strftime('%d/%m/%Y %H:%M WIB')
+    meta = Paragraph(
+        f'<b>Dokumen laporan resmi</b><br/>Dibuat: {generated}<br/>Sistem: Smart Shrimp Farm',
+        meta_style,
+    )
+    header_table = Table([[header_left, meta]], colWidths=[doc.width * 0.72, doc.width * 0.28])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('LINEBELOW', (0, 0), (-1, -1), 1.2, gold),
     ]))
+
+    elements = [header_table, Spacer(1, 7)]
+
+    display_rows = []
+    for row in rows:
+        display_rows.append([_make_pdf_paragraph(v, cell_style) for v in row])
+
+    data = [[_make_pdf_paragraph(h, header_style) for h in headers]] + display_rows
+    total_start = None
+    if total_rows:
+        total_start = len(data)
+        for total in total_rows:
+            data.append([_make_pdf_paragraph(v, total_style) for v in total])
+
+    if not rows:
+        empty = Paragraph('Belum ada data pada periode/filter yang dipilih.', cell_style)
+        data.append([empty] + [''] * (len(headers) - 1))
+
+    # Adaptive widths: long narrative columns receive more space while still
+    # keeping every report within the printable page width.
+    weights = []
+    for idx, header in enumerate(headers):
+        max_len = len(str(header))
+        for row in rows[:100]:
+            if idx < len(row):
+                max_len = max(max_len, min(len(str(row[idx] or '')), 55))
+        weights.append(max(5, min(max_len, 30)))
+    total_weight = sum(weights) or 1
+    col_widths = [doc.width * (w / total_weight) for w in weights]
+
+    table = Table(data, colWidths=col_widths, repeatRows=1, hAlign='LEFT')
+    style_commands = [
+        ('BACKGROUND', (0, 0), (-1, 0), navy),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.35, border),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FBFF')]),
+        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]
+    if total_start is not None:
+        style_commands.extend([
+            ('BACKGROUND', (0, total_start), (-1, -1), light_blue),
+            ('LINEABOVE', (0, total_start), (-1, total_start), 1.0, blue),
+            ('FONTNAME', (0, total_start), (-1, -1), 'Helvetica-Bold'),
+        ])
+    if not rows:
+        style_commands.extend([
+            ('SPAN', (0, 1), (-1, 1)),
+            ('ALIGN', (0, 1), (-1, 1), 'CENTER'),
+            ('TOPPADDING', (0, 1), (-1, 1), 14),
+            ('BOTTOMPADDING', (0, 1), (-1, 1), 14),
+        ])
+    table.setStyle(TableStyle(style_commands))
     elements.append(table)
-    doc.build(elements)
+    elements.append(Spacer(1, 8))
+    elements.append(Paragraph(
+        'Catatan: Laporan ini dihasilkan otomatis dari data pada aplikasi Smart Shrimp Farm sesuai filter yang dipilih.',
+        subtitle_style,
+    ))
+
+    doc.build(elements, onFirstPage=_page_header_footer, onLaterPages=_page_header_footer)
     return response
