@@ -1,33 +1,111 @@
 {% extends 'base.html' %}
 {% block title %}AI Prediksi Panen Parsial{% endblock %}
 {% block content %}
-{% include 'chat_ai/_ai_header.html' with page_title='AI Prediksi Panen Parsial' page_subtitle='Prediksi waktu dan potensi panen parsial berdasarkan sampling, biomassa, size, SR, FCR, dan tren pertumbuhan.' show_pond=False %}
-<form class="ai-inline-filter" method="get">
-  <label>Kolam<select name="pond" class="form-select">{% for p in ponds %}<option value="{{p.id}}" {% if selected_pond and selected_pond.id == p.id %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></label>
-  <label>Target Size
-    <input type="number" name="target_size" class="form-control" value="{{ target_size|default:30 }}" min="1" max="1000" step="1" inputmode="numeric" required>
-    <small class="text-muted">Masukkan angka bulat, contoh 30.</small>
-  </label>
-  <label>Harga Referensi<input class="form-control" name="price" value="{{ price }}"></label>
-  <input type="hidden" name="generate" value="1"><button class="btn btn-primary"><i class="fa-solid fa-wand-magic-sparkles"></i> Prediksi Panen</button>
-</form>
-<div class="ai-kpi-grid">
-  <div class="ai-kpi success"><i class="fa-solid fa-calendar-check"></i><span>Estimasi Tanggal</span><b>{{ prediction.date|date:'d M Y' }}</b><small>{{ prediction.days|ribuan }} hari lagi</small></div>
-  <div class="ai-kpi"><i class="fa-solid fa-fish-fins"></i><span>Target Size</span><b>{{ prediction.target_size|floatformat:0 }}</b><small>ekor/kg</small></div>
-  <div class="ai-kpi warning"><i class="fa-solid fa-weight-hanging"></i><span>Estimasi Biomassa</span><b>{{ prediction.biomass|angka:2 }} kg</b><small>basis sampling terakhir</small></div>
-  <div class="ai-kpi success"><i class="fa-solid fa-money-bill-trend-up"></i><span>Potensi Nilai</span><b>{{ value_rp }}</b><small>berdasarkan harga referensi</small></div>
-</div>
-<div class="ai-dashboard-grid">
-  <div class="ai-card wide">
-    <div class="ai-section-title"><i class="fa-solid fa-chart-line"></i><h2>Ringkasan Prediksi</h2></div>
-    <p class="ai-note">{{ prediction.summary }}</p>
-    <div class="ai-two-col">
-      <ul class="ai-check-list"><li>ABW: {% if prediction.sample %}{{ prediction.sample.abw_g|angka:2 }} g{% else %}-{% endif %}</li><li>Size sekarang: {% if prediction.sample %}{{ prediction.sample.size|angka:2 }}{% else %}-{% endif %}</li><li>ADG: {% if prediction.sample %}{{ prediction.sample.adg_weekly|angka:2 }} g/hari{% else %}-{% endif %}</li><li>FCR: {% if prediction.sample %}{{ prediction.sample.fcr|angka:2 }}{% else %}-{% endif %}</li></ul>
-      <div><h3>Skenario Panen</h3><div class="ai-scenario good"><b>Optimistis</b><span>Lebih cepat 2 hari jika ADG naik</span></div><div class="ai-scenario"><b>Normal</b><span>{{ prediction.date|date:'d M Y' }} berdasarkan data saat ini</span></div><div class="ai-scenario warn"><b>Konservatif</b><span>Tambah 3–5 hari jika nafsu makan turun</span></div></div>
+<section class="harvest-page">
+  <div class="harvest-hero">
+    <div class="harvest-hero-copy">
+      <div class="harvest-eyebrow"><i class="fa-solid fa-wand-magic-sparkles"></i> Analitik budidaya berbasis data aktual</div>
+      <h1>AI Prediksi Panen Parsial</h1>
+      <p>Perkirakan waktu panen, biomassa, dan potensi nilai berdasarkan sampling terakhir, ABW, ADG, SR, serta FCR.</p>
+      <div class="harvest-status-row">
+        {% if ollama_online %}
+          <span class="harvest-status online"><i class="fa-solid fa-circle-check"></i> Ollama online</span>
+        {% else %}
+          <span class="harvest-status offline"><i class="fa-solid fa-circle-exclamation"></i> Ollama offline</span>
+        {% endif %}
+        {% if ollama_model %}<span class="harvest-meta"><i class="fa-solid fa-microchip"></i> {{ ollama_model }}</span>{% endif %}
+        {% if ollama_url %}<span class="harvest-meta url"><i class="fa-solid fa-link"></i> {{ ollama_url }}</span>{% endif %}
+      </div>
     </div>
+    <div class="harvest-hero-icon"><i class="fa-solid fa-fish-fins"></i></div>
   </div>
-  <div class="ai-card"><div class="ai-section-title"><i class="fa-solid fa-list-check"></i><h2>Rekomendasi Panen</h2></div><ul class="ai-reco-list"><li><i class="fa-solid fa-check"></i>Cek harga pasar target size sebelum panen.</li><li><i class="fa-solid fa-check"></i>Prioritaskan panen pagi hari.</li><li><i class="fa-solid fa-check"></i>Jaga kualitas air sebelum panen.</li><li><i class="fa-solid fa-check"></i>Siapkan cold chain dan nota penjualan.</li></ul></div>
-</div>
-{% include 'chat_ai/_ai_result.html' %}
-{% include 'chat_ai/_source_data.html' %}
+
+  <form class="harvest-control-card" method="get">
+    <div class="harvest-control-head">
+      <div>
+        <span class="harvest-control-kicker">Parameter prediksi</span>
+        <h2>Atur target panen</h2>
+      </div>
+      <span class="harvest-control-note"><i class="fa-solid fa-circle-info"></i> Nilai dihitung ulang setelah tombol ditekan</span>
+    </div>
+    <div class="harvest-form-grid">
+      <label class="harvest-field">
+        <span>Kolam</span>
+        <div class="harvest-input-wrap"><i class="fa-solid fa-water"></i><select name="pond" class="form-select">{% for p in ponds %}<option value="{{p.id}}" {% if selected_pond and selected_pond.id == p.id %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></div>
+      </label>
+      <label class="harvest-field">
+        <span>Target Size</span>
+        <div class="harvest-input-wrap"><i class="fa-solid fa-fish"></i><input type="number" name="target_size" class="form-control" value="{{ target_size|default:30 }}" min="1" max="1000" step="1" inputmode="numeric" required><em>ekor/kg</em></div>
+        <small>Angka bulat. Nilai awal 30.</small>
+      </label>
+      <label class="harvest-field">
+        <span>Harga Referensi</span>
+        <div class="harvest-input-wrap"><i class="fa-solid fa-rupiah-sign"></i><input class="form-control" type="number" min="0" step="100" name="price" value="{{ price }}"><em>/kg</em></div>
+        <small>Gunakan harga pasar terbaru.</small>
+      </label>
+      <input type="hidden" name="generate" value="1">
+      <button class="harvest-primary-btn" type="submit"><i class="fa-solid fa-wand-magic-sparkles"></i><span>Hitung Prediksi</span></button>
+    </div>
+  </form>
+
+  <div class="harvest-kpi-grid">
+    <article class="harvest-kpi green">
+      <div class="harvest-kpi-icon"><i class="fa-solid fa-calendar-check"></i></div>
+      <div><span>Estimasi Tanggal</span><strong>{{ prediction.date|date:'d M Y' }}</strong><small>{{ prediction.days|ribuan }} hari lagi</small></div>
+    </article>
+    <article class="harvest-kpi blue">
+      <div class="harvest-kpi-icon"><i class="fa-solid fa-fish-fins"></i></div>
+      <div><span>Target Size</span><strong>{{ prediction.target_size|floatformat:0 }}</strong><small>ekor per kilogram</small></div>
+    </article>
+    <article class="harvest-kpi amber">
+      <div class="harvest-kpi-icon"><i class="fa-solid fa-weight-hanging"></i></div>
+      <div><span>Estimasi Biomassa</span><strong>{{ prediction.biomass|angka:2 }} kg</strong><small>berdasarkan sampling terakhir</small></div>
+    </article>
+    <article class="harvest-kpi emerald">
+      <div class="harvest-kpi-icon"><i class="fa-solid fa-money-bill-trend-up"></i></div>
+      <div><span>Potensi Nilai</span><strong>{{ value_rp }}</strong><small>berdasarkan harga referensi</small></div>
+    </article>
+  </div>
+
+  <div class="harvest-main-grid">
+    <article class="harvest-panel harvest-summary-panel">
+      <div class="harvest-panel-head">
+        <div class="harvest-panel-title"><i class="fa-solid fa-chart-line"></i><div><span>Ringkasan</span><h2>Prediksi Panen</h2></div></div>
+        <span class="harvest-badge">Data sampling aktual</span>
+      </div>
+      <div class="harvest-summary-callout">{{ prediction.summary }}</div>
+
+      <div class="harvest-summary-grid">
+        <div class="harvest-metric-list">
+          <div><span>ABW terkini</span><strong>{% if prediction.sample %}{{ prediction.sample.abw_g|angka:2 }} g{% else %}—{% endif %}</strong></div>
+          <div><span>Size terkini</span><strong>{% if prediction.sample %}{{ prediction.sample.size|angka:2 }} /kg{% else %}—{% endif %}</strong></div>
+          <div><span>ADG aktual</span><strong>{% if prediction.sample %}{{ prediction.sample.adg_weekly|angka:2 }} g/hari{% else %}—{% endif %}</strong></div>
+          <div><span>FCR terkini</span><strong>{% if prediction.sample %}{{ prediction.sample.fcr|angka:2 }}{% else %}—{% endif %}</strong></div>
+        </div>
+
+        <div class="harvest-scenario-stack">
+          <h3>Skenario Panen</h3>
+          <div class="harvest-scenario optimistic"><i class="fa-solid fa-arrow-trend-up"></i><div><b>Optimistis</b><span>Lebih cepat sekitar 2 hari jika ADG meningkat.</span></div></div>
+          <div class="harvest-scenario normal"><i class="fa-solid fa-calendar-day"></i><div><b>Normal</b><span>{{ prediction.date|date:'d M Y' }} berdasarkan kondisi terbaru.</span></div></div>
+          <div class="harvest-scenario conservative"><i class="fa-solid fa-shield-halved"></i><div><b>Konservatif</b><span>Tambahkan 3–5 hari jika nafsu makan atau kualitas air menurun.</span></div></div>
+        </div>
+      </div>
+    </article>
+
+    <aside class="harvest-panel harvest-reco-panel">
+      <div class="harvest-panel-head">
+        <div class="harvest-panel-title"><i class="fa-solid fa-list-check"></i><div><span>Tindakan</span><h2>Rekomendasi Panen</h2></div></div>
+      </div>
+      <ul class="harvest-reco-list">
+        <li><i class="fa-solid fa-chart-column"></i><div><b>Verifikasi harga pasar</b><span>Bandingkan harga target size sebelum menetapkan tanggal panen.</span></div></li>
+        <li><i class="fa-solid fa-sun"></i><div><b>Prioritaskan pagi hari</b><span>Kurangi risiko stres dan penurunan mutu hasil panen.</span></div></li>
+        <li><i class="fa-solid fa-droplet"></i><div><b>Stabilkan kualitas air</b><span>Pastikan DO, pH, dan suhu berada pada rentang aman.</span></div></li>
+        <li><i class="fa-solid fa-snowflake"></i><div><b>Siapkan cold chain</b><span>Koordinasikan es, wadah, transportasi, dan nota penjualan.</span></div></li>
+      </ul>
+    </aside>
+  </div>
+
+  {% include 'chat_ai/_ai_result.html' %}
+  {% include 'chat_ai/_source_data.html' %}
+</section>
 {% endblock %}
