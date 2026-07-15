@@ -259,14 +259,19 @@ def ai_siphon_warning(request):
 @permission_required('chat.view')
 def ai_harvest_prediction(request):
     ponds, pond = _selected_pond(request)
-    target_size = int(request.GET.get('target_size') or 70)
+    target_sizes = list(range(100, 24, -5))
+    try:
+        requested_target_size = int(request.GET.get('target_size') or 70)
+    except (TypeError, ValueError):
+        requested_target_size = 70
+    target_size = requested_target_size if requested_target_size in target_sizes else 70
     price = int(request.GET.get('price') or 63000)
     ctx = _pond_context(pond)
     prediction = _harvest_prediction(ctx, target_size, price)
     ai_text = _maybe_ollama(request, 'AI Prediksi Panen Parsial', ctx, f'Target size {target_size}, harga referensi {price}, prediksi awal: {prediction["summary"]}')
     return render(request, 'chat_ai/ai_harvest_prediction.html', {
         'ponds': ponds, 'selected_pond': pond, 'ctx': ctx, 'prediction': prediction,
-        'target_size': target_size, 'price': price, 'value_rp': _rupiah(prediction['value']),
+        'target_size': target_size, 'target_sizes': target_sizes, 'price': price, 'value_rp': _rupiah(prediction['value']),
         'ollama_health': ollama_health(), 'ai_text': ai_text,
     })
 
