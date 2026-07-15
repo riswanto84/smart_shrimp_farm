@@ -8,13 +8,22 @@
       <h1>AI Prediksi Panen Parsial</h1>
       <p>Perkirakan waktu panen, biomassa, dan potensi nilai berdasarkan sampling terakhir, ABW, ADG, SR, serta FCR.</p>
       <div class="harvest-status-row">
-        {% if ollama_online %}
-          <span class="harvest-status online"><i class="fa-solid fa-circle-check"></i> Ollama online</span>
+        {% if ollama_health.ok %}
+          <span class="harvest-status online">
+            <i class="fa-solid fa-circle-check"></i>
+            {% if ollama_health.gateway %}AI Gateway online{% else %}Ollama online{% endif %}
+          </span>
+        {% elif ollama_health.status == 'model_missing' %}
+          <span class="harvest-status warning"><i class="fa-solid fa-triangle-exclamation"></i> Model belum tersedia</span>
+        {% elif ollama_health.status == 'timeout' %}
+          <span class="harvest-status warning"><i class="fa-solid fa-clock"></i> Koneksi timeout</span>
         {% else %}
           <span class="harvest-status offline"><i class="fa-solid fa-circle-exclamation"></i> Ollama offline</span>
         {% endif %}
-        {% if ollama_model %}<span class="harvest-meta"><i class="fa-solid fa-microchip"></i> {{ ollama_model }}</span>{% endif %}
-        {% if ollama_url %}<span class="harvest-meta url"><i class="fa-solid fa-link"></i> {{ ollama_url }}</span>{% endif %}
+        {% if ollama_health.message %}<span class="harvest-meta"><i class="fa-solid fa-circle-info"></i> {{ ollama_health.message }}</span>{% endif %}
+        {% if ollama_health.model %}<span class="harvest-meta"><i class="fa-solid fa-microchip"></i> {{ ollama_health.model }}</span>{% endif %}
+        {% if ollama_health.latency_ms %}<span class="harvest-meta"><i class="fa-solid fa-gauge-high"></i> {{ ollama_health.latency_ms }} ms</span>{% endif %}
+        {% if ollama_health.url %}<span class="harvest-meta url"><i class="fa-solid fa-link"></i> {{ ollama_health.url }}</span>{% endif %}
       </div>
     </div>
     <div class="harvest-hero-icon"><i class="fa-solid fa-fish-fins"></i></div>

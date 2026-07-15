@@ -270,10 +270,19 @@ def ai_harvest_prediction(request):
     ctx = _pond_context(pond)
     prediction = _harvest_prediction(ctx, target_size, price)
     ai_text = _maybe_ollama(request, 'AI Prediksi Panen Parsial', ctx, f'Target size {target_size}, harga referensi {price}, prediksi awal: {prediction["summary"]}')
+    health = ollama_health(timeout=5)
     return render(request, 'chat_ai/ai_harvest_prediction.html', {
         'ponds': ponds, 'selected_pond': pond, 'ctx': ctx, 'prediction': prediction,
         'target_size': target_size, 'price': price, 'value_rp': _rupiah(prediction['value']),
-        'ollama_health': ollama_health(), 'ai_text': ai_text,
+        'ollama_health': health,
+        # Variabel eksplisit untuk kompatibilitas template lama dan agar status tidak selalu dianggap offline.
+        'ollama_online': bool(health.get('ok')),
+        'ollama_model': health.get('model'),
+        'ollama_url': health.get('url'),
+        'ollama_status_message': health.get('message'),
+        'ollama_latency_ms': health.get('latency_ms'),
+        'ollama_uses_gateway': bool(health.get('gateway')),
+        'ai_text': ai_text,
     })
 
 
