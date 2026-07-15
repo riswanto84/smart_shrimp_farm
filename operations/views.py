@@ -543,6 +543,7 @@ def production_dashboard(request):
             'fcr': round(sum(bucket['fcr']) / len(bucket['fcr']), 2) if bucket['fcr'] else 0,
             'sr': round(sum(bucket['sr']) / len(bucket['sr']), 2) if bucket['sr'] else 0,
             'population': bucket['population'],
+            'size': round(1000.0 / (sum(bucket['abw']) / len(bucket['abw'])), 2) if bucket['abw'] and (sum(bucket['abw']) / len(bucket['abw'])) > 0 else 0,
         })
 
     # ADG untuk dashboard dihitung ulang dari rumus baku agar nilai impor lama
@@ -569,6 +570,9 @@ def production_dashboard(request):
     avg_sr_values = [x for x in avg_sr_values if x > 0]
     avg_sr = sum(avg_sr_values) / len(avg_sr_values) if avg_sr_values else 0
     current_population = sum(int(x.population or x.population_index or 0) for x in latest_samples)
+    # Size adalah jumlah ekor per kilogram. Gunakan ABW rata-rata sampling
+    # terakhir per kolam agar konsisten dengan KPI ABW pada dashboard.
+    current_size = (1000.0 / avg_abw) if avg_abw > 0 else 0
 
     # Target produksi berasal dari Master Siklus Budidaya, bukan hardcode.
     target_harvest_ton = _float(getattr(selected_cycle, 'target_biomass_ton', 25)) or 25.0
@@ -598,6 +602,7 @@ def production_dashboard(request):
 
     biomass_projection = []
     target_abw_limit = (1000.0 / target_size) if target_size > 0 else 40.0
+    target_abw_grams = target_abw_limit
     valid_adgs = [safe_actual_adg(x) for x in latest_samples]
     valid_adgs = sorted(x for x in valid_adgs if x > 0)
     fallback_adg = (
@@ -628,6 +633,16 @@ def production_dashboard(request):
             'biomass_ton': round(total_kg / 1000.0, 3),
         })
 
+    # Size proyeksi pada target DOC dihitung dari total biomassa proyeksi
+    # dibagi populasi hidup terbaru. Rumus: ABW = biomassa(kg)*1000/populasi,
+    # lalu Size = 1000/ABW.
+    projected_size_doc = 0
+    projected_abw_doc = 0
+    if biomass_projection and current_population > 0:
+        projected_total_kg = _float(biomass_projection[-1].get('biomass_ton')) * 1000.0
+        projected_abw_doc = projected_total_kg * 1000.0 / current_population
+        projected_size_doc = 1000.0 / projected_abw_doc if projected_abw_doc > 0 else 0
+
     # Estimasi tanggal target size siklus diringkas dari estimasi seluruh kolam.
     size30_dates = []
     target_abw = 1000.0 / target_size if target_size > 0 else 0
@@ -649,6 +664,7 @@ def production_dashboard(request):
         'doc120_projection_ton': biomass_projection[-1]['biomass_ton'] if biomass_projection else 0,
         'target_doc': target_doc,
         'target_size': target_size,
+        'target_abw_grams': target_abw_grams,
         'target_sr': target_sr,
         'target_fcr': target_fcr,
         'target_adg': target_adg,
@@ -662,6 +678,9 @@ def production_dashboard(request):
         'avg_adg': avg_adg,
         'avg_sr': avg_sr,
         'current_population': current_population,
+        'current_size': current_size,
+        'projected_size_doc': projected_size_doc,
+        'projected_abw_doc': projected_abw_doc,
         'estimated_size30_date': estimated_size30_date,
         'feed_today': feed_value,
         'feed_date': feed_date,
