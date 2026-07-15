@@ -162,14 +162,14 @@ def _feed_recommendation(ctx):
     return round(total, 1), sessions, reason
 
 
-def _harvest_prediction(ctx, target_size=70, price=63000):
+def _harvest_prediction(ctx, target_size=30, price=63000):
     s = ctx.get('latest_sampling')
     today = ctx['today']
     if not s:
         return {'date': today, 'days': 0, 'target_size': target_size, 'biomass': 0, 'value': 0, 'summary': 'Data sampling belum tersedia.'}
     abw = _num(s.abw_g)
     adg = _num(s.adg_weekly or s.adg_cumulative or 0.15)
-    target_abw = 1000 / float(target_size or 70)
+    target_abw = 1000 / float(target_size or 30)
     days_needed = 0 if abw >= target_abw else int(max((target_abw - abw) / max(adg, 0.01), 0))
     est_date = today + timedelta(days=days_needed)
     biomass = _num(s.biomass_kg or s.biomass_index_kg)
@@ -259,19 +259,20 @@ def ai_siphon_warning(request):
 @permission_required('chat.view')
 def ai_harvest_prediction(request):
     ponds, pond = _selected_pond(request)
-    target_sizes = list(range(100, 24, -5))
     try:
-        requested_target_size = int(request.GET.get('target_size') or 70)
+        target_size = int(request.GET.get('target_size') or 30)
     except (TypeError, ValueError):
-        requested_target_size = 70
-    target_size = requested_target_size if requested_target_size in target_sizes else 70
+        target_size = 30
+    # Target size harus berupa bilangan bulat positif. Batasi agar input tetap wajar.
+    if target_size < 1 or target_size > 1000:
+        target_size = 30
     price = int(request.GET.get('price') or 63000)
     ctx = _pond_context(pond)
     prediction = _harvest_prediction(ctx, target_size, price)
     ai_text = _maybe_ollama(request, 'AI Prediksi Panen Parsial', ctx, f'Target size {target_size}, harga referensi {price}, prediksi awal: {prediction["summary"]}')
     return render(request, 'chat_ai/ai_harvest_prediction.html', {
         'ponds': ponds, 'selected_pond': pond, 'ctx': ctx, 'prediction': prediction,
-        'target_size': target_size, 'target_sizes': target_sizes, 'price': price, 'value_rp': _rupiah(prediction['value']),
+        'target_size': target_size, 'price': price, 'value_rp': _rupiah(prediction['value']),
         'ollama_health': ollama_health(), 'ai_text': ai_text,
     })
 

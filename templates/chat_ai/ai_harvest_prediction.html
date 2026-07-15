@@ -5,18 +5,15 @@
 <form class="ai-inline-filter" method="get">
   <label>Kolam<select name="pond" class="form-select">{% for p in ponds %}<option value="{{p.id}}" {% if selected_pond and selected_pond.id == p.id %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></label>
   <label>Target Size
-    <select name="target_size" class="form-select">
-      {% for size_option in target_sizes %}
-        <option value="{{ size_option }}" {% if target_size == size_option %}selected{% endif %}>{{ size_option }}</option>
-      {% endfor %}
-    </select>
+    <input type="number" name="target_size" class="form-control" value="{{ target_size|default:30 }}" min="1" max="1000" step="1" inputmode="numeric" required>
+    <small class="text-muted">Masukkan angka bulat, contoh 30.</small>
   </label>
   <label>Harga Referensi<input class="form-control" name="price" value="{{ price }}"></label>
   <input type="hidden" name="generate" value="1"><button class="btn btn-primary"><i class="fa-solid fa-wand-magic-sparkles"></i> Prediksi Panen</button>
 </form>
 <div class="ai-kpi-grid">
   <div class="ai-kpi success"><i class="fa-solid fa-calendar-check"></i><span>Estimasi Tanggal</span><b>{{ prediction.date|date:'d M Y' }}</b><small>{{ prediction.days|ribuan }} hari lagi</small></div>
-  <div class="ai-kpi"><i class="fa-solid fa-fish-fins"></i><span>Target Size</span><b>{{ prediction.target_size|angka:2 }}</b><small>ekor/kg</small></div>
+  <div class="ai-kpi"><i class="fa-solid fa-fish-fins"></i><span>Target Size</span><b>{{ prediction.target_size|floatformat:0 }}</b><small>ekor/kg</small></div>
   <div class="ai-kpi warning"><i class="fa-solid fa-weight-hanging"></i><span>Estimasi Biomassa</span><b>{{ prediction.biomass|angka:2 }} kg</b><small>basis sampling terakhir</small></div>
   <div class="ai-kpi success"><i class="fa-solid fa-money-bill-trend-up"></i><span>Potensi Nilai</span><b>{{ value_rp }}</b><small>berdasarkan harga referensi</small></div>
 </div>
