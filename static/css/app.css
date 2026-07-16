@@ -143,7 +143,7 @@
 .weather-top-pill small{max-width:125px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .weather-card-pro{display:grid;grid-template-columns:minmax(280px,1.05fr) minmax(420px,1.45fr) minmax(280px,1fr);gap:22px;align-items:stretch;margin:0 0 18px;padding:22px;border:1px solid #dce8f6;border-radius:22px;background:linear-gradient(135deg,#0b3b73 0%,#0d67c9 55%,#1e80e8 100%);box-shadow:0 16px 38px rgba(15,66,128,.16);color:#fff;overflow:hidden;position:relative}
 .weather-card-pro:before{content:"";position:absolute;width:320px;height:320px;border-radius:50%;right:-120px;top:-180px;background:rgba(255,255,255,.09)}
-.weather-card-pro.is-cache{background:linear-gradient(135deg,#475569,#64748b)}
+.weather-card-pro.is-cache{background:linear-gradient(135deg,#0b3b73 0%,#0d67c9 55%,#1e80e8 100%)}
 .weather-card-pro.is-offline{background:linear-gradient(135deg,#6b7280,#475569)}
 .weather-main{display:flex;align-items:center;gap:18px;position:relative;z-index:1}
 .weather-icon-wrap{width:82px;height:82px;min-width:82px;border-radius:24px;display:grid;place-items:center;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);font-size:38px;box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
