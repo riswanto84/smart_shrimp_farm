@@ -1,10 +1,19 @@
 """Layanan cuaca publik untuk lokasi tambak.
 
-Sumber default: Open-Meteo Forecast API. Data adalah observasi/model cuaca pada
-koordinat tambak, bukan pembacaan sensor fisik di lokasi kolam.
+Sumber default: Open-Meteo Forecast API. Data yang ditampilkan merupakan data
+cuaca model/API pada koordinat tambak, bukan pembacaan sensor suhu air kolam.
+
+Implementasi ini dibuat tahan terhadap masalah yang umum muncul di VPS:
+- proxy environment yang tidak sengaja terbaca oleh ``requests``;
+- kegagalan DNS/IPv6 sementara;
+- respons 429/5xx;
+- timeout koneksi;
+- API sesaat tidak tersedia.
 """
 from __future__ import annotations
 
+import logging
+import socket
 from datetime import datetime
 from typing import Any
 
@@ -12,6 +21,11 @@ import requests
 from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
+from requests.adapters import HTTPAdapter
+from urllib3.util import connection as urllib3_connection
+from urllib3.util.retry import Retry
+
+logger = logging.getLogger(__name__)
 
 WEATHER_CODES = {
     0: ("Cerah", "fa-sun"),
@@ -86,7 +100,7 @@ def _build_farm_advice(data: dict[str, Any]) -> list[dict[str, str]]:
             "icon": "fa-temperature-high",
             "text": "Suhu udara tinggi. Hindari pemberian pakan berlebih saat siang terpanas.",
         })
-    elif temperature <= 24 and temperature > 0:
+    elif 0 < temperature <= 24:
         advice.append({
             "level": "info",
             "icon": "fa-temperature-low",
@@ -121,6 +135,9 @@ def _parse_payload(payload: dict[str, Any]) -> dict[str, Any]:
     hourly = payload.get("hourly") or {}
     daily = payload.get("daily") or {}
 
+    if current.get("temperature_2m") is None:
+        raise ValueError("Respons API tidak memiliki current.temperature_2m")
+
     code = int(current.get("weather_code") or 0)
     condition, icon = WEATHER_CODES.get(code, ("Kondisi tidak diketahui", "fa-cloud"))
 
@@ -130,7 +147,10 @@ def _parse_payload(payload: dict[str, Any]) -> dict[str, Any]:
         try:
             update_time = datetime.fromisoformat(str(current_time))
             if timezone.is_naive(update_time):
-                update_time = timezone.make_aware(update_time, timezone.get_current_timezone())
+                update_time = timezone.make_aware(
+                    update_time,
+                    timezone.get_current_timezone(),
+                )
         except (TypeError, ValueError):
             update_time = None
 
@@ -138,9 +158,9 @@ def _parse_payload(payload: dict[str, Any]) -> dict[str, Any]:
     hourly_times = hourly.get("time") or []
     hourly_rain = hourly.get("precipitation_probability") or []
     if current_time and current_time in hourly_times:
-        idx = hourly_times.index(current_time)
-        if idx < len(hourly_rain):
-            rain_chance = hourly_rain[idx]
+        index = hourly_times.index(current_time)
+        if index < len(hourly_rain):
+            rain_chance = hourly_rain[index]
     if rain_chance is None:
         rain_chance = (daily.get("precipitation_probability_max") or [None])[0]
 
@@ -176,24 +196,99 @@ def _parse_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-def get_farm_weather(force_refresh: bool = False) -> dict[str, Any]:
-    """Ambil cuaca lokasi tambak dengan cache dan stale fallback.
+def _build_session() -> requests.Session:
+    retry = Retry(
+        total=2,
+        connect=2,
+        read=2,
+        status=2,
+        backoff_factor=0.35,
+        status_forcelist=(429, 500, 502, 503, 504),
+        allowed_methods=frozenset({"GET"}),
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry, pool_connections=4, pool_maxsize=4)
+    session = requests.Session()
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
 
-    Cache aktif mengurangi panggilan API di setiap halaman. Bila API tidak dapat
-    dijangkau, cache lama dipakai agar UI tetap informatif dan diberi label cache.
-    """
-    cache_key = "ssf_weather_current_v2"
-    stale_key = "ssf_weather_stale_v2"
+    # VPS kadang memiliki HTTP(S)_PROXY lama/tidak valid. Secara default jangan
+    # mengambil proxy dari environment, kecuali dinyalakan eksplisit di .env.
+    session.trust_env = bool(getattr(settings, "WEATHER_TRUST_ENV", False))
+    session.headers.update({
+        "User-Agent": "SmartShrimpFarm/1.1 (+https://smart.udangemasnusantara.co.id)",
+        "Accept": "application/json",
+    })
+    return session
+
+
+def _request_weather(url: str, params: dict[str, Any], timeout: float) -> dict[str, Any]:
+    with _build_session() as session:
+        response = session.get(url, params=params, timeout=(timeout, timeout + 5))
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("Respons API bukan objek JSON")
+        return payload
+
+
+def _request_weather_ipv4(url: str, params: dict[str, Any], timeout: float) -> dict[str, Any]:
+    """Ulangi request memakai IPv4 jika VPS memiliki rute IPv6 yang rusak."""
+    original = urllib3_connection.allowed_gai_family
+    try:
+        urllib3_connection.allowed_gai_family = lambda: socket.AF_INET
+        return _request_weather(url, params, timeout)
+    finally:
+        urllib3_connection.allowed_gai_family = original
+
+
+def _offline_payload(exc: Exception) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "status": "offline",
+        "source": "Open-Meteo",
+        "source_url": "https://open-meteo.com/",
+        "location": getattr(settings, "WEATHER_LOCATION_NAME", "Muara Gembong"),
+        "condition": "Data cuaca tidak tersedia",
+        "icon": "fa-cloud-circle-exclamation",
+        "temperature": None,
+        "updated_at": None,
+        "message": "Gagal mengambil data cuaca dari API",
+        "error": f"{type(exc).__name__}: {exc}",
+        "farm_advice": [{
+            "level": "warning",
+            "icon": "fa-triangle-exclamation",
+            "text": "Gunakan pengamatan lapangan dan alat ukur tambak sampai API kembali tersedia.",
+        }],
+    }
+
+
+def get_farm_weather(force_refresh: bool = False) -> dict[str, Any]:
+    """Ambil cuaca lokasi tambak dengan cache, retry, dan fallback IPv4."""
+    latitude = float(getattr(settings, "WEATHER_LATITUDE", getattr(settings, "FARM_LAT", -5.98)))
+    longitude = float(getattr(settings, "WEATHER_LONGITUDE", getattr(settings, "FARM_LON", 107.02)))
+    cache_key = f"ssf_weather_current_v3:{latitude:.5f}:{longitude:.5f}"
+    stale_key = f"ssf_weather_stale_v3:{latitude:.5f}:{longitude:.5f}"
+    offline_key = f"ssf_weather_offline_v3:{latitude:.5f}:{longitude:.5f}"
     ttl = int(getattr(settings, "WEATHER_CACHE_SECONDS", 600))
 
     if not force_refresh:
         cached = cache.get(cache_key)
         if cached:
             return cached
+        recent_failure = cache.get(offline_key)
+        if recent_failure:
+            stale = cache.get(stale_key)
+            return stale or recent_failure
 
-    latitude = getattr(settings, "WEATHER_LATITUDE", getattr(settings, "FARM_LAT", -5.98))
-    longitude = getattr(settings, "WEATHER_LONGITUDE", getattr(settings, "FARM_LON", 107.02))
-    timeout = float(getattr(settings, "WEATHER_API_TIMEOUT", 5))
+    timeout = float(getattr(settings, "WEATHER_API_TIMEOUT", 10))
+    api_url = str(
+        getattr(
+            settings,
+            "WEATHER_API_URL",
+            "https://api.open-meteo.com/v1/forecast",
+        )
+    ).strip()
 
     params = {
         "latitude": latitude,
@@ -224,40 +319,34 @@ def get_farm_weather(force_refresh: bool = False) -> dict[str, Any]:
     }
 
     try:
-        response = requests.get(
-            getattr(settings, "WEATHER_API_URL", "https://api.open-meteo.com/v1/forecast"),
-            params=params,
-            timeout=timeout,
-            headers={"User-Agent": "SmartShrimpFarm/1.0 (+https://smart.udangemasnusantara.co.id)"},
-        )
-        response.raise_for_status()
-        weather = _parse_payload(response.json())
-        cache.set(cache_key, weather, ttl)
-        cache.set(stale_key, weather, 86400)
-        return weather
-    except (requests.RequestException, ValueError, KeyError) as exc:
-        stale = cache.get(stale_key)
-        if stale:
-            stale = dict(stale)
-            stale["status"] = "cache"
-            stale["message"] = "API tidak terjangkau; menampilkan data terakhir tersimpan"
-            stale["error"] = str(exc)
-            return stale
-        return {
-            "ok": False,
-            "status": "offline",
-            "source": "Open-Meteo",
-            "source_url": "https://open-meteo.com/",
-            "location": getattr(settings, "WEATHER_LOCATION_NAME", "Muara Gembong"),
-            "condition": "Data cuaca tidak tersedia",
-            "icon": "fa-cloud-circle-exclamation",
-            "temperature": None,
-            "updated_at": None,
-            "message": "Gagal mengambil data cuaca dari API",
-            "error": str(exc),
-            "farm_advice": [{
-                "level": "warning",
-                "icon": "fa-triangle-exclamation",
-                "text": "Gunakan pengamatan lapangan dan alat ukur tambak sampai API kembali tersedia.",
-            }],
-        }
+        payload = _request_weather(api_url, params, timeout)
+    except (requests.RequestException, ValueError, KeyError, OSError) as first_exc:
+        logger.warning("Weather API request gagal; mencoba IPv4: %s", first_exc)
+        try:
+            payload = _request_weather_ipv4(api_url, params, timeout)
+        except (requests.RequestException, ValueError, KeyError, OSError) as final_exc:
+            logger.exception("Weather API gagal pada VPS: %s", final_exc)
+            stale = cache.get(stale_key)
+            if stale:
+                stale = dict(stale)
+                stale["status"] = "cache"
+                stale["message"] = "API tidak terjangkau; menampilkan data terakhir tersimpan"
+                stale["error"] = f"{type(final_exc).__name__}: {final_exc}"
+                cache.set(offline_key, stale, 60)
+                return stale
+            offline = _offline_payload(final_exc)
+            cache.set(offline_key, offline, 60)
+            return offline
+
+    try:
+        weather = _parse_payload(payload)
+    except (ValueError, KeyError, TypeError) as exc:
+        logger.exception("Respons Weather API tidak dapat diproses: %s", exc)
+        offline = _offline_payload(exc)
+        cache.set(offline_key, offline, 60)
+        return offline
+
+    cache.delete(offline_key)
+    cache.set(cache_key, weather, ttl)
+    cache.set(stale_key, weather, 86400)
+    return weather
