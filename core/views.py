@@ -13,6 +13,7 @@ from datetime import timedelta
 import math
 from chat_ai.services import ollama_health
 from cultivation.utils import filter_selected_cycle
+from core.weather_service import get_farm_weather
 
 def home(request):
     # Halaman company profile/public home dinonaktifkan.
@@ -191,6 +192,9 @@ def dashboard(request):
         )
 
     ollama_status = ollama_health(timeout=2)
+    # Ambil cuaca langsung pada view dashboard. Nilai context view mengungguli
+    # context processor sehingga dashboard selalu memakai service cuaca terbaru.
+    live_weather = get_farm_weather()
     context = {
         'ponds': ponds,
         'sales_total': sales_total,
@@ -213,6 +217,7 @@ def dashboard(request):
         'doc120_normal_ton': doc120_normal_ton,
         'doc120_conservative_ton': doc120_conservative_ton,
         'ollama_status': ollama_status,
+        'live_weather': live_weather,
     }
     return render(request, 'core/dashboard.html', context)
 
@@ -227,6 +232,25 @@ def mark_notifications_read(request):
         request.session['ssf_notifications_read_key'] = key
         request.session.modified = True
     return JsonResponse({'ok': True})
+
+
+@login_required
+@permission_required('dashboard')
+def weather_status_api(request):
+    """Status cuaca aktual dari proses web/Gunicorn.
+
+    Endpoint ini juga menjadi mekanisme pemulihan otomatis jika render awal
+    belum memperoleh data. Gunakan ?refresh=1 untuk memaksa request API.
+    """
+    force_refresh = request.GET.get('refresh') == '1'
+    result = dict(get_farm_weather(force_refresh=force_refresh))
+    updated_at = result.get('updated_at')
+    if updated_at is not None:
+        try:
+            result['updated_at'] = updated_at.isoformat()
+        except AttributeError:
+            result['updated_at'] = str(updated_at)
+    return JsonResponse(result)
 
 
 @login_required

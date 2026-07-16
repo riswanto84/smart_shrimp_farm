@@ -110,6 +110,29 @@
   </section>
   <section class="panel activity-panel"><div class="panel-head"><h2>Aktivitas Terbaru</h2></div><div class="activity-list"><div><i class="fa-solid fa-circle-info"></i><p><b>Belum ada sumber aktivitas terintegrasi</b><small>Panel ini tidak lagi menampilkan data contoh.</small></p></div></div></section>
 </div>
+
+{% if live_weather.temperature is None %}
+<script>
+(function () {
+  // Render awal dapat terjadi ketika worker baru hidup dan cache belum terisi.
+  // Minta data sekali dari endpoint proses web, lalu reload setelah cache tersimpan.
+  const key = 'ssf-weather-recovery-v1';
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, '1');
+  fetch('{% url "weather_status_api" %}?refresh=1', {
+    credentials: 'same-origin',
+    headers: {'X-Requested-With': 'XMLHttpRequest'}
+  })
+    .then(function (response) { return response.ok ? response.json() : null; })
+    .then(function (data) {
+      if (data && data.temperature !== null && data.temperature !== undefined) {
+        window.location.reload();
+      }
+    })
+    .catch(function () {});
+})();
+</script>
+{% endif %}
 <script>
 (function () {
   const badge = document.getElementById('ollama-status-badge');

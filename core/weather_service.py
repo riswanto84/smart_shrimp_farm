@@ -349,6 +349,15 @@ def get_farm_weather(force_refresh: bool = False) -> dict[str, Any]:
         if isinstance(cached, dict) and cached.get("temperature") is not None:
             return cached
 
+        # Cache berkas dibaca SEBELUM request API. Ini penting pada VPS karena
+        # management command dan worker Gunicorn dapat memakai user/proses berbeda.
+        # Data yang baru berhasil diambil oleh check_weather_api langsung dapat
+        # ditampilkan oleh dashboard meskipun worker sedang mengalami kendala jaringan.
+        disk_cached = _read_disk_cache(disk_path)
+        if disk_cached:
+            cache.set(cache_key, disk_cached, min(ttl, 300))
+            return disk_cached
+
     timeout = float(getattr(settings, "WEATHER_API_TIMEOUT", 12))
     api_url = str(
         getattr(settings, "WEATHER_API_URL", "https://api.open-meteo.com/v1/forecast")

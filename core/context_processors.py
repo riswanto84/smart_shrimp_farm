@@ -1,5 +1,8 @@
 from django.utils import timezone
 import hashlib
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _notification_key(items):
@@ -118,6 +121,7 @@ def live_weather(request):
         from .weather_service import get_farm_weather
         return {"live_weather": get_farm_weather()}
     except Exception as exc:
+        logger.exception("Context processor cuaca gagal: %s", exc)
         return {
             "live_weather": {
                 "ok": False,
