@@ -24,7 +24,7 @@ class CultivationCycle(models.Model):
     target_sr_percent = models.DecimalField(max_digits=6, decimal_places=2, default=85, help_text='Target survival rate dalam persen.')
     target_fcr = models.DecimalField(max_digits=6, decimal_places=2, default=1.20, help_text='Target feed conversion ratio.')
     target_adg = models.DecimalField(max_digits=7, decimal_places=3, default=0.25, help_text='Target ADG gram per hari.')
-    target_population = models.PositiveBigIntegerField(default=0, blank=True, help_text='Target populasi hidup saat panen; 0 berarti tidak ditetapkan.')
+    target_population = models.PositiveBigIntegerField(default=0, blank=True, help_text='Field lama untuk kompatibilitas. Target populasi kini dihitung dari jumlah tebar × target SR.')
     estimated_price_per_kg = models.DecimalField(max_digits=14, decimal_places=2, default=0, blank=True, help_text='Harga jual estimasi per kilogram.')
     target_cost = models.DecimalField(max_digits=18, decimal_places=2, default=0, blank=True, help_text='Target biaya produksi satu siklus.')
     target_end_date = models.DateField(blank=True, null=True)
@@ -105,6 +105,13 @@ class CultivationCycle(models.Model):
         today = self.actual_end_date or timezone.localdate()
         elapsed = (today - self.start_date).days + 1
         return max(0, min(100, round(elapsed / max(self.target_duration_days, 1) * 100)))
+
+
+    def calculate_target_population(self, total_stocking):
+        """Hitung target populasi hidup dari total tebar dan target SR."""
+        if not total_stocking:
+            return 0
+        return round(int(total_stocking) * float(self.target_sr_percent or 0) / 100.0)
 
     @property
     def target_revenue(self):

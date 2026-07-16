@@ -59,7 +59,11 @@
       </form>
       {% endif %}
 
-      <div class="top-pill"><i class="fa-solid fa-cloud-sun text-warning"></i><strong>28°C</strong><small>Muara Gembong</small></div>
+      <div class="top-pill weather-top-pill" title="{{ live_weather.condition|default:'Data cuaca tidak tersedia' }} · Sumber {{ live_weather.source|default:'Open-Meteo' }}">
+        <i class="fa-solid {{ live_weather.icon|default:'fa-cloud' }} text-warning"></i>
+        <strong>{% if live_weather.temperature is not None %}{{ live_weather.temperature|floatformat:0 }}°C{% else %}—{% endif %}</strong>
+        <small>{{ live_weather.location|default:'Muara Gembong' }}{% if live_weather.status == 'cache' %} · cache{% endif %}</small>
+      </div>
       <div class="top-pill"><i class="fa-regular fa-calendar"></i><strong>{{ app_today|date:"d M Y" }}</strong><small>{{ app_today|date:"H:i" }} WIB</small></div>
       <div class="notif-wrap">
         <button class="notif-btn" id="notifToggle" type="button" aria-label="Buka notifikasi" aria-haspopup="true" aria-controls="notifPanel" aria-expanded="false" data-notification-key="{{ app_notification_key }}" data-notification-count="{{ app_notification_count }}">

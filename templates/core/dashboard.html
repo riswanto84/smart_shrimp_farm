@@ -26,6 +26,39 @@
     </div>
   </div>
 </div>
+<section class="weather-card-pro {% if live_weather.status == 'offline' %}is-offline{% elif live_weather.status == 'cache' %}is-cache{% endif %}">
+  <div class="weather-main">
+    <div class="weather-icon-wrap"><i class="fa-solid {{ live_weather.icon|default:'fa-cloud' }}"></i></div>
+    <div class="weather-current">
+      <div class="weather-eyebrow"><i class="fa-solid fa-location-dot"></i> {{ live_weather.location|default:'Muara Gembong' }}</div>
+      <div class="weather-temp-row">
+        <strong>{% if live_weather.temperature is not None %}{{ live_weather.temperature|floatformat:1 }}°C{% else %}—{% endif %}</strong>
+        <div><b>{{ live_weather.condition|default:'Data cuaca tidak tersedia' }}</b><span>Terasa seperti {% if live_weather.apparent_temperature is not None %}{{ live_weather.apparent_temperature|floatformat:1 }}°C{% else %}—{% endif %}</span></div>
+      </div>
+      <small class="weather-source-line">
+        {% if live_weather.status == 'live' %}<i class="fa-solid fa-circle-check"></i> Data API terbaru
+        {% elif live_weather.status == 'cache' %}<i class="fa-solid fa-clock-rotate-left"></i> Data terakhir tersimpan
+        {% else %}<i class="fa-solid fa-triangle-exclamation"></i> API tidak tersedia{% endif %}
+        {% if live_weather.updated_at %} · {{ live_weather.updated_at|date:"d M Y H:i" }} WIB{% endif %}
+        · Sumber: <a href="{{ live_weather.source_url|default:'https://open-meteo.com/' }}" target="_blank" rel="noopener">{{ live_weather.source|default:'Open-Meteo' }}</a>
+      </small>
+    </div>
+  </div>
+  <div class="weather-metrics">
+    <div><i class="fa-solid fa-droplet"></i><span>Kelembapan</span><b>{% if live_weather.humidity is not None %}{{ live_weather.humidity|floatformat:0 }}%{% else %}—{% endif %}</b></div>
+    <div><i class="fa-solid fa-cloud-rain"></i><span>Peluang Hujan</span><b>{% if live_weather.rain_chance is not None %}{{ live_weather.rain_chance|floatformat:0 }}%{% else %}—{% endif %}</b></div>
+    <div><i class="fa-solid fa-wind"></i><span>Angin</span><b>{% if live_weather.wind_speed is not None %}{{ live_weather.wind_speed|floatformat:1 }} km/j{% else %}—{% endif %}</b><small>{{ live_weather.wind_direction|default:'—' }}</small></div>
+    <div><i class="fa-solid fa-gauge-high"></i><span>Tekanan</span><b>{% if live_weather.pressure is not None %}{{ live_weather.pressure|floatformat:0 }} hPa{% else %}—{% endif %}</b></div>
+    <div><i class="fa-solid fa-temperature-arrow-up"></i><span>Hari Ini</span><b>{% if live_weather.today_min is not None %}{{ live_weather.today_min|floatformat:0 }}–{{ live_weather.today_max|floatformat:0 }}°C{% else %}—{% endif %}</b></div>
+  </div>
+  <div class="weather-advice">
+    <div class="weather-advice-title"><i class="fa-solid fa-shrimp"></i><span>Catatan operasional tambak</span></div>
+    {% for advice in live_weather.farm_advice %}
+    <div class="weather-advice-item {{ advice.level }}"><i class="fa-solid {{ advice.icon }}"></i><span>{{ advice.text }}</span></div>
+    {% empty %}<div class="weather-advice-item info"><i class="fa-solid fa-circle-info"></i><span>Gunakan hasil pengukuran air kolam sebagai dasar keputusan utama.</span></div>{% endfor %}
+    <small>Cuaca berasal dari model/API pada koordinat tambak, bukan sensor suhu air kolam.</small>
+  </div>
+</section>
 <div class="dashboard-grid">
   <section class="panel pond-summary">
     <div class="panel-head"><h2>Ringkasan Kolam</h2><a href="/ponds/">Lihat Semua Kolam <i class="fa-solid fa-arrow-right"></i></a></div>

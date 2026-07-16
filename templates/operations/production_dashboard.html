@@ -60,8 +60,6 @@
         <div class="summary-row"><span>Biomassa saat ini</span><b>{{ estimated_biomass|angka2 }} kg</b></div>
         <div class="summary-row"><span>Target produksi</span><b>{{ target_harvest_ton|floatformat:2 }} ton</b></div>
         <div class="summary-row"><span>Estimasi size {{ target_size|floatformat:0 }}</span><b>{% if estimated_size30_date %}{{ estimated_size30_date|date:"d M Y" }}{% else %}Belum cukup data{% endif %}</b></div>
-        {% if estimated_price_per_kg %}<div class="summary-row"><span>Harga estimasi/kg</span><b>Rp {{ estimated_price_per_kg|floatformat:0 }}</b></div><div class="summary-row"><span>Target omzet</span><b>Rp {{ target_revenue|floatformat:0 }}</b></div>{% endif %}
-        {% if target_cost %}<div class="summary-row"><span>Target biaya</span><b>Rp {{ target_cost|floatformat:0 }}</b></div><div class="summary-row"><span>Target laba</span><b>Rp {{ target_profit|floatformat:0 }}</b></div>{% endif %}
       </div>
     </section>
     <section class="panel-v2">

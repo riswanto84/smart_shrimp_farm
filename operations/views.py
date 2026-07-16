@@ -581,11 +581,10 @@ def production_dashboard(request):
     target_sr = _float(getattr(selected_cycle, 'target_sr_percent', 85)) or 85.0
     target_fcr = _float(getattr(selected_cycle, 'target_fcr', 1.20)) or 1.20
     target_adg = _float(getattr(selected_cycle, 'target_adg', 0.25)) or 0.25
-    target_population = int(getattr(selected_cycle, 'target_population', 0) or 0)
-    estimated_price_per_kg = _float(getattr(selected_cycle, 'estimated_price_per_kg', 0))
-    target_cost = _float(getattr(selected_cycle, 'target_cost', 0))
-    target_revenue = target_harvest_ton * 1000.0 * estimated_price_per_kg
-    target_profit = target_revenue - target_cost
+    # Target populasi hidup tidak lagi diinput manual. Nilainya dihitung
+    # otomatis dari total tebar pada sampling terakhir × target SR siklus.
+    total_stocking = sum(int(getattr(x, 'stocking_count', 0) or 0) for x in latest_samples)
+    target_population = round(total_stocking * target_sr / 100.0) if total_stocking > 0 else 0
     biomass_progress = min((estimated_biomass / 1000.0) / target_harvest_ton * 100.0, 100.0) if target_harvest_ton else 0
 
     # Proyeksi biomassa hingga target DOC menggunakan ADG aktual dan populasi FR
@@ -669,10 +668,6 @@ def production_dashboard(request):
         'target_fcr': target_fcr,
         'target_adg': target_adg,
         'target_population': target_population,
-        'estimated_price_per_kg': estimated_price_per_kg,
-        'target_cost': target_cost,
-        'target_revenue': target_revenue,
-        'target_profit': target_profit,
         'target_harvest_ton': target_harvest_ton,
         'biomass_progress': biomass_progress,
         'avg_adg': avg_adg,

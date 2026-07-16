@@ -18,9 +18,6 @@ class CultivationCycleForm(forms.ModelForm):
             "target_sr_percent",
             "target_fcr",
             "target_adg",
-            "target_population",
-            "estimated_price_per_kg",
-            "target_cost",
             "status",
             "actual_end_date",
             "notes",
@@ -42,9 +39,6 @@ class CultivationCycleForm(forms.ModelForm):
         }
         for name, value in numeric_defaults.items():
             self.fields[name].initial = value
-        self.fields["target_population"].required = False
-        self.fields["estimated_price_per_kg"].required = False
-        self.fields["target_cost"].required = False
 
     def clean_target_duration_days(self):
         value = self.cleaned_data.get("target_duration_days") or 135

@@ -108,3 +108,24 @@ def app_notifications(request):
         'app_notification_key': notification_key,
         'app_today': now,
     }
+
+
+def live_weather(request):
+    """Menyediakan cuaca lokasi tambak ke seluruh template terautentikasi."""
+    if not getattr(request, "user", None) or not request.user.is_authenticated:
+        return {}
+    try:
+        from .weather_service import get_farm_weather
+        return {"live_weather": get_farm_weather()}
+    except Exception as exc:
+        return {
+            "live_weather": {
+                "ok": False,
+                "status": "offline",
+                "location": "Muara Gembong",
+                "temperature": None,
+                "condition": "Data cuaca tidak tersedia",
+                "icon": "fa-cloud-circle-exclamation",
+                "message": str(exc),
+            }
+        }
