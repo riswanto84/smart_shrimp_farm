@@ -1,5 +1,8 @@
 Django==4.2.30
-requests==2.32.3
+requests==2.34.2
+chardet==5.2.0
+urllib3<3
+charset-normalizer<4
 reportlab==4.2.5
 Pillow==11.3.0
 python-decouple==3.8
