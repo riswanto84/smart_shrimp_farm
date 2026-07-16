@@ -47,7 +47,7 @@
   <div class="weather-metrics">
     <div><i class="fa-solid fa-droplet"></i><span>Kelembapan</span><b>{% if live_weather.humidity is not None %}{{ live_weather.humidity|floatformat:0 }}%{% else %}—{% endif %}</b></div>
     <div><i class="fa-solid fa-cloud-rain"></i><span>Peluang Hujan</span><b>{% if live_weather.rain_chance is not None %}{{ live_weather.rain_chance|floatformat:0 }}%{% else %}—{% endif %}</b></div>
-    <div><i class="fa-solid fa-wind"></i><span>Angin</span><b>{% if live_weather.wind_speed is not None %}{{ live_weather.wind_speed|floatformat:1 }} km/j{% else %}—{% endif %}</b><small>{{ live_weather.wind_direction|default:'—' }}</small></div>
+    <div title="{% if live_weather.wind_direction_degrees is not None %}Arah angin {{ live_weather.wind_direction }} ({{ live_weather.wind_direction_degrees|floatformat:0 }}°){% else %}Arah angin tidak tersedia{% endif %}"><i class="fa-solid fa-wind"></i><span>Angin</span><b>{% if live_weather.wind_speed is not None %}{{ live_weather.wind_speed|floatformat:1 }} km/j{% else %}—{% endif %}</b><small>{% if live_weather.wind_direction and live_weather.wind_direction != '—' %}{{ live_weather.wind_direction }}{% else %}Arah tidak tersedia{% endif %}</small></div>
     <div><i class="fa-solid fa-gauge-high"></i><span>Tekanan</span><b>{% if live_weather.pressure is not None %}{{ live_weather.pressure|floatformat:0 }} hPa{% else %}—{% endif %}</b></div>
     <div><i class="fa-solid fa-temperature-arrow-up"></i><span>Hari Ini</span><b>{% if live_weather.today_min is not None %}{{ live_weather.today_min|floatformat:0 }}–{{ live_weather.today_max|floatformat:0 }}°C{% else %}—{% endif %}</b></div>
   </div>

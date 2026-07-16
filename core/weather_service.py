@@ -74,11 +74,23 @@ def _safe_number(value: Any, default: float = 0.0) -> float:
 
 
 def _wind_direction(degrees: Any) -> str:
+    """Ubah derajat arah angin menjadi label Indonesia yang mudah dibaca."""
     value = _safe_number(degrees, -1)
     if value < 0:
         return "—"
-    names = ["U", "TL", "T", "TG", "S", "BD", "B", "BL"]
-    return names[int((value + 22.5) // 45) % 8]
+
+    directions = [
+        ("↑", "Utara"),
+        ("↗", "Timur Laut"),
+        ("→", "Timur"),
+        ("↘", "Tenggara"),
+        ("↓", "Selatan"),
+        ("↙", "Barat Daya"),
+        ("←", "Barat"),
+        ("↖", "Barat Laut"),
+    ]
+    arrow, label = directions[int((value + 22.5) // 45) % 8]
+    return f"{arrow} {label}"
 
 
 def _build_farm_advice(data: dict[str, Any]) -> list[dict[str, str]]:
@@ -177,6 +189,7 @@ def _parse_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "pressure": current.get("surface_pressure", current.get("pressure_msl")),
         "wind_speed": current.get("wind_speed_10m"),
         "wind_direction": _wind_direction(current.get("wind_direction_10m")),
+        "wind_direction_degrees": current.get("wind_direction_10m"),
         "condition": condition,
         "weather_code": code,
         "icon": icon,
@@ -294,6 +307,18 @@ def _read_disk_cache(path: Path) -> dict[str, Any] | None:
             return None
 
         payload["updated_at"] = _parse_api_datetime(payload.get("updated_at"))
+
+        # Normalisasi cache lama yang pernah menyimpan singkatan satu huruf
+        # seperti "T". Jika derajat arah tersedia, selalu hitung ulang label
+        # lengkap agar tampilan menjadi "→ Timur", "↗ Timur Laut", dst.
+        degrees = payload.get("wind_direction_degrees")
+        direction = str(payload.get("wind_direction") or "").strip()
+        legacy_labels = {"U", "TL", "T", "TG", "S", "BD", "B", "BL"}
+        if degrees is not None:
+            payload["wind_direction"] = _wind_direction(degrees)
+        elif direction in legacy_labels or len(direction) <= 2:
+            payload["wind_direction"] = "—"
+
         payload["ok"] = True
         payload["status"] = "cache"
         payload["message"] = "API sementara tidak tersedia; menampilkan data cuaca terakhir yang valid"
@@ -340,13 +365,19 @@ def get_farm_weather(force_refresh: bool = False) -> dict[str, Any]:
     longitude = float(
         getattr(settings, "WEATHER_LONGITUDE", getattr(settings, "FARM_LON", 107.02))
     )
-    cache_key = f"ssf_weather_current_v4:{latitude:.5f}:{longitude:.5f}"
+    cache_key = f"ssf_weather_current_v5:{latitude:.5f}:{longitude:.5f}"
     ttl = max(60, int(getattr(settings, "WEATHER_CACHE_SECONDS", 600)))
     disk_path = _cache_file(latitude, longitude)
 
     if not force_refresh:
         cached = cache.get(cache_key)
         if isinstance(cached, dict) and cached.get("temperature") is not None:
+            degrees = cached.get("wind_direction_degrees")
+            direction = str(cached.get("wind_direction") or "").strip()
+            if degrees is not None:
+                cached["wind_direction"] = _wind_direction(degrees)
+            elif direction in {"U", "TL", "T", "TG", "S", "BD", "B", "BL"} or len(direction) <= 2:
+                cached["wind_direction"] = "—"
             return cached
 
         # Cache berkas dibaca SEBELUM request API. Ini penting pada VPS karena
