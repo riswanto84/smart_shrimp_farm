@@ -26,16 +26,16 @@
     </div>
   </div>
 </div>
-<section class="weather-card-pro {% if live_weather.status == 'offline' %}is-offline{% elif live_weather.status == 'cache' %}is-cache{% endif %}">
+<section id="weather-card" class="weather-card-pro {% if live_weather.status == 'offline' %}is-offline{% elif live_weather.status == 'cache' %}is-cache{% endif %}" data-weather-updated="{% if live_weather.updated_at %}{{ live_weather.updated_at|date:'c' }}{% endif %}">
   <div class="weather-main">
-    <div class="weather-icon-wrap"><i class="fa-solid {{ live_weather.icon|default:'fa-cloud' }}"></i></div>
+    <div class="weather-icon-wrap"><i id="weather-icon" class="fa-solid {{ live_weather.icon|default:'fa-cloud' }}"></i></div>
     <div class="weather-current">
-      <div class="weather-eyebrow"><i class="fa-solid fa-location-dot"></i> {{ live_weather.location|default:'Muara Gembong' }}</div>
+      <div class="weather-eyebrow"><i class="fa-solid fa-location-dot"></i> <span id="weather-location">{{ live_weather.location|default:'Muara Gembong' }}</span></div>
       <div class="weather-temp-row">
-        <strong>{% if live_weather.temperature is not None %}{{ live_weather.temperature|floatformat:1 }}°C{% else %}—{% endif %}</strong>
-        <div><b>{{ live_weather.condition|default:'Data cuaca tidak tersedia' }}</b><span>Terasa seperti {% if live_weather.apparent_temperature is not None %}{{ live_weather.apparent_temperature|floatformat:1 }}°C{% else %}—{% endif %}</span></div>
+        <strong id="weather-temperature">{% if live_weather.temperature is not None %}{{ live_weather.temperature|floatformat:1 }}°C{% else %}—{% endif %}</strong>
+        <div><b id="weather-condition">{{ live_weather.condition|default:'Data cuaca tidak tersedia' }}</b><span>Terasa seperti <span id="weather-apparent">{% if live_weather.apparent_temperature is not None %}{{ live_weather.apparent_temperature|floatformat:1 }}°C{% else %}—{% endif %}</span></span></div>
       </div>
-      <small class="weather-source-line">
+      <small id="weather-source-line" class="weather-source-line">
         {% if live_weather.status == 'live' %}<i class="fa-solid fa-circle-check"></i> Data API terbaru
         {% elif live_weather.status == 'cache' %}<i class="fa-solid fa-clock-rotate-left"></i> Data terakhir tersimpan
         {% else %}<i class="fa-solid fa-triangle-exclamation"></i> API tidak tersedia{% endif %}
@@ -45,11 +45,11 @@
     </div>
   </div>
   <div class="weather-metrics">
-    <div><i class="fa-solid fa-droplet"></i><span>Kelembapan</span><b>{% if live_weather.humidity is not None %}{{ live_weather.humidity|floatformat:0 }}%{% else %}—{% endif %}</b></div>
-    <div><i class="fa-solid fa-cloud-rain"></i><span>Peluang Hujan</span><b>{% if live_weather.rain_chance is not None %}{{ live_weather.rain_chance|floatformat:0 }}%{% else %}—{% endif %}</b></div>
-    <div title="{% if live_weather.wind_direction_degrees is not None %}Arah angin {{ live_weather.wind_direction }} ({{ live_weather.wind_direction_degrees|floatformat:0 }}°){% else %}Arah angin tidak tersedia{% endif %}"><i class="fa-solid fa-wind"></i><span>Angin</span><b>{% if live_weather.wind_speed is not None %}{{ live_weather.wind_speed|floatformat:1 }} km/j{% else %}—{% endif %}</b><small>{% if live_weather.wind_direction and live_weather.wind_direction != '—' %}{{ live_weather.wind_direction }}{% else %}Arah tidak tersedia{% endif %}</small></div>
-    <div><i class="fa-solid fa-gauge-high"></i><span>Tekanan</span><b>{% if live_weather.pressure is not None %}{{ live_weather.pressure|floatformat:0 }} hPa{% else %}—{% endif %}</b></div>
-    <div><i class="fa-solid fa-temperature-arrow-up"></i><span>Hari Ini</span><b>{% if live_weather.today_min is not None %}{{ live_weather.today_min|floatformat:0 }}–{{ live_weather.today_max|floatformat:0 }}°C{% else %}—{% endif %}</b></div>
+    <div><i class="fa-solid fa-droplet"></i><span>Kelembapan</span><b id="weather-humidity">{% if live_weather.humidity is not None %}{{ live_weather.humidity|floatformat:0 }}%{% else %}—{% endif %}</b></div>
+    <div><i class="fa-solid fa-cloud-rain"></i><span>Peluang Hujan</span><b id="weather-rain">{% if live_weather.rain_chance is not None %}{{ live_weather.rain_chance|floatformat:0 }}%{% else %}—{% endif %}</b></div>
+    <div id="weather-wind-card" title="{% if live_weather.wind_direction_degrees is not None %}Arah angin {{ live_weather.wind_direction }} ({{ live_weather.wind_direction_degrees|floatformat:0 }}°){% else %}Arah angin tidak tersedia{% endif %}"><i class="fa-solid fa-wind"></i><span>Angin</span><b id="weather-wind-speed">{% if live_weather.wind_speed is not None %}{{ live_weather.wind_speed|floatformat:1 }} km/j{% else %}—{% endif %}</b><small id="weather-wind-direction">{% if live_weather.wind_direction and live_weather.wind_direction != '—' %}{{ live_weather.wind_direction }}{% else %}Arah tidak tersedia{% endif %}</small></div>
+    <div><i class="fa-solid fa-gauge-high"></i><span>Tekanan</span><b id="weather-pressure">{% if live_weather.pressure is not None %}{{ live_weather.pressure|floatformat:0 }} hPa{% else %}—{% endif %}</b></div>
+    <div><i class="fa-solid fa-temperature-arrow-up"></i><span>Hari Ini</span><b id="weather-today-range">{% if live_weather.today_min is not None %}{{ live_weather.today_min|floatformat:0 }}–{{ live_weather.today_max|floatformat:0 }}°C{% else %}—{% endif %}</b></div>
   </div>
   <div class="weather-advice">
     <div class="weather-advice-title"><i class="fa-solid fa-shrimp"></i><span>Catatan operasional tambak</span></div>
@@ -133,6 +133,108 @@
 })();
 </script>
 {% endif %}
+<script>
+(function () {
+  const endpoint = '{% url "weather_status_api" %}';
+  const pollMs = 5 * 60 * 1000;
+  let requestInFlight = false;
+
+  function numberText(value, decimals, suffix) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '—';
+    return number.toLocaleString('id-ID', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    }) + suffix;
+  }
+
+  function dateText(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return new Intl.DateTimeFormat('id-ID', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+      timeZone: 'Asia/Jakarta', hour12: false
+    }).format(date).replace('.', ':');
+  }
+
+  function setText(id, value) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+  }
+
+  function applyWeather(data) {
+    const card = document.getElementById('weather-card');
+    if (!card || !data) return;
+    card.classList.toggle('is-offline', data.status === 'offline');
+    card.classList.toggle('is-cache', data.status === 'cache');
+    card.dataset.weatherUpdated = data.updated_at || '';
+
+    const icon = document.getElementById('weather-icon');
+    if (icon) icon.className = 'fa-solid ' + (data.icon || 'fa-cloud');
+    setText('weather-location', data.location || 'Muara Gembong');
+    setText('weather-temperature', numberText(data.temperature, 1, '°C'));
+    setText('weather-condition', data.condition || 'Data cuaca tidak tersedia');
+    setText('weather-apparent', numberText(data.apparent_temperature, 1, '°C'));
+    setText('weather-humidity', numberText(data.humidity, 0, '%'));
+    setText('weather-rain', numberText(data.rain_chance, 0, '%'));
+    setText('weather-wind-speed', numberText(data.wind_speed, 1, ' km/j'));
+    setText('weather-wind-direction', data.wind_direction && data.wind_direction !== '—' ? data.wind_direction : 'Arah tidak tersedia');
+    setText('weather-pressure', numberText(data.pressure, 0, ' hPa'));
+    const range = Number.isFinite(Number(data.today_min)) && Number.isFinite(Number(data.today_max))
+      ? numberText(data.today_min, 0, '') + '–' + numberText(data.today_max, 0, '°C')
+      : '—';
+    setText('weather-today-range', range);
+
+    const windCard = document.getElementById('weather-wind-card');
+    if (windCard) {
+      windCard.title = data.wind_direction_degrees !== null && data.wind_direction_degrees !== undefined
+        ? `Arah angin ${data.wind_direction || ''} (${Math.round(Number(data.wind_direction_degrees))}°)`
+        : 'Arah angin tidak tersedia';
+    }
+
+    const sourceLine = document.getElementById('weather-source-line');
+    if (sourceLine) {
+      const statusLabel = data.status === 'live'
+        ? '<i class="fa-solid fa-circle-check"></i> Data API terbaru'
+        : data.status === 'cache'
+          ? '<i class="fa-solid fa-clock-rotate-left"></i> Data terakhir tersimpan'
+          : '<i class="fa-solid fa-triangle-exclamation"></i> API tidak tersedia';
+      const updated = dateText(data.updated_at);
+      const checked = dateText(data.checked_at);
+      sourceLine.innerHTML = `${statusLabel}${updated ? ' · Waktu data ' + updated + ' WIB' : ''}${checked ? ' · Diperiksa ' + checked + ' WIB' : ''} · Sumber: <a href="${data.source_url || 'https://open-meteo.com/'}" target="_blank" rel="noopener">${data.source || 'Open-Meteo'}</a>`;
+    }
+  }
+
+  async function refreshWeather(force) {
+    if (requestInFlight || document.hidden) return;
+    requestInFlight = true;
+    try {
+      const separator = endpoint.includes('?') ? '&' : '?';
+      const url = endpoint + separator + (force ? 'refresh=1&' : '') + '_=' + Date.now();
+      const response = await fetch(url, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+      });
+      if (!response.ok) return;
+      applyWeather(await response.json());
+    } catch (error) {
+      console.warn('Pembaruan cuaca gagal:', error);
+    } finally {
+      requestInFlight = false;
+    }
+  }
+
+  // Periksa sesaat setelah halaman dibuka dan kemudian setiap 5 menit.
+  window.setTimeout(function () { refreshWeather(true); }, 3000);
+  window.setInterval(function () { refreshWeather(true); }, pollMs);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) refreshWeather(true);
+  });
+})();
+</script>
 <script>
 (function () {
   const badge = document.getElementById('ollama-status-badge');

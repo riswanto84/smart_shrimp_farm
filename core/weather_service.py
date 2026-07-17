@@ -20,7 +20,7 @@ import logging
 import os
 import socket
 import tempfile
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -198,6 +198,7 @@ def _parse_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "today_max": (daily.get("temperature_2m_max") or [None])[0],
         "today_min": (daily.get("temperature_2m_min") or [None])[0],
         "status": "live",
+        "checked_at": timezone.localtime(),
         "message": "Data cuaca API terbaru pada koordinat tambak",
     }
     data["farm_advice"] = _build_farm_advice(data)
@@ -258,42 +259,65 @@ def _cache_file(latitude: float, longitude: float) -> Path:
     return cache_dir / f"last_good_{digest}.json"
 
 
-def _serialize_for_disk(data: dict[str, Any]) -> dict[str, Any]:
-    serializable = dict(data)
-    updated_at = serializable.get("updated_at")
-    if isinstance(updated_at, datetime):
-        serializable["updated_at"] = updated_at.isoformat()
-    serializable["saved_at"] = timezone.now().isoformat()
-    return serializable
+def _serialize_for_disk(obj):
+    if isinstance(obj, dict):
+        return {
+            k: _serialize_for_disk(v)
+            for k, v in obj.items()
+        }
+
+    if isinstance(obj, (list, tuple)):
+        return [_serialize_for_disk(v) for v in obj]
+
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+
+    return obj
 
 
 def _write_disk_cache(path: Path, data: dict[str, Any]) -> None:
     """Simpan data valid secara atomik agar dapat dipakai semua worker Gunicorn."""
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        # Cache berisi data publik. Mode longgar menghindari konflik ownership
-        # antara command yang dijalankan root dan worker Gunicorn (www-data).
+
         try:
             path.parent.chmod(0o777)
         except OSError:
             pass
-        temporary = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+
+        cache_data = dict(data)
+        cache_data["saved_at"] = timezone.now()
+
+        temporary = path.with_name(
+            f"{path.name}.{os.getpid()}.tmp"
+        )
+
         temporary.write_text(
-            json.dumps(_serialize_for_disk(data), ensure_ascii=False),
+            json.dumps(
+                _serialize_for_disk(cache_data),
+                ensure_ascii=False,
+            ),
             encoding="utf-8",
         )
+
         try:
             temporary.chmod(0o666)
         except OSError:
             pass
+
         os.replace(temporary, path)
+
         try:
             path.chmod(0o666)
         except OSError:
             pass
-    except OSError as exc:
-        logger.warning("Gagal menyimpan cache cuaca berkas %s: %s", path, exc)
 
+    except (OSError, TypeError, ValueError) as exc:
+        logger.warning(
+            "Gagal menyimpan cache cuaca berkas %s: %s",
+            path,
+            exc,
+        )
 
 def _read_disk_cache(path: Path) -> dict[str, Any] | None:
     try:
@@ -307,6 +331,7 @@ def _read_disk_cache(path: Path) -> dict[str, Any] | None:
             return None
 
         payload["updated_at"] = _parse_api_datetime(payload.get("updated_at"))
+        payload["_saved_at"] = saved_at
 
         # Normalisasi cache lama yang pernah menyimpan singkatan satu huruf
         # seperti "T". Jika derajat arah tersedia, selalu hitung ulang label
@@ -347,6 +372,7 @@ def _offline_payload(exc: Exception) -> dict[str, Any]:
         "today_min": None,
         "today_max": None,
         "updated_at": None,
+        "checked_at": timezone.localtime(),
         "message": "Gagal mengambil data cuaca dari API dan belum ada cache valid",
         "error": f"{type(exc).__name__}: {exc}",
         "farm_advice": [{
@@ -380,14 +406,20 @@ def get_farm_weather(force_refresh: bool = False) -> dict[str, Any]:
                 cached["wind_direction"] = "—"
             return cached
 
-        # Cache berkas dibaca SEBELUM request API. Ini penting pada VPS karena
-        # management command dan worker Gunicorn dapat memakai user/proses berbeda.
-        # Data yang baru berhasil diambil oleh check_weather_api langsung dapat
-        # ditampilkan oleh dashboard meskipun worker sedang mengalami kendala jaringan.
+        # Cache berkas hanya digunakan langsung jika masih segar. Cache lama
+        # tidak boleh menghentikan aplikasi mengambil data API terbaru selamanya.
+        # Jika sudah melewati TTL, lanjutkan request API dan pakai berkas hanya
+        # sebagai fallback saat API benar-benar gagal.
         disk_cached = _read_disk_cache(disk_path)
         if disk_cached:
-            cache.set(cache_key, disk_cached, min(ttl, 300))
-            return disk_cached
+            saved_at = disk_cached.pop("_saved_at", None)
+            is_fresh = bool(
+                saved_at and timezone.now() - saved_at <= timedelta(seconds=ttl)
+            )
+            if is_fresh:
+                disk_cached["checked_at"] = timezone.localtime()
+                cache.set(cache_key, disk_cached, ttl)
+                return disk_cached
 
     timeout = float(getattr(settings, "WEATHER_API_TIMEOUT", 12))
     api_url = str(
@@ -425,6 +457,8 @@ def get_farm_weather(force_refresh: bool = False) -> dict[str, Any]:
             logger.exception("Weather API gagal pada VPS: %s", final_exc)
             stale = _read_disk_cache(disk_path)
             if stale:
+                stale.pop("_saved_at", None)
+                stale["checked_at"] = timezone.localtime()
                 cache.set(cache_key, stale, min(ttl, 300))
                 return stale
             # Jangan cache payload kosong/offline. Request berikutnya boleh mencoba lagi.
@@ -436,10 +470,14 @@ def get_farm_weather(force_refresh: bool = False) -> dict[str, Any]:
         logger.exception("Respons Weather API tidak dapat diproses: %s", exc)
         stale = _read_disk_cache(disk_path)
         if stale:
+            stale.pop("_saved_at", None)
+            stale["checked_at"] = timezone.localtime()
             cache.set(cache_key, stale, min(ttl, 300))
             return stale
         return _offline_payload(exc)
 
+    weather.pop("_saved_at", None)
+    weather["checked_at"] = timezone.localtime()
     cache.set(cache_key, weather, ttl)
     _write_disk_cache(disk_path, weather)
     return weather

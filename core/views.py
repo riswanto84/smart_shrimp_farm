@@ -244,12 +244,13 @@ def weather_status_api(request):
     """
     force_refresh = request.GET.get('refresh') == '1'
     result = dict(get_farm_weather(force_refresh=force_refresh))
-    updated_at = result.get('updated_at')
-    if updated_at is not None:
-        try:
-            result['updated_at'] = updated_at.isoformat()
-        except AttributeError:
-            result['updated_at'] = str(updated_at)
+    for field in ('updated_at', 'checked_at'):
+        value = result.get(field)
+        if value is not None:
+            try:
+                result[field] = value.isoformat()
+            except AttributeError:
+                result[field] = str(value)
     return JsonResponse(result)
 
 
