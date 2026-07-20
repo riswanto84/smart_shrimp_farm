@@ -18,7 +18,7 @@ ROLE_PERMISSIONS = {
         'dashboard', 'sales.dashboard', 'sales.cashier', 'sales.invoices', 'sales.customers'
     },
     'akuntan': {
-        'dashboard', 'sales.dashboard', 'sales.invoices', 'finance.expenses', 'finance.profit_loss', 'finance.periodic_report'
+        'dashboard', 'sales.dashboard', 'sales.invoices', 'finance.expenses', 'finance.profit_loss', 'finance.periodic_report', 'finance.tax_reports'
     },
     'investor': {
         'dashboard', 'investor.dashboard'
@@ -41,7 +41,13 @@ MENU_DEFINITIONS = [
     {'type': 'item', 'label': 'Kasir Penjualan', 'url': '/sales/cashier/', 'icon': 'fa-solid fa-cash-register', 'perm': 'sales.cashier'},
     {'type': 'item', 'label': 'Nota', 'url': '/sales/invoices/', 'icon': 'fa-solid fa-file-invoice-dollar', 'perm': 'sales.invoices'},
     {'type': 'item', 'label': 'Pelanggan', 'url': '/sales/customers/', 'icon': 'fa-solid fa-users', 'perm': 'sales.customers'},
-    {'type': 'group', 'label': 'KEUANGAN'},
+    {'type': 'group', 'label': 'KEUANGAN & PAJAK'},
+    {'type': 'item', 'label': 'Ringkasan Pajak', 'url': '/finance/tax/', 'icon': 'fa-solid fa-building-columns', 'perm': 'finance.tax_reports'},
+    {'type': 'item', 'label': 'Peredaran Bruto', 'url': '/finance/tax/gross-turnover/', 'icon': 'fa-solid fa-coins', 'perm': 'finance.tax_reports'},
+    {'type': 'item', 'label': 'Laba Rugi Pajak', 'url': '/finance/tax/profit-loss/', 'icon': 'fa-solid fa-chart-line', 'perm': 'finance.tax_reports'},
+    {'type': 'item', 'label': 'Neraca', 'url': '/finance/tax/balance/', 'icon': 'fa-solid fa-scale-balanced', 'perm': 'finance.tax_reports'},
+    {'type': 'item', 'label': 'Daftar Aset', 'url': '/finance/tax/assets/', 'icon': 'fa-solid fa-gears', 'perm': 'finance.tax_reports'},
+    {'type': 'item', 'label': 'Penyusutan Fiskal', 'url': '/finance/tax/depreciation/', 'icon': 'fa-solid fa-arrow-trend-down', 'perm': 'finance.tax_reports'},
     {'type': 'item', 'label': 'Pengeluaran Operasional', 'url': '/finance/expenses/', 'icon': 'fa-solid fa-wallet', 'perm': 'finance.expenses'},
     {'type': 'item', 'label': 'Laba Rugi', 'url': '/finance/profit-loss/', 'icon': 'fa-solid fa-chart-line', 'perm': 'finance.profit_loss'},
     {'type': 'item', 'label': 'Laporan Keuangan Periodik', 'url': '/finance/periodic-report/', 'icon': 'fa-solid fa-chart-column', 'perm': 'finance.periodic_report'},

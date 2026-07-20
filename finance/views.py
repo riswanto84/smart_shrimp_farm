@@ -781,3 +781,285 @@ def edit_expense(request, pk):
 def delete_expense(request, pk):
     get_object_or_404(OperationalExpense, pk=pk).delete()
     return redirect('finance:expenses')
+
+# =============================================================================
+# MODUL KEUANGAN & PAJAK RINGKAS
+# Neraca, laba rugi, peredaran bruto, aset dan penyusutan
+# =============================================================================
+from calendar import monthrange
+from django.contrib import messages
+from django.db.models import Q
+from django.http import HttpResponse
+from .models import OtherRevenue, BalanceEntry, FixedAsset
+
+
+def _as_date(request):
+    return parse_date(request.GET.get('as_of') or '') or timezone.localdate()
+
+
+def _date_period(request):
+    year = int(request.GET.get('year') or timezone.localdate().year)
+    date_from = parse_date(request.GET.get('date_from') or '') or timezone.datetime(year, 1, 1).date()
+    date_to = parse_date(request.GET.get('date_to') or '') or timezone.datetime(year, 12, 31).date()
+    if date_from > date_to:
+        date_from, date_to = date_to, date_from
+    return date_from, date_to
+
+
+def _fiscal_life(group):
+    return {
+        'group_1': 4,
+        'group_2': 8,
+        'group_3': 16,
+        'group_4': 20,
+        'permanent_building': 20,
+        'non_permanent_building': 10,
+    }.get(group)
+
+
+def _months_used(asset, as_of):
+    if asset.use_date > as_of or asset.fiscal_group == 'non_depreciable':
+        return 0
+    months = (as_of.year - asset.use_date.year) * 12 + as_of.month - asset.use_date.month + 1
+    life = _fiscal_life(asset.fiscal_group)
+    if life:
+        months = min(months, life * 12)
+    return max(months, 0)
+
+
+def _asset_depreciation(asset, as_of):
+    cost = asset.total_cost
+    life = _fiscal_life(asset.fiscal_group)
+    if not life or asset.fiscal_group == 'non_depreciable':
+        annual = Decimal('0')
+        accumulated = Decimal('0')
+    else:
+        depreciable = max(cost - (asset.residual_value or Decimal('0')), Decimal('0'))
+        annual = depreciable / Decimal(life)
+        accumulated = min((annual / Decimal('12')) * Decimal(_months_used(asset, as_of)), depreciable)
+    return {
+        'annual': annual,
+        'accumulated': accumulated,
+        'book_value': max(cost - accumulated, Decimal('0')),
+        'life': life,
+    }
+
+
+def _gross_turnover_data(request):
+    date_from, date_to = _date_period(request)
+    sales = Sale.objects.filter(date__date__range=(date_from, date_to)).exclude(status__in=['Gagal','Expired','Dibatalkan','Refund'])
+    other = OtherRevenue.objects.filter(date__range=(date_from, date_to))
+    rows = []
+    for item in sales.select_related('customer').order_by('date'):
+        rows.append({'date': item.date.date(), 'document': item.invoice_no, 'customer': item.customer.name if item.customer else '-', 'source': 'Penjualan Udang', 'amount': item.total_amount, 'kind': 'sale'})
+    for item in other.order_by('date'):
+        rows.append({'date': item.date, 'document': item.document_number or '-', 'customer': item.customer or '-', 'source': item.revenue_type, 'amount': item.gross_amount, 'kind': 'other'})
+    rows.sort(key=lambda r: r['date'])
+    total = sum((r['amount'] for r in rows), Decimal('0'))
+    monthly = []
+    for month in range(1,13):
+        value = sum((r['amount'] for r in rows if r['date'].year == date_from.year and r['date'].month == month), Decimal('0'))
+        monthly.append({'month': month, 'label': timezone.datetime(2000,month,1).strftime('%B'), 'amount': value})
+    return date_from, date_to, rows, total, monthly
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def tax_dashboard(request):
+    date_from, date_to = _date_period(request)
+    _, _, _, turnover, _ = _gross_turnover_data(request)
+    expenses = OperationalExpense.objects.filter(date__range=(date_from,date_to))
+    expense_total = expenses.aggregate(s=Sum('amount'))['s'] or Decimal('0')
+    fiscal_expense = expenses.filter(is_fiscal_deductible=True).aggregate(s=Sum('amount'))['s'] or Decimal('0')
+    assets = FixedAsset.objects.filter(status='active')
+    asset_total = sum((a.total_cost for a in assets), Decimal('0'))
+    return render(request,'finance/tax_dashboard.html',{
+        'date_from':date_from,'date_to':date_to,'turnover':turnover,'expense_total':expense_total,
+        'fiscal_expense':fiscal_expense,'commercial_profit':turnover-expense_total,
+        'fiscal_profit_before_adjustment':turnover-fiscal_expense,'asset_total':asset_total,'asset_count':assets.count(),
+    })
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def gross_turnover(request):
+    date_from,date_to,rows,total,monthly=_gross_turnover_data(request)
+    return render(request,'finance/gross_turnover.html',{'date_from':date_from,'date_to':date_to,'rows':rows,'total':total,'monthly':monthly})
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def add_other_revenue(request):
+    if request.method == 'POST':
+        OtherRevenue.objects.create(
+            cycle=get_selected_cycle(request), date=request.POST['date'], document_number=request.POST.get('document_number',''),
+            revenue_type=request.POST['revenue_type'], description=request.POST['description'], customer=request.POST.get('customer',''),
+            gross_amount=parse_rupiah(request.POST.get('gross_amount')), tax_amount=parse_rupiah(request.POST.get('tax_amount')),
+            payment_method=request.POST.get('payment_method','Transfer'), notes=request.POST.get('notes',''))
+        messages.success(request,'Pendapatan lain berhasil disimpan.')
+        return redirect('finance:gross_turnover')
+    return render(request,'finance/other_revenue_form.html',{'types':OtherRevenue.REVENUE_TYPES})
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def export_gross_turnover_excel(request):
+    date_from,date_to,rows,total,_=_gross_turnover_data(request)
+    data=[[r['date'].strftime('%d/%m/%Y'),r['document'],r['customer'],r['source'],rupiah(r['amount'])] for r in rows]
+    return export_excel('peredaran_bruto','Laporan Peredaran Bruto',f'Periode: {format_date_range(date_from,date_to)}',['Tanggal','Nomor Bukti','Pelanggan','Sumber Pendapatan','Peredaran Bruto'],data,[['','','','TOTAL',rupiah(total)]])
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def export_gross_turnover_pdf(request):
+    date_from,date_to,rows,total,_=_gross_turnover_data(request)
+    data=[[r['date'].strftime('%d/%m/%Y'),r['document'],r['customer'],r['source'],rupiah(r['amount'])] for r in rows]
+    return export_pdf('peredaran_bruto','Laporan Peredaran Bruto',f'Periode: {format_date_range(date_from,date_to)}',['Tanggal','Nomor Bukti','Pelanggan','Sumber Pendapatan','Peredaran Bruto'],data,[['','','','TOTAL',rupiah(total)]])
+
+
+def _profit_loss_tax_data(request):
+    date_from,date_to=_date_period(request)
+    _,_,_,revenue,_=_gross_turnover_data(request)
+    expenses=OperationalExpense.objects.filter(date__range=(date_from,date_to))
+    grouped=list(expenses.values('category').annotate(total=Sum('amount')).order_by('category'))
+    expense_total=sum((x['total'] for x in grouped),Decimal('0'))
+    non_deductible=expenses.filter(is_fiscal_deductible=False).aggregate(s=Sum('amount'))['s'] or Decimal('0')
+    return date_from,date_to,revenue,grouped,expense_total,revenue-expense_total,non_deductible
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def tax_profit_loss(request):
+    date_from,date_to,revenue,grouped,expense_total,profit,non_deductible=_profit_loss_tax_data(request)
+    return render(request,'finance/tax_profit_loss.html',locals())
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def export_tax_profit_loss_pdf(request):
+    date_from,date_to,revenue,grouped,expense_total,profit,non_deductible=_profit_loss_tax_data(request)
+    rows=[['Peredaran Bruto',rupiah(revenue)]]+[[f"Beban {x['category']}",rupiah(x['total'])] for x in grouped]+[['Total Beban',rupiah(expense_total)],['Laba/Rugi Bersih',rupiah(profit)],['Biaya Non-Deductible (informasi)',rupiah(non_deductible)]]
+    return export_pdf('laba_rugi_pajak','Laporan Laba Rugi',f'Periode: {format_date_range(date_from,date_to)}',['Uraian','Jumlah'],rows)
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def balance_entries(request):
+    as_of=_as_date(request)
+    entries=BalanceEntry.objects.filter(as_of_date__lte=as_of)
+    return render(request,'finance/balance_entries.html',{'entries':entries,'as_of':as_of})
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def add_balance_entry(request):
+    if request.method=='POST':
+        BalanceEntry.objects.create(as_of_date=request.POST['as_of_date'],account_type=request.POST['account_type'],group=request.POST['group'],account_name=request.POST['account_name'],amount=parse_rupiah(request.POST.get('amount')),notes=request.POST.get('notes',''))
+        messages.success(request,'Pos neraca berhasil disimpan.')
+        return redirect('finance:balance_entries')
+    return render(request,'finance/balance_form.html',{'account_types':BalanceEntry.ACCOUNT_TYPES,'asset_groups':BalanceEntry.ASSET_GROUPS,'liability_groups':BalanceEntry.LIABILITY_GROUPS,'equity_groups':BalanceEntry.EQUITY_GROUPS})
+
+
+def _balance_sheet_data(request):
+    as_of=_as_date(request)
+    latest={}
+    for e in BalanceEntry.objects.filter(as_of_date__lte=as_of).order_by('account_name','-as_of_date','-id'):
+        latest.setdefault((e.account_type,e.account_name),e)
+    entries=list(latest.values())
+    assets=[e for e in entries if e.account_type=='asset' and e.group!='Aset Tetap']
+    liabilities=[e for e in entries if e.account_type=='liability']
+    equities=[e for e in entries if e.account_type=='equity']
+    fixed_assets=[]
+    for a in FixedAsset.objects.filter(use_date__lte=as_of).exclude(status='disposed'):
+        dep=_asset_depreciation(a,as_of)
+        fixed_assets.append({'asset':a,**dep})
+    fixed_cost=sum((x['asset'].total_cost for x in fixed_assets),Decimal('0'))
+    accumulated=sum((x['accumulated'] for x in fixed_assets),Decimal('0'))
+    total_assets=sum((e.amount for e in assets),Decimal('0'))+fixed_cost-accumulated
+    total_liabilities=sum((e.amount for e in liabilities),Decimal('0'))
+    total_equity=sum((e.amount for e in equities),Decimal('0'))
+    start=timezone.datetime(as_of.year,1,1).date()
+    mock=type('R',(),{'GET':{'date_from':start.isoformat(),'date_to':as_of.isoformat()}})()
+    # laba berjalan dihitung langsung tanpa mengubah request asli
+    sales=Sale.objects.filter(date__date__range=(start,as_of)).exclude(status__in=['Gagal','Expired','Dibatalkan','Refund']).aggregate(s=Sum('total_amount'))['s'] or Decimal('0')
+    other=OtherRevenue.objects.filter(date__range=(start,as_of)).aggregate(s=Sum('gross_amount'))['s'] or Decimal('0')
+    costs=OperationalExpense.objects.filter(date__range=(start,as_of)).aggregate(s=Sum('amount'))['s'] or Decimal('0')
+    current_profit=sales+other-costs
+    total_equity_with_profit=total_equity+current_profit
+    return {'as_of':as_of,'assets':assets,'liabilities':liabilities,'equities':equities,'fixed_assets':fixed_assets,'fixed_cost':fixed_cost,'accumulated':accumulated,'total_assets':total_assets,'total_liabilities':total_liabilities,'total_equity':total_equity,'current_profit':current_profit,'total_equity_with_profit':total_equity_with_profit,'difference':total_assets-total_liabilities-total_equity_with_profit}
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def balance_sheet(request):
+    return render(request,'finance/balance_sheet.html',_balance_sheet_data(request))
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def export_balance_sheet_pdf(request):
+    d=_balance_sheet_data(request)
+    rows=[]
+    for e in d['assets']: rows.append([f"ASET - {e.account_name}",rupiah(e.amount)])
+    rows += [['Aset Tetap - Harga Perolehan',rupiah(d['fixed_cost'])],['Akumulasi Penyusutan',f"({rupiah(d['accumulated'])})"],['TOTAL ASET',rupiah(d['total_assets'])]]
+    for e in d['liabilities']: rows.append([f"KEWAJIBAN - {e.account_name}",rupiah(e.amount)])
+    rows.append(['TOTAL KEWAJIBAN',rupiah(d['total_liabilities'])])
+    for e in d['equities']: rows.append([f"EKUITAS - {e.account_name}",rupiah(e.amount)])
+    rows += [['Laba/Rugi Tahun Berjalan',rupiah(d['current_profit'])],['TOTAL EKUITAS',rupiah(d['total_equity_with_profit'])],['SELISIH NERACA',rupiah(d['difference'])]]
+    return export_pdf('neraca','Laporan Neraca',f"Posisi per {d['as_of'].strftime('%d/%m/%Y')}",['Uraian','Jumlah'],rows)
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def assets(request):
+    as_of=_as_date(request)
+    rows=[]
+    for a in FixedAsset.objects.all(): rows.append({'asset':a,**_asset_depreciation(a,as_of)})
+    return render(request,'finance/assets.html',{'rows':rows,'as_of':as_of})
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def add_asset(request):
+    if request.method=='POST':
+        FixedAsset.objects.create(code=request.POST['code'],name=request.POST['name'],category=request.POST['category'],acquisition_date=request.POST['acquisition_date'],use_date=request.POST['use_date'],acquisition_cost=parse_rupiah(request.POST.get('acquisition_cost')),additional_cost=parse_rupiah(request.POST.get('additional_cost')),residual_value=parse_rupiah(request.POST.get('residual_value')),commercial_useful_life_years=int(request.POST.get('commercial_useful_life_years') or 4),fiscal_group=request.POST['fiscal_group'],location=request.POST.get('location',''),document_number=request.POST.get('document_number',''),source_of_funds=request.POST.get('source_of_funds',''),status=request.POST.get('status','active'),notes=request.POST.get('notes',''))
+        messages.success(request,'Aset berhasil disimpan.')
+        return redirect('finance:assets')
+    return render(request,'finance/asset_form.html',{'groups':FixedAsset.FISCAL_GROUPS,'statuses':FixedAsset.STATUS})
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def edit_asset(request,pk):
+    asset=get_object_or_404(FixedAsset,pk=pk)
+    if request.method=='POST':
+        for field in ['code','name','category','acquisition_date','use_date','fiscal_group','location','document_number','source_of_funds','status','notes']:
+            setattr(asset,field,request.POST.get(field,''))
+        asset.acquisition_cost=parse_rupiah(request.POST.get('acquisition_cost')); asset.additional_cost=parse_rupiah(request.POST.get('additional_cost')); asset.residual_value=parse_rupiah(request.POST.get('residual_value')); asset.commercial_useful_life_years=int(request.POST.get('commercial_useful_life_years') or 4); asset.save()
+        messages.success(request,'Aset berhasil diperbarui.')
+        return redirect('finance:assets')
+    return render(request,'finance/asset_form.html',{'asset':asset,'groups':FixedAsset.FISCAL_GROUPS,'statuses':FixedAsset.STATUS})
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def depreciation_report(request):
+    as_of=_as_date(request); year=as_of.year; rows=[]
+    total_cost=total_year=total_accumulated=total_book=Decimal('0')
+    for a in FixedAsset.objects.exclude(status='disposed'):
+        dep=_asset_depreciation(a,as_of)
+        year_start=timezone.datetime(year,1,1).date()
+        before=_asset_depreciation(a,year_start-timedelta(days=1))['accumulated']
+        current=max(dep['accumulated']-before,Decimal('0'))
+        row={'asset':a,**dep,'current_year':current}; rows.append(row)
+        total_cost+=a.total_cost; total_year+=current; total_accumulated+=dep['accumulated']; total_book+=dep['book_value']
+    return render(request,'finance/depreciation.html',locals())
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def export_depreciation_pdf(request):
+    as_of=_as_date(request); rows=[]; tc=ta=tb=Decimal('0')
+    for a in FixedAsset.objects.exclude(status='disposed'):
+        d=_asset_depreciation(a,as_of); tc+=a.total_cost; ta+=d['accumulated']; tb+=d['book_value']; rows.append([a.code,a.name,a.get_fiscal_group_display(),rupiah(a.total_cost),rupiah(d['annual']),rupiah(d['accumulated']),rupiah(d['book_value'])])
+    return export_pdf('daftar_aset_penyusutan','Daftar Aset dan Penyusutan Fiskal',f"Posisi per {as_of.strftime('%d/%m/%Y')}",['Kode','Nama Aset','Kelompok','Perolehan','Penyusutan/Tahun','Akumulasi','Nilai Buku'],rows,[['','','TOTAL',rupiah(tc),'',rupiah(ta),rupiah(tb)]])
