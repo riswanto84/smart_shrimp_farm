@@ -1,10 +1,15 @@
 from django.contrib import admin
-from .models import OperationalExpense, OtherRevenue, BalanceEntry, FixedAsset, TradeAccount, TradePayment
+from .models import OperationalExpense, OperationalExpenseAttachment, OtherRevenue, BalanceEntry, FixedAsset, TradeAccount, TradePayment
+
+class OperationalExpenseAttachmentInline(admin.TabularInline):
+    model = OperationalExpenseAttachment
+    extra = 0
 
 @admin.register(OperationalExpense)
 class OperationalExpenseAdmin(admin.ModelAdmin):
     list_display=('date','category','name','amount','is_fiscal_deductible')
     list_filter=('category','is_fiscal_deductible','date')
+    inlines = (OperationalExpenseAttachmentInline,)
 
 @admin.register(OtherRevenue)
 class OtherRevenueAdmin(admin.ModelAdmin):

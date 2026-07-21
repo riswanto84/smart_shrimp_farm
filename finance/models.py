@@ -17,6 +17,29 @@ class OperationalExpense(models.Model):
         ordering = ['-date', '-id']
 
 
+class OperationalExpenseAttachment(models.Model):
+    expense = models.ForeignKey(
+        OperationalExpense,
+        on_delete=models.CASCADE,
+        related_name='attachments',
+        verbose_name='Pengeluaran operasional',
+    )
+    file = models.FileField(upload_to='expense_attachments/%Y/%m/')
+    original_name = models.CharField(max_length=255, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['uploaded_at', 'id']
+
+    def __str__(self):
+        return self.original_name or self.file.name
+
+    @property
+    def filename(self):
+        import os
+        return self.original_name or os.path.basename(self.file.name)
+
+
 class OtherRevenue(models.Model):
     cycle=models.ForeignKey(CultivationCycle,on_delete=models.PROTECT,null=True,blank=True,related_name='other_revenues')
     date=models.DateField()

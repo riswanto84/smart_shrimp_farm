@@ -1,5 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.http import FileResponse
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, Table, TableStyle
@@ -15,16 +17,42 @@ from decimal import Decimal
 import json
 from ponds.models import Pond
 from sales.models import Sale
-from .models import OperationalExpense
+from .models import OperationalExpense, OperationalExpenseAttachment
 from core.reporting import get_date_range, filter_by_date_range, format_date_range, export_excel, export_pdf, rupiah
 from core.utils import parse_rupiah
 from core.pagination import paginate_queryset
 from cultivation.utils import get_selected_cycle, filter_selected_cycle
 
 
+
+ALLOWED_EXPENSE_ATTACHMENT_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.webp', '.docx', '.xlsx'}
+MAX_EXPENSE_ATTACHMENT_SIZE = 10 * 1024 * 1024
+MAX_EXPENSE_ATTACHMENTS = 20
+
+
+def _validate_expense_attachments(files, existing_count=0):
+    import os
+    errors = []
+    if existing_count + len(files) > MAX_EXPENSE_ATTACHMENTS:
+        errors.append(f'Maksimal {MAX_EXPENSE_ATTACHMENTS} file per transaksi.')
+    for upload in files:
+        ext = os.path.splitext(upload.name)[1].lower()
+        if ext not in ALLOWED_EXPENSE_ATTACHMENT_EXTENSIONS:
+            errors.append(f'Format file {upload.name} tidak diizinkan.')
+        if upload.size > MAX_EXPENSE_ATTACHMENT_SIZE:
+            errors.append(f'Ukuran file {upload.name} melebihi 10 MB.')
+    return errors
+
+
+def _save_expense_attachments(expense, files):
+    for upload in files:
+        OperationalExpenseAttachment.objects.create(
+            expense=expense, file=upload, original_name=upload.name[:255]
+        )
+
 def _expense_queryset(request):
     date_from, date_to = get_date_range(request)
-    items = filter_selected_cycle(request, OperationalExpense.objects.select_related('pond').order_by('-date'))
+    items = filter_selected_cycle(request, OperationalExpense.objects.select_related('pond').prefetch_related('attachments').order_by('-date'))
     items = filter_by_date_range(items, 'date', date_from, date_to)
     category = request.GET.get('category') or ''
     pond = request.GET.get('pond') or ''
@@ -126,19 +154,34 @@ def export_expenses_pdf(request):
 def add_expense(request):
     ponds = Pond.objects.all()
     if request.method == 'POST':
-        OperationalExpense.objects.create(
+        files = request.FILES.getlist('attachments')
+        errors = _validate_expense_attachments(files)
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+            return render(request, 'finance/expense_form.html', {
+                'ponds': ponds, 'categories': OperationalExpense.CATEGORIES,
+                'form_data': request.POST, 'obj': None, 'mode': 'add',
+                'max_files': MAX_EXPENSE_ATTACHMENTS,
+            })
+        obj = OperationalExpense.objects.create(
             cycle=get_selected_cycle(request, required=True),
             date=request.POST['date'],
             category=request.POST['category'],
             pond_id=request.POST.get('pond') or None,
             name=request.POST['name'],
-            amount=parse_rupiah(request.POST.get('amount')), 
+            amount=parse_rupiah(request.POST.get('amount')),
             payment_method=request.POST.get('payment_method', 'Cash'),
-            receipt=request.FILES.get('receipt'),
             notes=request.POST.get('notes', '')
         )
+        _save_expense_attachments(obj, files)
+        messages.success(request, f'Pengeluaran berhasil disimpan dengan {len(files)} lampiran.')
         return redirect('finance:expenses')
-    return render(request, 'finance/expense_form.html', {'ponds': ponds, 'categories': OperationalExpense.CATEGORIES})
+    return render(request, 'finance/expense_form.html', {
+        'ponds': ponds, 'categories': OperationalExpense.CATEGORIES,
+        'form_data': {}, 'obj': None, 'mode': 'add',
+        'max_files': MAX_EXPENSE_ATTACHMENTS,
+    })
 
 
 def _profit_loss_data(request):
@@ -761,6 +804,15 @@ def edit_expense(request, pk):
     obj = get_object_or_404(OperationalExpense, pk=pk)
     ponds = Pond.objects.all()
     if request.method == 'POST':
+        files = request.FILES.getlist('attachments')
+        errors = _validate_expense_attachments(files, obj.attachments.count())
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+            return render(request, 'finance/expense_form.html', {
+                'ponds': ponds, 'categories': OperationalExpense.CATEGORIES,
+                'obj': obj, 'mode': 'edit', 'max_files': MAX_EXPENSE_ATTACHMENTS,
+            })
         obj.cycle = get_selected_cycle(request, required=True)
         obj.date = request.POST['date']
         obj.category = request.POST['category']
@@ -768,12 +820,28 @@ def edit_expense(request, pk):
         obj.name = request.POST['name']
         obj.amount = parse_rupiah(request.POST.get('amount'))
         obj.payment_method = request.POST.get('payment_method', 'Cash')
-        if request.FILES.get('receipt'):
-            obj.receipt = request.FILES.get('receipt')
         obj.notes = request.POST.get('notes', '')
         obj.save()
+        _save_expense_attachments(obj, files)
+        messages.success(request, f'Pengeluaran diperbarui. {len(files)} lampiran baru ditambahkan.')
         return redirect('finance:expenses')
-    return render(request, 'finance/expense_form.html', {'ponds': ponds, 'categories': OperationalExpense.CATEGORIES, 'obj': obj, 'mode': 'edit'})
+    return render(request, 'finance/expense_form.html', {
+        'ponds': ponds, 'categories': OperationalExpense.CATEGORIES,
+        'obj': obj, 'mode': 'edit', 'max_files': MAX_EXPENSE_ATTACHMENTS,
+    })
+
+@login_required
+@permission_required('finance.expenses')
+@require_POST
+def delete_expense_attachment(request, pk):
+    attachment = get_object_or_404(OperationalExpenseAttachment, pk=pk)
+    expense_id = attachment.expense_id
+    if attachment.file:
+        attachment.file.delete(save=False)
+    attachment.delete()
+    messages.success(request, 'Lampiran berhasil dihapus.')
+    return redirect('finance:edit_expense', pk=expense_id)
+
 
 @login_required
 @permission_required('finance.expenses')

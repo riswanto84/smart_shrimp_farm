@@ -1,2 +1,67 @@
 {% extends 'base.html' %}
-{% block content %}<div class="page-head"><div><h1>{% if mode == 'edit' %}Edit{% else %}Tambah{% endif %} Pengeluaran</h1><p>Upload bukti nota dan hubungkan biaya ke kolam tertentu bila diperlukan.</p></div></div><div class="cardx"><form method="post" enctype="multipart/form-data" class="row g-3">{% csrf_token %}<div class="col-md-4"><label class="form-label">Tanggal</label><input class="form-control" type="date" name="date" value="{{ obj.date|date:'Y-m-d' }}" required></div><div class="col-md-4"><label class="form-label">Kategori</label><select class="form-select" name="category">{% for value,label in categories %}<option value="{{value}}" {% if obj.category == value %}selected{% endif %}>{{label}}</option>{% endfor %}</select></div><div class="col-md-4"><label class="form-label">Kolam</label><select class="form-select" name="pond"><option value="">Semua Kolam</option>{% for p in ponds %}<option value="{{p.id}}" {% if obj.pond_id == p.id %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></div><div class="col-md-6"><label class="form-label">Nama Pengeluaran</label><input class="form-control" name="name" value="{{ obj.name|default:'' }}" placeholder="Contoh: Pakan CP 30 sak" required></div><div class="col-md-3"><label class="form-label">Jumlah</label><input class="form-control" name="amount" inputmode="numeric" data-rupiah-input value="{{ obj.amount|default:'' }}" placeholder="Contoh: 15.000.000" required><div class="form-text">Format otomatis Rupiah, contoh Rp 15.000.000.</div></div><div class="col-md-3"><label class="form-label">Metode Bayar</label><select class="form-select" name="payment_method"><option {% if obj.payment_method == 'Cash' %}selected{% endif %}>Cash</option><option {% if obj.payment_method == 'Transfer' %}selected{% endif %}>Transfer</option><option {% if obj.payment_method == 'QRIS' %}selected{% endif %}>QRIS</option><option {% if obj.payment_method == 'Tempo' %}selected{% endif %}>Tempo</option></select><div class="form-text">Pilih Tempo bila transaksi belum dibayar, lalu catat pada menu Utang Usaha.</div></div><div class="col-md-6"><label class="form-label">Upload Bukti</label><input class="form-control" type="file" name="receipt">{% if obj.receipt %}<div class="form-text">Bukti saat ini: <a href="{{ obj.receipt.url }}">lihat file</a></div>{% endif %}</div><div class="col-12"><label class="form-label">Catatan</label><textarea class="form-control" name="notes" rows="4">{{ obj.notes|default:'' }}</textarea></div><div class="col-12 d-flex gap-2"><button class="btn btn-primary">Simpan Pengeluaran</button><a class="btn btn-outline-secondary" href="{% url 'finance:expenses' %}">Batal</a></div></form></div>{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{% if mode == 'edit' %}Edit{% else %}Tambah{% endif %} Pengeluaran</h1>
+    <p>Satu transaksi dapat memiliki beberapa dokumen pendukung: invoice, faktur, kuitansi, bukti transfer, surat jalan, dan foto.</p>
+  </div>
+</div>
+
+<div class="cardx">
+<form method="post" enctype="multipart/form-data" class="row g-3" id="expense-form">
+  {% csrf_token %}
+  <div class="col-md-4"><label class="form-label">Tanggal</label><input class="form-control" type="date" name="date" value="{% firstof form_data.date obj.date|date:'Y-m-d' %}" required></div>
+  <div class="col-md-4"><label class="form-label">Kategori</label><select class="form-select" name="category">{% for value,label in categories %}<option value="{{value}}" {% if form_data.category == value or obj.category == value %}selected{% endif %}>{{label}}</option>{% endfor %}</select></div>
+  <div class="col-md-4"><label class="form-label">Kolam</label><select class="form-select" name="pond"><option value="">Semua Kolam</option>{% for p in ponds %}<option value="{{p.id}}" {% if form_data.pond == p.id|stringformat:'s' or obj.pond_id == p.id %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></div>
+  <div class="col-md-6"><label class="form-label">Nama Pengeluaran</label><input class="form-control" name="name" value="{% firstof form_data.name obj.name %}" placeholder="Contoh: Pakan CP 30 sak" required></div>
+  <div class="col-md-3"><label class="form-label">Jumlah</label><input class="form-control" name="amount" inputmode="numeric" data-rupiah-input value="{% firstof form_data.amount obj.amount %}" placeholder="Contoh: 15.000.000" required><div class="form-text">Format otomatis Rupiah.</div></div>
+  <div class="col-md-3"><label class="form-label">Metode Bayar</label><select class="form-select" name="payment_method">{% firstof form_data.payment_method obj.payment_method "Cash" as selected_payment_method %}<option value="Cash" {% if selected_payment_method == 'Cash' %}selected{% endif %}>Cash</option><option value="Transfer" {% if selected_payment_method == 'Transfer' %}selected{% endif %}>Transfer</option><option value="QRIS" {% if selected_payment_method == 'QRIS' %}selected{% endif %}>QRIS</option><option value="Tempo" {% if selected_payment_method == 'Tempo' %}selected{% endif %}>Tempo</option></select><div class="form-text">Pilih Tempo bila transaksi belum dibayar.</div></div>
+
+  <div class="col-12">
+    <label class="form-label">Bukti Pengeluaran (Multiple File)</label>
+    <input class="form-control" type="file" name="attachments" id="attachments" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.xlsx">
+    <div class="form-text">Maksimal {{ max_files }} file per transaksi, masing-masing maksimal 10 MB. Format: PDF, JPG/JPEG, PNG, WEBP, DOCX, XLSX.</div>
+    <div id="selected-files" class="mt-2 small"></div>
+  </div>
+
+  {% if obj.attachments.all %}
+  <div class="col-12">
+    <label class="form-label">Lampiran Tersimpan</label>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle">
+        <thead><tr><th>Nama File</th><th>Diunggah</th><th class="text-end">Aksi</th></tr></thead>
+        <tbody>
+        {% for attachment in obj.attachments.all %}
+          <tr>
+            <td><i class="fa-solid fa-paperclip me-1"></i><a href="{{ attachment.file.url }}" target="_blank" rel="noopener">{{ attachment.filename }}</a></td>
+            <td>{{ attachment.uploaded_at|date:'d/m/Y H:i' }}</td>
+            <td class="text-end">
+              <button type="submit" form="delete-attachment-{{ attachment.id }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Hapus lampiran ini?');"><i class="fa-solid fa-trash"></i></button>
+            </td>
+          </tr>
+        {% empty %}<tr><td colspan="3" class="text-muted">Belum ada lampiran.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="col-12"><label class="form-label">Catatan</label><textarea class="form-control" name="notes" rows="4">{% firstof form_data.notes obj.notes %}</textarea></div>
+  <div class="col-12 d-flex gap-2"><button class="btn btn-primary">Simpan Pengeluaran</button><a class="btn btn-outline-secondary" href="{% url 'finance:expenses' %}">Batal</a></div>
+</form>
+{% if obj %}{% for attachment in obj.attachments.all %}<form id="delete-attachment-{{ attachment.id }}" method="post" action="{% url 'finance:delete_expense_attachment' attachment.id %}" class="d-none">{% csrf_token %}</form>{% endfor %}{% endif %}
+</div>
+<script>
+(function () {
+  const input = document.getElementById('attachments');
+  const output = document.getElementById('selected-files');
+  if (!input || !output) return;
+  input.addEventListener('change', function () {
+    const files = Array.from(input.files || []);
+    if (!files.length) { output.innerHTML = ''; return; }
+    output.innerHTML = '<strong>' + files.length + ' file dipilih:</strong><ul class="mb-0">' +
+      files.map(f => '<li>' + f.name.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) + ' (' + (f.size / 1024 / 1024).toFixed(2) + ' MB)</li>').join('') + '</ul>';
+  });
+})();
+</script>
+{% endblock %}
