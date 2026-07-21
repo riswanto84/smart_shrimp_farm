@@ -790,7 +790,7 @@ from calendar import monthrange
 from django.contrib import messages
 from django.db.models import Q
 from django.http import HttpResponse
-from .models import OtherRevenue, BalanceEntry, FixedAsset
+from .models import OtherRevenue, BalanceEntry, FixedAsset, TradeAccount, TradePayment
 
 
 def _as_date(request):
@@ -873,10 +873,16 @@ def tax_dashboard(request):
     fiscal_expense = expenses.filter(is_fiscal_deductible=True).aggregate(s=Sum('amount'))['s'] or Decimal('0')
     assets = FixedAsset.objects.filter(status='active')
     asset_total = sum((a.total_cost for a in assets), Decimal('0'))
+    receivable_total = sum((x.outstanding_amount for x in TradeAccount.objects.filter(account_type=TradeAccount.RECEIVABLE)), Decimal('0'))
+    payable_total = sum((x.outstanding_amount for x in TradeAccount.objects.filter(account_type=TradeAccount.PAYABLE)), Decimal('0'))
+    overdue_receivable = sum((x.outstanding_amount for x in TradeAccount.objects.filter(account_type=TradeAccount.RECEIVABLE, due_date__lt=timezone.localdate())), Decimal('0'))
+    overdue_payable = sum((x.outstanding_amount for x in TradeAccount.objects.filter(account_type=TradeAccount.PAYABLE, due_date__lt=timezone.localdate())), Decimal('0'))
     return render(request,'finance/tax_dashboard.html',{
         'date_from':date_from,'date_to':date_to,'turnover':turnover,'expense_total':expense_total,
         'fiscal_expense':fiscal_expense,'commercial_profit':turnover-expense_total,
         'fiscal_profit_before_adjustment':turnover-fiscal_expense,'asset_total':asset_total,'asset_count':assets.count(),
+        'receivable_total':receivable_total,'payable_total':payable_total,
+        'overdue_receivable':overdue_receivable,'overdue_payable':overdue_payable,
     })
 
 
@@ -966,17 +972,24 @@ def _balance_sheet_data(request):
     for e in BalanceEntry.objects.filter(as_of_date__lte=as_of).order_by('account_name','-as_of_date','-id'):
         latest.setdefault((e.account_type,e.account_name),e)
     entries=list(latest.values())
-    assets=[e for e in entries if e.account_type=='asset' and e.group!='Aset Tetap']
-    liabilities=[e for e in entries if e.account_type=='liability']
+    # Piutang dan utang usaha berasal otomatis dari modul kartu utang/piutang.
+    # Pos manual dengan kelompok yang sama dikeluarkan agar tidak terjadi hitung ganda.
+    assets=[e for e in entries if e.account_type=='asset' and e.group not in ('Aset Tetap','Piutang Usaha')]
+    liabilities=[e for e in entries if e.account_type=='liability' and e.group!='Utang Usaha']
     equities=[e for e in entries if e.account_type=='equity']
+    def outstanding_as_of(account):
+        paid = account.payments.filter(payment_date__lte=as_of).aggregate(s=Sum('amount'))['s'] or Decimal('0')
+        return max(account.original_amount - paid, Decimal('0'))
+    receivable_total=sum((outstanding_as_of(x) for x in TradeAccount.objects.filter(account_type=TradeAccount.RECEIVABLE, transaction_date__lte=as_of)),Decimal('0'))
+    payable_total=sum((outstanding_as_of(x) for x in TradeAccount.objects.filter(account_type=TradeAccount.PAYABLE, transaction_date__lte=as_of)),Decimal('0'))
     fixed_assets=[]
     for a in FixedAsset.objects.filter(use_date__lte=as_of).exclude(status='disposed'):
         dep=_asset_depreciation(a,as_of)
         fixed_assets.append({'asset':a,**dep})
     fixed_cost=sum((x['asset'].total_cost for x in fixed_assets),Decimal('0'))
     accumulated=sum((x['accumulated'] for x in fixed_assets),Decimal('0'))
-    total_assets=sum((e.amount for e in assets),Decimal('0'))+fixed_cost-accumulated
-    total_liabilities=sum((e.amount for e in liabilities),Decimal('0'))
+    total_assets=sum((e.amount for e in assets),Decimal('0'))+receivable_total+fixed_cost-accumulated
+    total_liabilities=sum((e.amount for e in liabilities),Decimal('0'))+payable_total
     total_equity=sum((e.amount for e in equities),Decimal('0'))
     start=timezone.datetime(as_of.year,1,1).date()
     mock=type('R',(),{'GET':{'date_from':start.isoformat(),'date_to':as_of.isoformat()}})()
@@ -986,7 +999,7 @@ def _balance_sheet_data(request):
     costs=OperationalExpense.objects.filter(date__range=(start,as_of)).aggregate(s=Sum('amount'))['s'] or Decimal('0')
     current_profit=sales+other-costs
     total_equity_with_profit=total_equity+current_profit
-    return {'as_of':as_of,'assets':assets,'liabilities':liabilities,'equities':equities,'fixed_assets':fixed_assets,'fixed_cost':fixed_cost,'accumulated':accumulated,'total_assets':total_assets,'total_liabilities':total_liabilities,'total_equity':total_equity,'current_profit':current_profit,'total_equity_with_profit':total_equity_with_profit,'difference':total_assets-total_liabilities-total_equity_with_profit}
+    return {'as_of':as_of,'assets':assets,'liabilities':liabilities,'equities':equities,'fixed_assets':fixed_assets,'receivable_total':receivable_total,'payable_total':payable_total,'fixed_cost':fixed_cost,'accumulated':accumulated,'total_assets':total_assets,'total_liabilities':total_liabilities,'total_equity':total_equity,'current_profit':current_profit,'total_equity_with_profit':total_equity_with_profit,'difference':total_assets-total_liabilities-total_equity_with_profit}
 
 
 @login_required
@@ -1001,8 +1014,10 @@ def export_balance_sheet_pdf(request):
     d=_balance_sheet_data(request)
     rows=[]
     for e in d['assets']: rows.append([f"ASET - {e.account_name}",rupiah(e.amount)])
+    rows.append(['ASET - Piutang Usaha',rupiah(d['receivable_total'])])
     rows += [['Aset Tetap - Harga Perolehan',rupiah(d['fixed_cost'])],['Akumulasi Penyusutan',f"({rupiah(d['accumulated'])})"],['TOTAL ASET',rupiah(d['total_assets'])]]
     for e in d['liabilities']: rows.append([f"KEWAJIBAN - {e.account_name}",rupiah(e.amount)])
+    rows.append(['KEWAJIBAN - Utang Usaha',rupiah(d['payable_total'])])
     rows.append(['TOTAL KEWAJIBAN',rupiah(d['total_liabilities'])])
     for e in d['equities']: rows.append([f"EKUITAS - {e.account_name}",rupiah(e.amount)])
     rows += [['Laba/Rugi Tahun Berjalan',rupiah(d['current_profit'])],['TOTAL EKUITAS',rupiah(d['total_equity_with_profit'])],['SELISIH NERACA',rupiah(d['difference'])]]
@@ -1063,3 +1078,201 @@ def export_depreciation_pdf(request):
     for a in FixedAsset.objects.exclude(status='disposed'):
         d=_asset_depreciation(a,as_of); tc+=a.total_cost; ta+=d['accumulated']; tb+=d['book_value']; rows.append([a.code,a.name,a.get_fiscal_group_display(),rupiah(a.total_cost),rupiah(d['annual']),rupiah(d['accumulated']),rupiah(d['book_value'])])
     return export_pdf('daftar_aset_penyusutan','Daftar Aset dan Penyusutan Fiskal',f"Posisi per {as_of.strftime('%d/%m/%Y')}",['Kode','Nama Aset','Kelompok','Perolehan','Penyusutan/Tahun','Akumulasi','Nilai Buku'],rows,[['','','TOTAL',rupiah(tc),'',rupiah(ta),rupiah(tb)]])
+
+# =============================================================================
+# UTANG DAN PIUTANG USAHA
+# =============================================================================
+from django.db import transaction
+
+
+def _trade_queryset(request, account_type):
+    items = TradeAccount.objects.filter(account_type=account_type).prefetch_related('payments')
+    q = (request.GET.get('q') or '').strip()
+    status = request.GET.get('status') or ''
+    if q:
+        items = items.filter(Q(partner_name__icontains=q) | Q(document_number__icontains=q) | Q(description__icontains=q))
+    today = timezone.localdate()
+    rows = []
+    for item in items:
+        if status == 'open' and item.outstanding_amount <= 0:
+            continue
+        if status == 'paid' and item.outstanding_amount > 0:
+            continue
+        if status == 'overdue' and not item.is_overdue:
+            continue
+        age_days = max((today - item.due_date).days, 0) if item.outstanding_amount > 0 else 0
+        bucket = 'Belum jatuh tempo'
+        if age_days:
+            if age_days <= 30: bucket = '1–30 hari'
+            elif age_days <= 60: bucket = '31–60 hari'
+            elif age_days <= 90: bucket = '61–90 hari'
+            else: bucket = '> 90 hari'
+        rows.append({'item': item, 'paid': item.paid_amount, 'outstanding': item.outstanding_amount, 'age_days': age_days, 'bucket': bucket})
+    return rows
+
+
+def _trade_summary(rows):
+    original = sum((r['item'].original_amount for r in rows), Decimal('0'))
+    paid = sum((r['paid'] for r in rows), Decimal('0'))
+    outstanding = sum((r['outstanding'] for r in rows), Decimal('0'))
+    overdue = sum((r['outstanding'] for r in rows if r['item'].is_overdue), Decimal('0'))
+    return original, paid, outstanding, overdue
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def receivables(request):
+    rows = _trade_queryset(request, TradeAccount.RECEIVABLE)
+    original, paid, outstanding, overdue = _trade_summary(rows)
+    return render(request, 'finance/trade_accounts.html', {
+        'rows': rows, 'account_type': TradeAccount.RECEIVABLE, 'title': 'Piutang Usaha',
+        'partner_label': 'Pelanggan', 'original': original, 'paid': paid,
+        'outstanding': outstanding, 'overdue': overdue,
+    })
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def payables(request):
+    rows = _trade_queryset(request, TradeAccount.PAYABLE)
+    original, paid, outstanding, overdue = _trade_summary(rows)
+    return render(request, 'finance/trade_accounts.html', {
+        'rows': rows, 'account_type': TradeAccount.PAYABLE, 'title': 'Utang Usaha',
+        'partner_label': 'Supplier/Pemasok', 'original': original, 'paid': paid,
+        'outstanding': outstanding, 'overdue': overdue,
+    })
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def add_trade_account(request, account_type):
+    if account_type not in {TradeAccount.RECEIVABLE, TradeAccount.PAYABLE}:
+        return redirect('finance:tax_dashboard')
+    if request.method == 'POST':
+        amount = parse_rupiah(request.POST.get('original_amount'))
+        transaction_date = parse_date(request.POST.get('transaction_date') or '')
+        due_date = parse_date(request.POST.get('due_date') or '')
+        if amount <= 0 or not transaction_date or not due_date:
+            messages.error(request, 'Tanggal dan nilai transaksi wajib diisi dengan benar.')
+        elif due_date < transaction_date:
+            messages.error(request, 'Tanggal jatuh tempo tidak boleh sebelum tanggal transaksi.')
+        else:
+            obj = TradeAccount.objects.create(
+                cycle=get_selected_cycle(request), account_type=account_type,
+                transaction_date=transaction_date, due_date=due_date,
+                document_number=request.POST.get('document_number','').strip(),
+                partner_name=request.POST.get('partner_name','').strip(),
+                description=request.POST.get('description','').strip(),
+                original_amount=amount, notes=request.POST.get('notes','').strip(),
+            )
+            messages.success(request, f'{obj.get_account_type_display()} berhasil disimpan.')
+            return redirect('finance:trade_detail', pk=obj.pk)
+    return render(request, 'finance/trade_account_form.html', {
+        'account_type': account_type,
+        'title': 'Tambah Piutang Usaha' if account_type == TradeAccount.RECEIVABLE else 'Tambah Utang Usaha',
+        'partner_label': 'Pelanggan' if account_type == TradeAccount.RECEIVABLE else 'Supplier/Pemasok',
+    })
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def edit_trade_account(request, pk):
+    obj = get_object_or_404(TradeAccount, pk=pk)
+    if request.method == 'POST':
+        amount = parse_rupiah(request.POST.get('original_amount'))
+        transaction_date = parse_date(request.POST.get('transaction_date') or '')
+        due_date = parse_date(request.POST.get('due_date') or '')
+        if amount < obj.paid_amount:
+            messages.error(request, 'Nilai awal tidak boleh lebih kecil dari total pembayaran yang sudah dicatat.')
+        elif not transaction_date or not due_date or due_date < transaction_date:
+            messages.error(request, 'Periksa kembali tanggal transaksi dan jatuh tempo.')
+        else:
+            obj.transaction_date=transaction_date; obj.due_date=due_date
+            obj.document_number=request.POST.get('document_number','').strip()
+            obj.partner_name=request.POST.get('partner_name','').strip()
+            obj.description=request.POST.get('description','').strip()
+            obj.original_amount=amount; obj.notes=request.POST.get('notes','').strip(); obj.save()
+            messages.success(request, 'Data berhasil diperbarui.')
+            return redirect('finance:trade_detail', pk=obj.pk)
+    return render(request, 'finance/trade_account_form.html', {
+        'obj':obj, 'account_type':obj.account_type,
+        'title':'Edit '+obj.get_account_type_display(),
+        'partner_label':'Pelanggan' if obj.account_type == TradeAccount.RECEIVABLE else 'Supplier/Pemasok',
+    })
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def trade_detail(request, pk):
+    obj = get_object_or_404(TradeAccount.objects.prefetch_related('payments'), pk=pk)
+    return render(request, 'finance/trade_account_detail.html', {
+        'obj':obj, 'payments':obj.payments.all(), 'paid':obj.paid_amount,
+        'outstanding':obj.outstanding_amount,
+    })
+
+
+@login_required
+@permission_required('finance.tax_reports')
+@require_POST
+@transaction.atomic
+def add_trade_payment(request, pk):
+    obj = get_object_or_404(TradeAccount.objects.select_for_update(), pk=pk)
+    amount = parse_rupiah(request.POST.get('amount'))
+    payment_date = parse_date(request.POST.get('payment_date') or '')
+    if not payment_date or amount <= 0:
+        messages.error(request, 'Tanggal dan jumlah pembayaran wajib diisi.')
+    elif amount > obj.outstanding_amount:
+        messages.error(request, 'Pembayaran tidak boleh melebihi sisa saldo.')
+    else:
+        TradePayment.objects.create(
+            trade_account=obj, payment_date=payment_date, amount=amount,
+            payment_method=request.POST.get('payment_method','Transfer'),
+            document_number=request.POST.get('document_number','').strip(),
+            notes=request.POST.get('notes','').strip(),
+        )
+        messages.success(request, 'Pembayaran berhasil dicatat.')
+    return redirect('finance:trade_detail', pk=obj.pk)
+
+
+@login_required
+@permission_required('finance.tax_reports')
+@require_POST
+def delete_trade_payment(request, pk):
+    payment = get_object_or_404(TradePayment, pk=pk)
+    account_pk = payment.trade_account_id
+    payment.delete()
+    messages.success(request, 'Pembayaran berhasil dihapus.')
+    return redirect('finance:trade_detail', pk=account_pk)
+
+
+@login_required
+@permission_required('finance.tax_reports')
+@require_POST
+def delete_trade_account(request, pk):
+    obj = get_object_or_404(TradeAccount, pk=pk)
+    target = 'finance:receivables' if obj.account_type == TradeAccount.RECEIVABLE else 'finance:payables'
+    obj.delete()
+    messages.success(request, 'Data utang/piutang berhasil dihapus.')
+    return redirect(target)
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def export_trade_pdf(request, account_type):
+    if account_type not in {TradeAccount.RECEIVABLE, TradeAccount.PAYABLE}:
+        return redirect('finance:tax_dashboard')
+    rows = _trade_queryset(request, account_type)
+    title = 'Daftar Piutang Usaha' if account_type == TradeAccount.RECEIVABLE else 'Daftar Utang Usaha'
+    data = [[
+        r['item'].transaction_date.strftime('%d/%m/%Y'), r['item'].due_date.strftime('%d/%m/%Y'),
+        r['item'].document_number or '-', r['item'].partner_name, r['item'].description,
+        rupiah(r['item'].original_amount), rupiah(r['paid']), rupiah(r['outstanding']),
+        ('Jatuh tempo' if r['item'].is_overdue else r['item'].payment_status)
+    ] for r in rows]
+    totals = _trade_summary(rows)
+    return export_pdf(
+        'piutang_usaha' if account_type == TradeAccount.RECEIVABLE else 'utang_usaha', title,
+        f'Posisi per {timezone.localdate().strftime("%d/%m/%Y")}',
+        ['Transaksi','Jatuh Tempo','Dokumen','Mitra','Uraian','Nilai Awal','Dibayar','Saldo','Status'],
+        data, [['','','','','TOTAL',rupiah(totals[0]),rupiah(totals[1]),rupiah(totals[2]),'']]
+    )

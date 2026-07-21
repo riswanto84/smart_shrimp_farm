@@ -81,3 +81,79 @@ class FixedAsset(models.Model):
     @property
     def total_cost(self):
         return (self.acquisition_cost or Decimal('0')) + (self.additional_cost or Decimal('0'))
+
+class TradeAccount(models.Model):
+    RECEIVABLE = 'receivable'
+    PAYABLE = 'payable'
+    ACCOUNT_TYPES = [
+        (RECEIVABLE, 'Piutang Usaha'),
+        (PAYABLE, 'Utang Usaha'),
+    ]
+
+    cycle = models.ForeignKey(
+        CultivationCycle, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='trade_accounts'
+    )
+    account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPES)
+    transaction_date = models.DateField(verbose_name='Tanggal transaksi')
+    due_date = models.DateField(verbose_name='Tanggal jatuh tempo')
+    document_number = models.CharField(max_length=80, blank=True, verbose_name='Nomor dokumen')
+    partner_name = models.CharField(max_length=180, verbose_name='Pelanggan/Supplier')
+    description = models.CharField(max_length=220)
+    original_amount = models.DecimalField(max_digits=16, decimal_places=2, verbose_name='Nilai awal')
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['due_date', 'transaction_date', 'id']
+        indexes = [
+            models.Index(fields=['account_type', 'due_date']),
+            models.Index(fields=['partner_name']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_account_type_display()} - {self.partner_name} - {self.document_number or self.pk}"
+
+    @property
+    def paid_amount(self):
+        return self.payments.aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
+
+    @property
+    def outstanding_amount(self):
+        return max((self.original_amount or Decimal('0')) - self.paid_amount, Decimal('0'))
+
+    @property
+    def payment_status(self):
+        if self.outstanding_amount <= 0:
+            return 'Lunas'
+        if self.paid_amount > 0:
+            return 'Sebagian'
+        return 'Belum Dibayar'
+
+    @property
+    def is_overdue(self):
+        from django.utils import timezone
+        return self.outstanding_amount > 0 and self.due_date < timezone.localdate()
+
+
+class TradePayment(models.Model):
+    METHODS = [
+        ('Transfer', 'Transfer'),
+        ('Cash', 'Tunai'),
+        ('Giro', 'Giro'),
+        ('Lainnya', 'Lainnya'),
+    ]
+    trade_account = models.ForeignKey(TradeAccount, on_delete=models.CASCADE, related_name='payments')
+    payment_date = models.DateField(verbose_name='Tanggal pembayaran')
+    amount = models.DecimalField(max_digits=16, decimal_places=2)
+    payment_method = models.CharField(max_length=30, choices=METHODS, default='Transfer')
+    document_number = models.CharField(max_length=80, blank=True, verbose_name='Nomor bukti')
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['payment_date', 'id']
+
+    def __str__(self):
+        return f"{self.trade_account} - {self.amount}"

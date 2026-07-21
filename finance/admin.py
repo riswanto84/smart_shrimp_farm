@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import OperationalExpense, OtherRevenue, BalanceEntry, FixedAsset
+from .models import OperationalExpense, OtherRevenue, BalanceEntry, FixedAsset, TradeAccount, TradePayment
 
 @admin.register(OperationalExpense)
 class OperationalExpenseAdmin(admin.ModelAdmin):
@@ -20,3 +20,20 @@ class BalanceEntryAdmin(admin.ModelAdmin):
 class FixedAssetAdmin(admin.ModelAdmin):
     list_display=('code','name','category','use_date','total_cost','fiscal_group','status')
     list_filter=('category','fiscal_group','status')
+
+
+class TradePaymentInline(admin.TabularInline):
+    model = TradePayment
+    extra = 0
+
+@admin.register(TradeAccount)
+class TradeAccountAdmin(admin.ModelAdmin):
+    list_display=('account_type','transaction_date','due_date','partner_name','document_number','original_amount','payment_status')
+    list_filter=('account_type','transaction_date','due_date')
+    search_fields=('partner_name','document_number','description')
+    inlines=(TradePaymentInline,)
+
+@admin.register(TradePayment)
+class TradePaymentAdmin(admin.ModelAdmin):
+    list_display=('trade_account','payment_date','amount','payment_method','document_number')
+    list_filter=('payment_method','payment_date')

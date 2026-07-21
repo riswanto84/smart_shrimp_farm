@@ -12,5 +12,15 @@ urlpatterns = [
     path('tax/profit-loss/',views.tax_profit_loss,name='tax_profit_loss'), path('tax/profit-loss/pdf/',views.export_tax_profit_loss_pdf,name='export_tax_profit_loss_pdf'),
     path('tax/balance/entries/',views.balance_entries,name='balance_entries'), path('tax/balance/entries/add/',views.add_balance_entry,name='add_balance_entry'), path('tax/balance/',views.balance_sheet,name='balance_sheet'), path('tax/balance/pdf/',views.export_balance_sheet_pdf,name='export_balance_sheet_pdf'),
     path('tax/assets/',views.assets,name='assets'), path('tax/assets/add/',views.add_asset,name='add_asset'), path('tax/assets/<int:pk>/edit/',views.edit_asset,name='edit_asset'),
+
+    path('tax/receivables/', views.receivables, name='receivables'),
+    path('tax/payables/', views.payables, name='payables'),
+    path('tax/trade/<str:account_type>/add/', views.add_trade_account, name='add_trade_account'),
+    path('tax/trade/<int:pk>/', views.trade_detail, name='trade_detail'),
+    path('tax/trade/<int:pk>/edit/', views.edit_trade_account, name='edit_trade_account'),
+    path('tax/trade/<int:pk>/delete/', views.delete_trade_account, name='delete_trade_account'),
+    path('tax/trade/<int:pk>/payment/add/', views.add_trade_payment, name='add_trade_payment'),
+    path('tax/trade/payment/<int:pk>/delete/', views.delete_trade_payment, name='delete_trade_payment'),
+    path('tax/trade/<str:account_type>/pdf/', views.export_trade_pdf, name='export_trade_pdf'),
     path('tax/depreciation/',views.depreciation_report,name='depreciation'), path('tax/depreciation/pdf/',views.export_depreciation_pdf,name='export_depreciation_pdf'),
 ]
