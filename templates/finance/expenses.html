@@ -1,7 +1,40 @@
 {% extends 'base.html' %}
 {% load currency %}
 {% block content %}
-<div class="page-head"><div><h1>Pengeluaran Operasional</h1><p>Kelola biaya pakan, listrik, BBM, obat, tenaga kerja, dan operasional tambak.</p></div><div class="d-flex gap-2 flex-wrap"><a class="btn btn-outline-warning" href="{% url 'finance:payables' %}"><i class="fa-solid fa-file-invoice-dollar"></i> Utang Usaha</a><a class="btn btn-outline-info" href="{% url 'finance:receivables' %}"><i class="fa-solid fa-hand-holding-dollar"></i> Piutang Usaha</a><a class="btn btn-primary" href="{% url 'finance:add_expense' %}"><i class="fa-solid fa-plus"></i> Tambah Pengeluaran</a></div></div>
+<style>
+.finance-page-actions{display:flex;align-items:stretch;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.finance-action-link{display:flex;align-items:center;gap:10px;min-height:44px;padding:8px 14px;border:1px solid #dce5f1;border-radius:12px;background:#fff;color:#14213d;text-decoration:none;box-shadow:0 4px 14px rgba(15,35,70,.06);transition:all .18s ease}
+.finance-action-link:hover{color:#14213d;transform:translateY(-1px);box-shadow:0 8px 20px rgba(15,35,70,.11);border-color:#c6d4e6}
+.finance-action-icon{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border-radius:9px;flex:0 0 32px;font-size:14px}
+.finance-action-copy{display:flex;flex-direction:column;line-height:1.08;text-align:left}
+.finance-action-copy strong{font-size:13px;font-weight:800;white-space:nowrap}
+.finance-action-copy small{font-size:10px;color:#72809a;margin-top:4px;white-space:nowrap}
+.finance-action-link.payable .finance-action-icon{background:#fff4db;color:#b66c00}
+.finance-action-link.receivable .finance-action-icon{background:#e7f8f5;color:#008d78}
+.finance-action-primary{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:44px;padding:10px 16px;border-radius:12px;background:linear-gradient(135deg,#123f78,#0b2f5e);color:#fff;text-decoration:none;font-weight:800;font-size:13px;box-shadow:0 7px 16px rgba(11,47,94,.22);transition:all .18s ease;white-space:nowrap}
+.finance-action-primary:hover{color:#fff;transform:translateY(-1px);box-shadow:0 10px 22px rgba(11,47,94,.28)}
+@media (max-width:991.98px){.page-head{align-items:flex-start}.finance-page-actions{width:100%;justify-content:flex-start}.finance-action-link{flex:1 1 185px}.finance-action-primary{flex:1 1 185px}}
+@media (max-width:575.98px){.finance-page-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}.finance-action-link{width:100%;min-width:0;padding:8px 10px}.finance-action-copy small{white-space:normal}.finance-action-primary{grid-column:1/-1;width:100%}}
+</style>
+<div class="page-head">
+  <div>
+    <h1>Pengeluaran Operasional</h1>
+    <p>Kelola biaya pakan, listrik, BBM, obat, tenaga kerja, dan operasional tambak.</p>
+  </div>
+  <div class="finance-page-actions" aria-label="Aksi keuangan">
+    <a class="finance-action-link payable" href="{% url 'finance:payables' %}">
+      <span class="finance-action-icon"><i class="fa-solid fa-file-invoice-dollar"></i></span>
+      <span class="finance-action-copy"><strong>Utang Usaha</strong><small>Kelola kewajiban supplier</small></span>
+      <i class="fa-solid fa-chevron-right ms-1 opacity-50"></i>
+    </a>
+    <a class="finance-action-link receivable" href="{% url 'finance:receivables' %}">
+      <span class="finance-action-icon"><i class="fa-solid fa-hand-holding-dollar"></i></span>
+      <span class="finance-action-copy"><strong>Piutang Usaha</strong><small>Pantau tagihan pelanggan</small></span>
+      <i class="fa-solid fa-chevron-right ms-1 opacity-50"></i>
+    </a>
+    <a class="finance-action-primary" href="{% url 'finance:add_expense' %}"><i class="fa-solid fa-plus"></i> Tambah Pengeluaran</a>
+  </div>
+</div>
 <div class="kpi-grid mb-3"><div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-wallet"></i></div><div><span>Total Pengeluaran</span><strong>{{ total|rupiah }}</strong><small>Periode terpilih</small></div></div><div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-calendar-day"></i></div><div><span>Rata-rata/Hari</span><strong>{{ average_per_day|rupiah }}</strong><small>{{ average_label }}</small></div></div><div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-seedling"></i></div><div><span>Terbesar</span><strong>{{ largest_category }}</strong><small>{{ largest_category_amount|rupiah }}</small></div></div><div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-file-invoice"></i></div><div><span>Export Laporan</span><strong>PDF/Excel</strong><small>Filter rentang tanggal</small></div></div></div>
 <div class="cardx mb-3"><form method="get" class="row g-2 align-items-end"><div class="col-md-3"><label class="form-label">Tanggal Mulai</label><input class="form-control" type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"></div><div class="col-md-3"><label class="form-label">Tanggal Selesai</label><input class="form-control" type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></div><div class="col-md-2"><label class="form-label">Kategori</label><select class="form-select" name="category"><option value="">Semua</option>{% for value,label in categories %}<option value="{{value}}" {% if request.GET.category == value %}selected{% endif %}>{{label}}</option>{% endfor %}</select></div><div class="col-md-2"><label class="form-label">Kolam</label><select class="form-select" name="pond"><option value="">Semua</option>{% for p in ponds %}<option value="{{p.id}}" {% if request.GET.pond == p.id|stringformat:'s' %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></div><div class="col-md-2 d-grid"><button class="btn btn-outline-primary">Terapkan Filter</button></div></form><div class="mt-3 d-flex gap-2 flex-wrap"><a class="btn btn-success" href="{% url 'finance:export_expenses_excel' %}?{{ request.GET.urlencode }}">Export Excel</a><a class="btn btn-danger" href="{% url 'finance:export_expenses_pdf' %}?{{ request.GET.urlencode }}">Export PDF</a></div></div>
 <div class="cardx table-responsive"><table class="table app-table align-middle"><thead><tr><th>Tanggal</th><th>Kategori</th><th>Nama</th><th>Kolam</th><th>Jumlah</th><th>Metode</th><th>Dokumen</th><th class="text-end">Aksi</th></tr></thead><tbody>{% for i in items %}<tr><td>{{i.date}}</td><td><span class="badge-soft">{{i.category}}</span></td><td><b>{{i.name}}</b></td><td>{{i.pond.name|default:'Semua'}}</td><td>{{ i.amount|rupiah }}</td><td>{{i.payment_method}}</td><td>{% if i.documents.count %}<span class="badge-soft"><i class="fa-solid fa-paperclip"></i> {{ i.documents.count }} file</span>{% elif i.receipt %}<a href="{{i.receipt.url}}" target="_blank" rel="noopener">Bukti lama</a>{% else %}-{% endif %}</td><td><div class="d-flex gap-2 flex-wrap justify-content-end"><a class="btn btn-sm btn-warning text-dark" href="{% url 'finance:edit_expense' i.id %}"><i class="fa-solid fa-pen-to-square"></i> Edit</a><form method="post" action="{% url 'finance:delete_expense' i.id %}" onsubmit="return confirm('Hapus data pengeluaran ini?');">{% csrf_token %}<button class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i> Hapus</button></form></div></td></tr>{% empty %}<tr><td colspan="8" class="text-center text-muted">Tidak ada data pada filter ini.</td></tr>{% endfor %}</tbody></table></div>
