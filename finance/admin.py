@@ -1,10 +1,17 @@
 from django.contrib import admin
-from .models import OperationalExpense, OtherRevenue, BalanceEntry, FixedAsset, TradeAccount, TradePayment, TradeDocument
+from .models import OperationalExpense, ExpenseDocument, OtherRevenue, BalanceEntry, FixedAsset, TradeAccount, TradePayment, TradeDocument
 
 @admin.register(OperationalExpense)
 class OperationalExpenseAdmin(admin.ModelAdmin):
     list_display=('date','category','name','amount','is_fiscal_deductible')
     list_filter=('category','is_fiscal_deductible','date')
+
+
+@admin.register(ExpenseDocument)
+class ExpenseDocumentAdmin(admin.ModelAdmin):
+    list_display=('original_name','expense','uploaded_by','uploaded_at')
+    list_filter=('uploaded_at',)
+    search_fields=('original_name','description','expense__name','expense__document_number')
 
 @admin.register(OtherRevenue)
 class OtherRevenueAdmin(admin.ModelAdmin):

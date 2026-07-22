@@ -13,7 +13,7 @@ ADDRESS_LINES = [
     'Jalan Pantai Mekar, Kec. Muara Gembong,',
     'Kabupaten Bekasi, Jawa Barat 17730',
 ]
-PHONE = '081219142796'
+PHONE = '08131717521'
 INSTAGRAM = '@udang.emas.nusantara'
 TIKTOK = 'udang.emas.nusantara'
 
@@ -160,37 +160,30 @@ def build_invoice_pdf(sale):
     _line(c, y, width, margin)
     y -= 5 * mm
 
-    item_x = margin
-    qty_x = margin + 43 * mm
-    price_x = margin + 57 * mm
-    total_x = right
-    item_max_width = qty_x - item_x - 2 * mm
-
-    c.setFont('Courier-Bold', 8)
-    c.drawString(item_x, y, 'ITEM')
-    c.drawRightString(qty_x, y, 'QTY')
-    c.drawRightString(price_x, y, 'HARGA')
-    c.drawRightString(total_x, y, 'TOTAL')
-    y -= 2.5 * mm
+    # Layout item vertikal agar angka panjang tidak pernah bertumpuk pada struk thermal.
+    c.setFont('Courier-Bold', 9)
+    c.drawString(margin, y, 'RINCIAN ITEM')
+    y -= 3 * mm
     _line(c, y, width, margin, dashed=False)
-    y -= 5 * mm
+    y -= 6 * mm
 
-    c.setFont('Courier', 8)
     for it in items:
-        item_lines = _wrap_text('Udang Vaname Fresh', max_chars=17)
-        item_lines.append(f'Size {it.size_text or "-"}')
-        first_line_y = y
-        for idx, line in enumerate(item_lines):
-            if idx == 0:
-                _fit_text(c, line, item_x, y, item_max_width, 'Courier', 8)
-            else:
-                _fit_text(c, line, item_x, y, item_max_width, 'Courier', 8)
-            y -= 4 * mm
-        c.drawRightString(qty_x, first_line_y, f'{it.weight_kg} kg')
-        c.drawRightString(price_x, first_line_y, _money_plain(it.price_per_kg))
-        c.drawRightString(total_x, first_line_y, _money_plain(it.subtotal))
-        y -= 4 * mm
-
+        c.setFont('Courier-Bold', 8.5)
+        c.drawString(margin, y, 'Udang Vaname Fresh')
+        y -= 4.5 * mm
+        c.setFont('Courier', 8)
+        rows = [
+            ('Size', it.size_text or '-'),
+            ('Qty', f'{it.weight_kg} kg'),
+            ('Harga/Kg', _money_plain(it.price_per_kg)),
+            ('Subtotal', _money_plain(it.subtotal)),
+        ]
+        for label, value in rows:
+            c.drawString(margin + 2 * mm, y, label)
+            c.drawString(margin + 24 * mm, y, ':')
+            c.drawRightString(right, y, value)
+            y -= 4.5 * mm
+        y -= 2 * mm
     _line(c, y, width, margin, dashed=False)
     y -= 7 * mm
 
@@ -227,6 +220,21 @@ def build_invoice_pdf(sale):
     c.drawString(margin, y, 'STATUS')
     c.drawRightString(right, y, sale.status)
     y -= 6 * mm
+
+    if sale.payment_method in {'Campuran', 'Lainnya'}:
+        c.setFont('Courier', 8)
+        for label, value in [('Cash', sale.cash_amount), ('Transfer', sale.transfer_amount), ('QRIS', sale.qris_amount), ((sale.other_payment_method or 'Lainnya'), sale.other_payment_amount)]:
+            if value:
+                c.drawString(margin, y, label)
+                c.drawRightString(right, y, _money_plain(value))
+                y -= 4.5 * mm
+        paid = (sale.cash_amount or 0) + (sale.transfer_amount or 0) + (sale.qris_amount or 0) + (sale.other_payment_amount or 0)
+        remaining = max((sale.total_amount or 0) - paid, 0)
+        if remaining:
+            c.setFont('Courier-Bold', 8)
+            c.drawString(margin, y, 'Kekurangan')
+            c.drawRightString(right, y, _money_plain(remaining))
+            y -= 5 * mm
 
     _line(c, y, width, margin)
     y -= 5 * mm

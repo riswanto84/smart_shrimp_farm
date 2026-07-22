@@ -17,6 +17,29 @@ class OperationalExpense(models.Model):
         ordering = ['-date', '-id']
 
 
+class ExpenseDocument(models.Model):
+    expense = models.ForeignKey(OperationalExpense, on_delete=models.CASCADE, related_name='documents')
+    file = models.FileField(upload_to='finance/expense_documents/%Y/%m/')
+    original_name = models.CharField(max_length=255, blank=True)
+    description = models.CharField(max_length=180, blank=True)
+    uploaded_by = models.ForeignKey(
+        'auth.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='uploaded_expense_documents'
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-uploaded_at', '-id']
+
+    def __str__(self):
+        return self.original_name or self.file.name
+
+    @property
+    def file_extension(self):
+        from pathlib import Path
+        return Path(self.original_name or self.file.name).suffix.lower().lstrip('.')
+
+
 class OtherRevenue(models.Model):
     cycle=models.ForeignKey(CultivationCycle,on_delete=models.PROTECT,null=True,blank=True,related_name='other_revenues')
     date=models.DateField()

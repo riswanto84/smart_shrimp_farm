@@ -7,7 +7,7 @@ from django.db.models import Sum, Count, Q
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 import json
-from .models import Customer, Sale, SaleItem
+from .models import Customer, Sale, SaleItem, SaleDocument
 from operations.models import Harvest
 from .pdf import build_invoice_pdf, safe_invoice_filename
 from .midtrans import (
@@ -24,6 +24,41 @@ from core.pagination import paginate_queryset
 
 from cultivation.utils import get_selected_cycle, filter_selected_cycle
 
+
+
+ALLOWED_SALE_DOCUMENT_EXTENSIONS = {'.pdf','.jpg','.jpeg','.png','.webp','.doc','.docx','.xls','.xlsx'}
+MAX_SALE_DOCUMENT_SIZE = 10 * 1024 * 1024
+
+def _payment_data(request, total_amount):
+    method = request.POST.get('payment_method', 'Cash')
+    cash = parse_rupiah(request.POST.get('cash_amount')) if method == 'Campuran' else Decimal('0')
+    transfer = parse_rupiah(request.POST.get('transfer_amount')) if method == 'Campuran' else Decimal('0')
+    qris = parse_rupiah(request.POST.get('qris_amount')) if method == 'Campuran' else Decimal('0')
+    other = parse_rupiah(request.POST.get('other_payment_amount')) if method in {'Campuran','Lainnya'} else Decimal('0')
+    other_name = (request.POST.get('other_payment_method') or '').strip()
+    if method == 'Cash': cash = total_amount
+    elif method == 'Transfer': transfer = total_amount
+    elif method == 'QRIS': qris = total_amount
+    elif method == 'Lainnya':
+        if not other_name: raise ValueError('Nama metode pembayaran lainnya wajib diisi.')
+        if other <= 0: other = total_amount
+    paid = cash + transfer + qris + other
+    if paid > total_amount: raise ValueError('Total pembayaran tidak boleh melebihi total transaksi.')
+    status = 'Lunas' if paid >= total_amount else 'Belum Lunas'
+    return method, cash, transfer, qris, other, other_name, paid, status
+
+def _save_sale_documents(request, sale):
+    from pathlib import Path
+    files = request.FILES.getlist('documents')
+    dtype = request.POST.get('document_type') or 'Bukti Transfer'
+    desc = (request.POST.get('document_description') or '').strip()
+    for uploaded in files:
+        ext = Path(uploaded.name).suffix.lower()
+        if ext not in ALLOWED_SALE_DOCUMENT_EXTENSIONS:
+            raise ValueError(f'Format file {uploaded.name} tidak didukung.')
+        if uploaded.size > MAX_SALE_DOCUMENT_SIZE:
+            raise ValueError(f'File {uploaded.name} melebihi batas 10 MB.')
+        SaleDocument.objects.create(sale=sale, document_type=dtype, file=uploaded, description=desc, uploaded_by=request.user)
 
 def _parse_decimal_field(value, label, *, required=True, allow_zero=False):
     raw = str(value or '').strip()
@@ -251,6 +286,7 @@ def cashier(request):
             harvest_id = _selected_fk_or_none(Harvest, request.POST.get('harvest'), 'Sumber panen')
             inv = 'INV' + timezone.now().strftime('%Y%m%d%H%M%S')
             weight, price, subtotal, shipping_cost, packing_cost, other_cost, total_amount = _get_sale_amounts_from_request(request)
+            method, cash, transfer, qris, other_pay, other_name, paid, auto_status = _payment_data(request, total_amount)
             sale = Sale.objects.create(
                 cycle=get_selected_cycle(request, required=True),
                 invoice_no=inv,
@@ -260,12 +296,13 @@ def cashier(request):
                 shipping_cost=shipping_cost,
                 packing_cost=packing_cost,
                 other_cost=other_cost,
-                payment_method=request.POST.get('payment_method', 'Cash'),
-                status=request.POST.get('status', 'Lunas'),
+                payment_method=method, cash_amount=cash, transfer_amount=transfer, qris_amount=qris, other_payment_amount=other_pay, other_payment_method=other_name,
+                status=auto_status,
                 cashier=request.user,
                 notes=request.POST.get('notes', ''),
             )
             SaleItem.objects.create(sale=sale, harvest_id=harvest_id, size_text=request.POST.get('size_text', ''), weight_kg=weight, price_per_kg=price, subtotal=subtotal)
+            _save_sale_documents(request, sale)
             return redirect('sales:invoice', pk=sale.pk)
         except ValueError as exc:
             messages.error(request, str(exc))
@@ -295,6 +332,7 @@ def edit_sale(request, pk):
         except ValueError as exc:
             messages.error(request, str(exc))
             return render(request, 'sales/sale_form.html', {'sale': sale, 'item': item, 'customers': customers, 'harvests': harvests, 'mode': 'edit'})
+        method, cash, transfer, qris, other_pay, other_name, paid, auto_status = _payment_data(request, total_amount)
         old_total_amount = sale.total_amount
 
         sale.invoice_no = invoice_no
@@ -304,8 +342,13 @@ def edit_sale(request, pk):
         sale.shipping_cost = shipping_cost
         sale.packing_cost = packing_cost
         sale.other_cost = other_cost
-        sale.payment_method = request.POST.get('payment_method', 'Cash')
-        sale.status = request.POST.get('status', 'Lunas')
+        sale.payment_method = method
+        sale.cash_amount = cash
+        sale.transfer_amount = transfer
+        sale.qris_amount = qris
+        sale.other_payment_amount = other_pay
+        sale.other_payment_method = other_name
+        sale.status = auto_status
         sale.notes = request.POST.get('notes', '')
         if old_total_amount != total_amount and sale.status != 'Lunas':
             # Jika total nota berubah, link Snap lama tidak lagi sesuai nominal baru.
@@ -324,6 +367,7 @@ def edit_sale(request, pk):
         item.price_per_kg = price
         item.subtotal = subtotal
         item.save()
+        _save_sale_documents(request, sale)
 
         messages.success(request, 'Nota penjualan berhasil diperbarui.')
         return redirect('sales:invoice', pk=sale.pk)
@@ -404,7 +448,7 @@ def export_sales_pdf(request):
 @login_required
 @permission_required('sales.invoices')
 def invoice(request, pk):
-    return render(request, 'sales/invoice.html', {'sale': get_object_or_404(Sale, pk=pk)})
+    return render(request, 'sales/invoice.html', {'sale': get_object_or_404(Sale.objects.prefetch_related('documents','items'), pk=pk)})
 
 
 @login_required
@@ -503,3 +547,16 @@ def edit_customer(request, pk):
 def delete_customer(request, pk):
     get_object_or_404(Customer, pk=pk).delete()
     return redirect('sales:customers')
+
+
+@login_required
+@permission_required('sales.cashier')
+@require_POST
+def delete_sale_document(request, pk):
+    doc = get_object_or_404(SaleDocument, pk=pk)
+    sale_pk = doc.sale_id
+    if doc.file:
+        doc.file.delete(save=False)
+    doc.delete()
+    messages.success(request, 'Dokumen penjualan berhasil dihapus.')
+    return redirect('sales:edit_sale', pk=sale_pk)

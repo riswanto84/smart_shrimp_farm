@@ -22,7 +22,7 @@
   {% endif %}
 
   <div class="form-shell-pro">
-    <form method="post" class="form-pro" id="saleFormPro">{% csrf_token %}
+    <form method="post" enctype="multipart/form-data" class="form-pro" id="saleFormPro">{% csrf_token %}
       {% if mode == 'edit' %}
       <section class="form-section-pro">
         <div class="section-head-pro"><i class="fa-solid fa-receipt"></i><div><h2>Informasi Nota</h2><p>Nomor nota dapat diubah selama belum digunakan nota lain.</p></div></div>
@@ -91,12 +91,26 @@
       <section class="form-section-pro">
         <div class="section-head-pro"><i class="fa-solid fa-credit-card"></i><div><h2>Pembayaran & Catatan</h2><p>Atur metode pembayaran, status nota, dan catatan untuk pelanggan.</p></div></div>
         <div class="form-grid-pro two">
-          <div class="field-pro"><label>Metode Pembayaran</label><div class="input-icon-pro"><i class="fa-regular fa-credit-card"></i><select class="form-select" name="payment_method">{% for value,label in sale.PAYMENT %}<option value="{{ value }}" {% if sale.payment_method == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div></div>
-          <div class="field-pro"><label>Status</label><div class="input-icon-pro"><i class="fa-solid fa-hourglass-half"></i><select class="form-select" name="status">{% for value,label in sale.STATUS %}<option value="{{ value }}" {% if sale.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div></div>
+          <div class="field-pro"><label>Metode Pembayaran</label><div class="input-icon-pro"><i class="fa-regular fa-credit-card"></i><select class="form-select" name="payment_method" id="paymentMethodPro">
+            <option value="Cash" {% if sale.payment_method == 'Cash' %}selected{% endif %}>Cash</option><option value="Transfer" {% if sale.payment_method == 'Transfer' %}selected{% endif %}>Transfer</option><option value="QRIS" {% if sale.payment_method == 'QRIS' %}selected{% endif %}>QRIS</option><option value="Tempo" {% if sale.payment_method == 'Tempo' %}selected{% endif %}>Tempo</option><option value="Midtrans" {% if sale.payment_method == 'Midtrans' %}selected{% endif %}>Midtrans</option><option value="Campuran" {% if sale.payment_method == 'Campuran' %}selected{% endif %}>Pembayaran Campuran</option><option value="Lainnya" {% if sale.payment_method == 'Lainnya' %}selected{% endif %}>Metode Lainnya</option>
+          </select></div><small>Status ditentukan otomatis dari jumlah yang dibayar.</small></div>
         </div>
-        <div class="field-pro"><label>Catatan</label><textarea class="form-control" name="notes" rows="4" placeholder="Tulis catatan tambahan (opsional)...">{{ sale.notes }}</textarea></div>
-      </section>
+        <div id="mixedPaymentFields" class="form-grid-pro two" style="display:none">
+          <div class="field-pro"><label>Cash (Rp)</label><input class="form-control" name="cash_amount" inputmode="numeric" data-rupiah-input value="{% if sale %}{{ sale.cash_amount|floatformat:0 }}{% endif %}"></div>
+          <div class="field-pro"><label>Transfer (Rp)</label><input class="form-control" name="transfer_amount" inputmode="numeric" data-rupiah-input value="{% if sale %}{{ sale.transfer_amount|floatformat:0 }}{% endif %}"></div>
+          <div class="field-pro"><label>QRIS (Rp)</label><input class="form-control" name="qris_amount" inputmode="numeric" data-rupiah-input value="{% if sale %}{{ sale.qris_amount|floatformat:0 }}{% endif %}"></div>
+          <div class="field-pro"><label>Pembayaran Lainnya (Rp)</label><input class="form-control" name="other_payment_amount" inputmode="numeric" data-rupiah-input value="{% if sale %}{{ sale.other_payment_amount|floatformat:0 }}{% endif %}"></div>
+        </div>
+        <div id="otherPaymentName" class="field-pro" style="display:none"><label>Nama Metode Lainnya</label><input class="form-control" name="other_payment_method" value="{% if sale %}{{ sale.other_payment_method }}{% endif %}" placeholder="Contoh: E-Wallet, Giro, Setoran bank"></div>
+        <div class="field-pro"><label>Catatan</label><textarea class="form-control" name="notes" rows="4" placeholder="Tulis catatan tambahan (opsional)...">{% if sale %}{{ sale.notes }}{% endif %}</textarea></div>
+        <div class="form-grid-pro two">
+          <div class="field-pro"><label>Jenis Dokumen</label><select class="form-select" name="document_type"><option>Bukti Transfer</option><option>Tanda Terima</option><option>Kwitansi</option><option>Invoice</option><option>Surat Jalan</option><option>Faktur Pajak</option><option value="Lainnya">Dokumen Lainnya</option></select></div>
+          <div class="field-pro"><label>Upload Bukti / Tanda Terima</label><input type="file" class="form-control" name="documents" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"><small>Maksimal 10 MB per file.</small></div>
+        </div>
+        <div class="field-pro"><label>Keterangan Dokumen</label><input class="form-control" name="document_description" placeholder="Contoh: Bukti transfer pembayaran pertama"></div>
+</section>
 
+      {% if sale.documents.all %}<section class="form-section-pro"><div class="section-head-pro"><i class="fa-solid fa-paperclip"></i><div><h2>Dokumen Tersimpan</h2><p>Bukti transfer dan tanda terima transaksi.</p></div></div><div class="table-responsive"><table class="table"><thead><tr><th>Jenis</th><th>File</th><th>Keterangan</th><th>Aksi</th></tr></thead><tbody>{% for d in sale.documents.all %}<tr><td>{{ d.document_type }}</td><td><a href="{{ d.file.url }}" target="_blank">{{ d.file.name }}</a></td><td>{{ d.description|default:'-' }}</td><td><form method="post" action="{% url 'sales:delete_sale_document' d.id %}" onsubmit="return confirm('Hapus dokumen ini?')">{% csrf_token %}<button class="btn btn-sm btn-danger" type="submit"><i class="fa-solid fa-trash"></i></button></form></td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
       <div class="form-actions-pro">
         <button class="btn btn-primary btn-lg"><i class="fa-solid fa-floppy-disk"></i> {% if mode == 'edit' %}Simpan Perubahan{% else %}Simpan & Buat Nota{% endif %}</button>
         {% if mode == 'edit' %}<a class="btn btn-outline-secondary btn-lg" href="{% url 'sales:invoice' sale.id %}"><i class="fa-solid fa-xmark"></i> Batal</a>{% endif %}
@@ -174,4 +188,6 @@
   recalc();
 })();
 </script>
+
+<script>(function(){const m=document.getElementById('paymentMethodPro'),mix=document.getElementById('mixedPaymentFields'),other=document.getElementById('otherPaymentName');function toggle(){if(!m)return;mix.style.display=m.value==='Campuran'?'grid':'none';other.style.display=(m.value==='Campuran'||m.value==='Lainnya')?'block':'none';}if(m){m.addEventListener('change',toggle);toggle();}})();</script>
 {% endblock %}

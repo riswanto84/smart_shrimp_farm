@@ -15,16 +15,44 @@ from decimal import Decimal
 import json
 from ponds.models import Pond
 from sales.models import Sale
-from .models import OperationalExpense, TradeAccount, TradePayment, TradeDocument
+from .models import OperationalExpense, ExpenseDocument, TradeAccount, TradePayment, TradeDocument
 from core.reporting import get_date_range, filter_by_date_range, format_date_range, export_excel, export_pdf, rupiah
 from core.utils import parse_rupiah
 from core.pagination import paginate_queryset
 from cultivation.utils import get_selected_cycle, filter_selected_cycle
 
 
+EXPENSE_DOCUMENT_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.webp', '.doc', '.docx', '.xls', '.xlsx'}
+EXPENSE_DOCUMENT_MAX_SIZE = 10 * 1024 * 1024
+
+
+def _save_expense_documents(request, expense):
+    description = request.POST.get('document_description', '').strip()
+    saved_count = 0
+    for uploaded_file in request.FILES.getlist('documents'):
+        extension = Path(uploaded_file.name).suffix.lower()
+        if extension not in EXPENSE_DOCUMENT_EXTENSIONS:
+            messages.error(request, f'File {uploaded_file.name} tidak didukung.')
+            continue
+        if uploaded_file.size > EXPENSE_DOCUMENT_MAX_SIZE:
+            messages.error(request, f'File {uploaded_file.name} melebihi batas 10 MB.')
+            continue
+        ExpenseDocument.objects.create(
+            expense=expense,
+            file=uploaded_file,
+            original_name=uploaded_file.name[:255],
+            description=description[:180],
+            uploaded_by=request.user if request.user.is_authenticated else None,
+        )
+        saved_count += 1
+    if saved_count:
+        messages.success(request, f'{saved_count} dokumen pengeluaran berhasil diunggah.')
+    return saved_count
+
+
 def _expense_queryset(request):
     date_from, date_to = get_date_range(request)
-    items = filter_selected_cycle(request, OperationalExpense.objects.select_related('pond').order_by('-date'))
+    items = filter_selected_cycle(request, OperationalExpense.objects.select_related('pond').prefetch_related('documents').order_by('-date'))
     items = filter_by_date_range(items, 'date', date_from, date_to)
     category = request.GET.get('category') or ''
     pond = request.GET.get('pond') or ''
@@ -126,17 +154,18 @@ def export_expenses_pdf(request):
 def add_expense(request):
     ponds = Pond.objects.all()
     if request.method == 'POST':
-        OperationalExpense.objects.create(
+        expense = OperationalExpense.objects.create(
             cycle=get_selected_cycle(request, required=True),
             date=request.POST['date'],
             category=request.POST['category'],
             pond_id=request.POST.get('pond') or None,
             name=request.POST['name'],
-            amount=parse_rupiah(request.POST.get('amount')), 
+            amount=parse_rupiah(request.POST.get('amount')),
             payment_method=request.POST.get('payment_method', 'Cash'),
             receipt=request.FILES.get('receipt'),
             notes=request.POST.get('notes', '')
         )
+        _save_expense_documents(request, expense)
         return redirect('finance:expenses')
     return render(request, 'finance/expense_form.html', {'ponds': ponds, 'categories': OperationalExpense.CATEGORIES})
 
@@ -772,8 +801,34 @@ def edit_expense(request, pk):
             obj.receipt = request.FILES.get('receipt')
         obj.notes = request.POST.get('notes', '')
         obj.save()
+        _save_expense_documents(request, obj)
         return redirect('finance:expenses')
     return render(request, 'finance/expense_form.html', {'ponds': ponds, 'categories': OperationalExpense.CATEGORIES, 'obj': obj, 'mode': 'edit'})
+
+
+@login_required
+@permission_required('finance.expenses')
+@require_POST
+def upload_expense_documents(request, pk):
+    expense = get_object_or_404(OperationalExpense, pk=pk)
+    if not request.FILES.getlist('documents'):
+        messages.warning(request, 'Pilih minimal satu dokumen untuk diunggah.')
+    else:
+        _save_expense_documents(request, expense)
+    return redirect('finance:edit_expense', pk=expense.pk)
+
+
+@login_required
+@permission_required('finance.expenses')
+@require_POST
+def delete_expense_document(request, pk):
+    document = get_object_or_404(ExpenseDocument, pk=pk)
+    expense_id = document.expense_id
+    if document.file:
+        document.file.delete(save=False)
+    document.delete()
+    messages.success(request, 'Dokumen pengeluaran berhasil dihapus.')
+    return redirect('finance:edit_expense', pk=expense_id)
 
 @login_required
 @permission_required('finance.expenses')

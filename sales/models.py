@@ -17,7 +17,7 @@ class Customer(models.Model):
 
 class Sale(models.Model):
     cycle = models.ForeignKey(CultivationCycle, on_delete=models.PROTECT, null=True, blank=True, related_name='sales')
-    PAYMENT = [('Cash', 'Cash'), ('Transfer', 'Transfer'), ('Tempo', 'Tempo'), ('QRIS', 'QRIS'), ('Midtrans', 'Midtrans')]
+    PAYMENT = [('Cash', 'Cash'), ('Transfer', 'Transfer'), ('Tempo', 'Tempo'), ('QRIS', 'QRIS'), ('Midtrans', 'Midtrans'), ('Campuran', 'Pembayaran Campuran'), ('Lainnya', 'Metode Lainnya')]
     STATUS = [
         ('Lunas', 'Lunas'),
         ('Belum Lunas', 'Belum Lunas'),
@@ -40,6 +40,11 @@ class Sale(models.Model):
     other_cost = models.DecimalField(max_digits=14, decimal_places=2, default=0, verbose_name='Biaya lainnya')
 
     payment_method = models.CharField(max_length=20, choices=PAYMENT, default='Cash')
+    cash_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    transfer_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    qris_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    other_payment_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    other_payment_method = models.CharField(max_length=100, blank=True)
     status = models.CharField(max_length=20, choices=STATUS, default='Lunas')
     cashier = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
 
@@ -75,3 +80,20 @@ class SaleItem(models.Model):
     weight_kg = models.DecimalField(max_digits=10, decimal_places=2)
     price_per_kg = models.DecimalField(max_digits=14, decimal_places=2)
     subtotal = models.DecimalField(max_digits=14, decimal_places=2)
+
+
+class SaleDocument(models.Model):
+    DOCUMENT_TYPES = [
+        ('Bukti Transfer', 'Bukti Transfer'), ('Tanda Terima', 'Tanda Terima'),
+        ('Kwitansi', 'Kwitansi'), ('Invoice', 'Invoice'), ('Surat Jalan', 'Surat Jalan'),
+        ('Faktur Pajak', 'Faktur Pajak'), ('Lainnya', 'Dokumen Lainnya'),
+    ]
+    sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='documents')
+    document_type = models.CharField(max_length=30, choices=DOCUMENT_TYPES, default='Bukti Transfer')
+    file = models.FileField(upload_to='sales/documents/%Y/%m/')
+    description = models.CharField(max_length=255, blank=True)
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.sale.invoice_no} - {self.document_type}'

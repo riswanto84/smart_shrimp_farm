@@ -1,2 +1,37 @@
 {% extends 'base.html' %}
-{% block content %}<div class="page-head"><div><h1>{% if mode == 'edit' %}Edit{% else %}Tambah{% endif %} Pengeluaran</h1><p>Upload bukti nota dan hubungkan biaya ke kolam tertentu bila diperlukan.</p></div></div><div class="cardx"><form method="post" enctype="multipart/form-data" class="row g-3">{% csrf_token %}<div class="col-md-4"><label class="form-label">Tanggal</label><input class="form-control" type="date" name="date" value="{{ obj.date|date:'Y-m-d' }}" required></div><div class="col-md-4"><label class="form-label">Kategori</label><select class="form-select" name="category">{% for value,label in categories %}<option value="{{value}}" {% if obj.category == value %}selected{% endif %}>{{label}}</option>{% endfor %}</select></div><div class="col-md-4"><label class="form-label">Kolam</label><select class="form-select" name="pond"><option value="">Semua Kolam</option>{% for p in ponds %}<option value="{{p.id}}" {% if obj.pond_id == p.id %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></div><div class="col-md-6"><label class="form-label">Nama Pengeluaran</label><input class="form-control" name="name" value="{{ obj.name|default:'' }}" placeholder="Contoh: Pakan CP 30 sak" required></div><div class="col-md-3"><label class="form-label">Jumlah</label><input class="form-control" name="amount" inputmode="numeric" data-rupiah-input value="{{ obj.amount|default:'' }}" placeholder="Contoh: 15.000.000" required><div class="form-text">Format otomatis Rupiah, contoh Rp 15.000.000.</div></div><div class="col-md-3"><label class="form-label">Metode Bayar</label><select class="form-select" name="payment_method"><option {% if obj.payment_method == 'Cash' %}selected{% endif %}>Cash</option><option {% if obj.payment_method == 'Transfer' %}selected{% endif %}>Transfer</option><option {% if obj.payment_method == 'QRIS' %}selected{% endif %}>QRIS</option><option {% if obj.payment_method == 'Tempo' %}selected{% endif %}>Tempo</option></select><div class="form-text">Pilih Tempo bila transaksi belum dibayar, lalu catat pada menu Utang Usaha.</div></div><div class="col-md-6"><label class="form-label">Upload Bukti</label><input class="form-control" type="file" name="receipt">{% if obj.receipt %}<div class="form-text">Bukti saat ini: <a href="{{ obj.receipt.url }}">lihat file</a></div>{% endif %}</div><div class="col-12"><label class="form-label">Catatan</label><textarea class="form-control" name="notes" rows="4">{{ obj.notes|default:'' }}</textarea></div><div class="col-12 d-flex gap-2"><button class="btn btn-primary">Simpan Pengeluaran</button><a class="btn btn-outline-secondary" href="{% url 'finance:expenses' %}">Batal</a></div></form></div>{% endblock %}
+{% load currency %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{% if mode == 'edit' %}Edit{% else %}Tambah{% endif %} Pengeluaran</h1>
+    <p>Upload beberapa nota, invoice, bukti transfer, foto, Word, atau Excel sekaligus.</p>
+  </div>
+</div>
+<div class="cardx">
+<form method="post" enctype="multipart/form-data" class="row g-3">
+  {% csrf_token %}
+  <div class="col-md-4"><label class="form-label">Tanggal</label><input class="form-control" type="date" name="date" value="{{ obj.date|date:'Y-m-d' }}" required></div>
+  <div class="col-md-4"><label class="form-label">Kategori</label><select class="form-select" name="category">{% for value,label in categories %}<option value="{{value}}" {% if obj.category == value %}selected{% endif %}>{{label}}</option>{% endfor %}</select></div>
+  <div class="col-md-4"><label class="form-label">Kolam</label><select class="form-select" name="pond"><option value="">Semua Kolam</option>{% for p in ponds %}<option value="{{p.id}}" {% if obj.pond_id == p.id %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></div>
+  <div class="col-md-6"><label class="form-label">Nama Pengeluaran</label><input class="form-control" name="name" value="{{ obj.name|default:'' }}" placeholder="Contoh: Pakan CP 30 sak" required></div>
+  <div class="col-md-3"><label class="form-label">Jumlah</label><input class="form-control" name="amount" inputmode="numeric" data-rupiah-input value="{% if obj %}{{ obj.amount|floatformat:0 }}{% endif %}" placeholder="Contoh: 15.000.000" required><div class="form-text">Format otomatis Rupiah.</div></div>
+  <div class="col-md-3"><label class="form-label">Metode Bayar</label><select class="form-select" name="payment_method"><option {% if obj.payment_method == 'Cash' %}selected{% endif %}>Cash</option><option {% if obj.payment_method == 'Transfer' %}selected{% endif %}>Transfer</option><option {% if obj.payment_method == 'QRIS' %}selected{% endif %}>QRIS</option><option {% if obj.payment_method == 'Tempo' %}selected{% endif %}>Tempo</option></select></div>
+  <div class="col-12"><label class="form-label">Upload Multidokumen</label><input class="form-control" type="file" name="documents" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"><div class="form-text">Dapat memilih beberapa file sekaligus. Maksimal 10 MB per file.</div></div>
+  <div class="col-12"><label class="form-label">Keterangan Dokumen</label><input class="form-control" name="document_description" placeholder="Contoh: invoice, nota pembelian, bukti transfer, atau surat jalan"></div>
+  {% if obj.receipt %}<div class="col-12"><div class="alert alert-light border mb-0">Bukti lama: <a href="{{ obj.receipt.url }}" target="_blank" rel="noopener">Buka file</a></div></div>{% endif %}
+  <div class="col-12"><label class="form-label">Catatan</label><textarea class="form-control" name="notes" rows="4">{{ obj.notes|default:'' }}</textarea></div>
+  <div class="col-12 d-flex gap-2"><button class="btn btn-primary">Simpan Pengeluaran</button><a class="btn btn-outline-secondary" href="{% url 'finance:expenses' %}">Batal</a></div>
+</form>
+</div>
+
+{% if obj %}
+<div class="cardx mt-3">
+  <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-3"><div><h3 class="mb-1">Dokumen Pengeluaran</h3><small class="text-muted">{{ obj.documents.count }} dokumen tersimpan</small></div></div>
+  {% if obj.documents.all %}
+  <div class="table-responsive"><table class="table app-table align-middle mb-0"><thead><tr><th>Dokumen</th><th>Keterangan</th><th>Diunggah</th><th class="text-end">Aksi</th></tr></thead><tbody>
+  {% for doc in obj.documents.all %}<tr><td><i class="fa-regular fa-file me-2"></i><a href="{{ doc.file.url }}" target="_blank" rel="noopener">{{ doc.original_name|default:doc.file.name }}</a></td><td>{{ doc.description|default:'-' }}</td><td>{{ doc.uploaded_at|date:'d/m/Y H:i' }}</td><td><div class="d-flex justify-content-end gap-2"><a class="btn btn-sm btn-outline-primary" href="{{ doc.file.url }}" target="_blank" rel="noopener" title="Buka"><i class="fa-solid fa-eye"></i></a><form method="post" action="{% url 'finance:delete_expense_document' doc.id %}" onsubmit="return confirm('Hapus dokumen ini?');">{% csrf_token %}<button class="btn btn-sm btn-outline-danger" title="Hapus"><i class="fa-solid fa-trash"></i></button></form></div></td></tr>{% endfor %}
+  </tbody></table></div>
+  {% else %}<div class="text-muted">Belum ada dokumen tambahan.</div>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

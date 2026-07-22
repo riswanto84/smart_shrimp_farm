@@ -73,7 +73,7 @@
         <h1>UDANG EMAS NUSANTARA</h1>
         <p class="tagline">Dari tambak nusantara untuk kualitas dunia</p>
         <p>Jalan Pantai Mekar, Kec. Muara Gembong,<br>Kabupaten Bekasi, Jawa Barat 17730</p>
-        <p>Telp. 081219142796</p>
+        <p>Telp. 08131717521</p>
       </header>
 
       <div class="receipt-line"></div>
@@ -88,22 +88,17 @@
       </div>
       <div class="receipt-line"></div>
 
-      <table class="receipt-table">
-        <thead>
-          <tr><th>Item</th><th>Qty</th><th>Harga</th><th>Total</th></tr>
-        </thead>
-        <tbody>
-          {% for i in sale.items.all %}
-          <tr>
-            <td>Udang Vaname Fresh<br><small>Size {{ i.size_text|default:"-" }}</small></td>
-            <td>{{ i.weight_kg|angka:2 }} kg</td>
-            <td>{{ i.price_per_kg|ribuan }}</td>
-            <td>{{ i.subtotal|ribuan }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-
+      <div class="receipt-items-stacked">
+        {% for i in sale.items.all %}
+        <div class="receipt-item-card">
+          <b>Udang Vaname Fresh</b>
+          <div><span>Size</span><strong>{{ i.size_text|default:"-" }}</strong></div>
+          <div><span>Qty</span><strong>{{ i.weight_kg|angka:2 }} kg</strong></div>
+          <div><span>Harga/Kg</span><strong>{{ i.price_per_kg|ribuan }}</strong></div>
+          <div><span>Subtotal</span><strong>{{ i.subtotal|ribuan }}</strong></div>
+        </div>
+        {% endfor %}
+      </div>
       <div class="receipt-line solid"></div>
       <div class="receipt-totals">
         <div><span>Subtotal Udang</span><b>{{ sale.items_subtotal|ribuan }}</b></div>
@@ -113,6 +108,12 @@
         <div><span>Total Kg</span><b>{{ sale.total_kg|angka:2 }} kg</b></div>
         <div class="grand"><span>TOTAL</span><b>{{ sale.total_amount|ribuan }}</b></div>
         <div><span>Status</span><b>{{ sale.status }}</b></div>
+        {% if sale.payment_method == 'Campuran' or sale.payment_method == 'Lainnya' %}
+          {% if sale.cash_amount %}<div><span>Cash</span><b>{{ sale.cash_amount|ribuan }}</b></div>{% endif %}
+          {% if sale.transfer_amount %}<div><span>Transfer</span><b>{{ sale.transfer_amount|ribuan }}</b></div>{% endif %}
+          {% if sale.qris_amount %}<div><span>QRIS</span><b>{{ sale.qris_amount|ribuan }}</b></div>{% endif %}
+          {% if sale.other_payment_amount %}<div><span>{{ sale.other_payment_method|default:'Lainnya' }}</span><b>{{ sale.other_payment_amount|ribuan }}</b></div>{% endif %}
+        {% endif %}
       </div>
 
       {% if sale.notes %}
@@ -123,6 +124,7 @@
       </section>
       {% endif %}
 
+      {% if sale.documents.all %}<div class="receipt-line"></div><section class="receipt-note"><b>DOKUMEN PEMBAYARAN:</b>{% for d in sale.documents.all %}<p><a href="{{ d.file.url }}" target="_blank">{{ d.document_type }}{% if d.description %} — {{ d.description }}{% endif %}</a></p>{% endfor %}</section>{% endif %}
       <div class="receipt-line"></div>
       <footer class="receipt-foot">
         <h2>■ Terima kasih telah berbelanja ■</h2>
@@ -182,4 +184,8 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 });
 </script>
+<style>
+.receipt-items-stacked{margin:10px 0}.receipt-item-card{padding:10px 0;border-bottom:1px solid #111}.receipt-item-card>b{display:block;margin-bottom:7px}.receipt-item-card div{display:flex;justify-content:space-between;gap:18px;padding:2px 0}.receipt-item-card span{white-space:nowrap}.receipt-item-card strong{text-align:right;overflow-wrap:anywhere}.receipt-sheet{width:min(100%,90mm)!important}.receipt-meta div,.receipt-totals div{gap:14px}.receipt-meta b,.receipt-totals b{overflow-wrap:anywhere;text-align:right}
+@media print{.receipt-sheet{width:90mm!important;max-width:90mm!important}.receipt-item-card{break-inside:avoid}}
+</style>
 {% endblock %}
