@@ -10,7 +10,7 @@
 <div class="kpi-grid">
   <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-chart-line"></i></div><div><span>Omzet Hari Ini</span><strong>{{ sales_total|rupiah }}</strong><small class="{% if sales_change_state == 'up' %}up{% elif sales_change_state == 'down' %}down{% else %}text-muted{% endif %}">{% if sales_change_state == 'up' %}↑{% elif sales_change_state == 'down' %}↓{% else %}•{% endif %} {{ sales_change_text }}</small></div></div>
   <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-wallet"></i></div><div><span>Pengeluaran Hari Ini</span><strong>{{ expense_total|rupiah }}</strong><small class="down">↓ 5.3% dari kemarin</small></div></div>
-  <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-water"></i></div><div><span>Kolam Aktif</span><strong>{{ ponds.count }}</strong><small>dari 6 kolam</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-water"></i></div><div><span>Kolam Aktif</span><strong>{{ active_pond_count }}</strong><small>{{ completed_pond_count }} kolam selesai panen</small></div></div>
   <div class="kpi-card" id="ollama-status-card">
     <div class="kpi-icon purple"><i class="fa-solid fa-microchip"></i></div>
     <div>
@@ -78,7 +78,7 @@
 <div class="dashboard-grid">
   <section class="panel pond-summary">
     <div class="panel-head"><h2>Ringkasan Kolam</h2><a href="/ponds/">Lihat Semua Kolam <i class="fa-solid fa-arrow-right"></i></a></div>
-    <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>Luas</th><th>Status</th><th>Padat Tebar</th><th>DOC</th><th>Estimasi Panen Size 30</th><th>Estimasi DOC 120</th></tr></thead><tbody>{% for p in ponds %}<tr><td><b>{{p.name}}</b></td><td>{{p.area_m2|ribuan}} m²</td><td><span class="status status-{{p.status|lower}}">{{p.status}}</span></td><td>{% if p.dashboard_stocking_density is not None %}{{ p.dashboard_stocking_density|floatformat:2 }} ekor/m²{% else %}<span class="text-muted">Belum ada data</span>{% endif %}</td><td>{% if p.dashboard_doc is not None %}{{ p.dashboard_doc }}{% else %}<span class="text-muted">—</span>{% endif %}</td><td>{% if p.dashboard_size30_date %}<b>{{ p.dashboard_size30_date|date:"d M Y" }}</b><br><small class="text-muted">{% if p.dashboard_size30_days == 0 %}Target tercapai{% else %}± {{ p.dashboard_size30_days }} hari lagi · ABW target 33,33 g{% endif %}</small>{% else %}<span class="text-muted">{{ p.dashboard_size30_status }}</span>{% endif %}</td><td>{% if p.dashboard_doc120_biomass_ton is not None %}<b>{{ p.dashboard_doc120_biomass_ton|floatformat:2 }} ton</b><br><small class="text-muted">ABW {{ p.dashboard_doc120_abw|floatformat:2 }} g · size {{ p.dashboard_doc120_size|floatformat:0 }} · {{ p.dashboard_doc120_days }} hari</small>{% else %}<span class="text-muted">{{ p.dashboard_doc120_status }}</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+    <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>Luas</th><th>Status</th><th>Padat Tebar</th><th>DOC</th><th>Estimasi Panen Size 30</th><th>Estimasi DOC 120</th></tr></thead><tbody>{% for p in ponds %}<tr><td><b>{{p.name}}</b></td><td>{{p.area_m2|ribuan}} m²</td><td><span class="status status-{{p.status|lower}}">{{p.status}}</span></td><td>{% if p.dashboard_stocking_density is not None %}{{ p.dashboard_stocking_density|floatformat:2 }} ekor/m²{% else %}<span class="text-muted">Belum ada data</span>{% endif %}</td><td>{% if p.dashboard_doc is not None %}{{ p.dashboard_doc }}{% else %}<span class="text-muted">—</span>{% endif %}</td><td>{% if p.dashboard_is_completed %}<span class="status status-panen">Selesai Panen</span><br><small class="text-muted">Tidak masuk estimasi aktif</small>{% elif p.dashboard_size30_date %}<b>{{ p.dashboard_size30_date|date:"d M Y" }}</b><br><small class="text-muted">{% if p.dashboard_size30_days == 0 %}Target tercapai{% else %}± {{ p.dashboard_size30_days }} hari lagi · ABW target 33,33 g{% endif %}</small>{% else %}<span class="text-muted">{{ p.dashboard_size30_status }}</span>{% endif %}</td><td>{% if p.dashboard_is_completed %}<b>0,00 ton</b><br><small class="text-muted">Panen total/selesai</small>{% elif p.dashboard_doc120_biomass_ton is not None %}<b>{{ p.dashboard_doc120_biomass_ton|floatformat:2 }} ton</b><br><small class="text-muted">ABW {{ p.dashboard_doc120_abw|floatformat:2 }} g · size {{ p.dashboard_doc120_size|floatformat:0 }} · {{ p.dashboard_doc120_days }} hari{% if p.dashboard_partial_harvest_kg > 0 %} · setelah parsial {{ p.dashboard_partial_harvest_kg|floatformat:2 }} kg{% endif %}</small>{% else %}<span class="text-muted">{{ p.dashboard_doc120_status }}</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
   </section>
   <section class="panel parameters-panel">
     <div class="panel-head"><h2>Parameter Terbaru {% if latest %}<span>({{ latest.pond.name }} · {{ latest.date|date:"d M Y" }})</span>{% endif %}</h2><a href="/operations/parameters/">Lihat Detail</a></div>
@@ -105,7 +105,7 @@
     </div>
   </section>
   <section class="panel production-panel">
-    <h2>Biomassa Produksi <span>(Ton){% if latest_sampling_date %} · Sampling {{ latest_sampling_date|date:"d M Y" }}{% endif %}</span></h2>
+    <h2>Biomassa Aktif Tersisa <span>(Ton){% if latest_sampling_date %} · Sampling {{ latest_sampling_date|date:"d M Y" }}{% endif %}</span></h2>
     <div class="donut" style="background:conic-gradient({{ production_gradient }});"><span>Total<br><b>{{ production_total_ton|floatformat:2 }}</b><br>Ton</span></div>
     <ul>
       {% for item in production_items %}
@@ -116,13 +116,13 @@
     </ul>
   </section>
   <section class="panel doc120-panel" style="grid-column:1 / -1;">
-    <div class="panel-head"><h2>Estimasi Total Panen DOC 120 <span>{% if latest_sampling_date %}berdasarkan sampling {{ latest_sampling_date|date:"d M Y" }}{% endif %}</span></h2></div>
+    <div class="panel-head"><h2>Estimasi Produksi Aktif DOC 120 <span>{% if latest_sampling_date %}berdasarkan sampling {{ latest_sampling_date|date:"d M Y" }}{% endif %}</span></h2></div>
     <div class="kpi-grid" style="margin-bottom:0;">
-      <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-scale-balanced"></i></div><div><span>Proyeksi Teoritis</span><strong>{{ doc120_total_ton|floatformat:2 }} ton</strong><small>ADG aktual · populasi FR tetap</small></div></div>
-      <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-chart-line"></i></div><div><span>Skenario Normal</span><strong>{{ doc120_normal_ton|floatformat:2 }} ton</strong><small>95% dari proyeksi</small></div></div>
-      <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-shield-halved"></i></div><div><span>Skenario Konservatif</span><strong>{{ doc120_conservative_ton|floatformat:2 }} ton</strong><small>90% dari proyeksi</small></div></div>
+      <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-water"></i></div><div><span>Estimasi Produksi Aktif</span><strong>{{ doc120_total_ton|floatformat:2 }} ton</strong><small>Hanya kolam budidaya · setelah panen parsial</small></div></div>
+      <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-truck-ramp-box"></i></div><div><span>Panen Riil</span><strong>{{ harvest_total_ton|floatformat:2 }} ton</strong><small>Akumulasi panen parsial dan total</small></div></div>
+      <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-chart-line"></i></div><div><span>Total Potensi Siklus</span><strong>{{ total_cycle_potential_ton|floatformat:2 }} ton</strong><small>Panen riil + estimasi produksi aktif</small></div></div>
     </div>
-    <p class="text-muted" style="margin:12px 0 0;">Asumsi: ADG aktual tetap, tidak ada panen parsial, dan populasi FR tidak berkurang sampai DOC 120.</p>
+    <p class="text-muted" style="margin:12px 0 0;">Perhitungan mengecualikan kolam panen total/selesai. Panen parsial mengurangi biomassa dan populasi tersisa sebelum proyeksi DOC 120 dihitung.</p>
   </section>
   <section class="panel" style="grid-column:1 / -1;">
     <div class="panel-head"><h2>Grafik Panen Riil <span>10 tanggal panen terakhir</span></h2></div>
