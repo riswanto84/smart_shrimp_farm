@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load currency %}
+{% load l10n %}
 {% block content %}
 <div class="form-page-pro">
   <div class="form-hero-pro">
@@ -69,7 +70,7 @@
         <div class="form-grid-pro two">
           <div class="field-pro">
             <label>Berat (Kg)</label>
-            <div class="input-icon-pro"><i class="fa-solid fa-scale-balanced"></i><input class="form-control numeric-decimal" type="text" inputmode="decimal" name="weight_kg" id="weightInputPro" value="{{ item.weight_kg|default:sale.total_kg }}" required></div>
+            <div class="input-icon-pro"><i class="fa-solid fa-scale-balanced"></i><input class="form-control numeric-decimal" type="text" inputmode="decimal" name="weight_kg" id="weightInputPro" value="{{ item.weight_kg|default:sale.total_kg|unlocalize }}" required></div>
           </div>
           <div class="field-pro">
             <label>Harga / Kg (Rp)</label>
@@ -154,8 +155,36 @@
   }
   bindDatalist('customerSearchPro','customerIdPro','customerListPro');
   bindDatalist('harvestSearchPro','harvestIdPro','harvestListPro');
+  function parseLocaleDecimal(value){
+    let raw=String(value||'').trim().replace(/\s/g,'').replace(/[^0-9,.-]/g,'');
+    if(!raw) return NaN;
+    const comma=raw.lastIndexOf(','), dot=raw.lastIndexOf('.');
+    if(comma>=0 && dot>=0){
+      const decimalSep=comma>dot?',':'.';
+      const thousandSep=decimalSep===','?'.':',';
+      raw=raw.split(thousandSep).join('');
+      const idx=raw.lastIndexOf(decimalSep);
+      raw=raw.slice(0,idx).replace(/[.,]/g,'')+'.'+raw.slice(idx+1).replace(/[.,]/g,'');
+    }else if(comma>=0){
+      const idx=raw.lastIndexOf(',');
+      raw=raw.slice(0,idx).replace(/,/g,'')+'.'+raw.slice(idx+1).replace(/,/g,'');
+    }else if(dot>=0){
+      const idx=raw.lastIndexOf('.');
+      raw=raw.slice(0,idx).replace(/\./g,'')+'.'+raw.slice(idx+1).replace(/\./g,'');
+    }
+    return Number(raw);
+  }
+  function canonicalDecimal(value){
+    const number=parseLocaleDecimal(value);
+    return Number.isFinite(number) ? String(number) : '';
+  }
+  function formatWeight(value){
+    const number=parseLocaleDecimal(value);
+    if(!Number.isFinite(number)) return value;
+    return number.toLocaleString('id-ID',{minimumFractionDigits:0,maximumFractionDigits:2});
+  }
   function recalc(){
-    const weight = parseFloat(String(document.getElementById('weightInputPro')?.value||'0').replace(',','.')) || 0;
+    const weight = parseLocaleDecimal(document.getElementById('weightInputPro')?.value) || 0;
     const price = Number(digits(document.getElementById('priceInputPro')?.value));
     const ship = Number(digits(document.querySelector('[name="shipping_cost"]')?.value));
     const pack = Number(digits(document.querySelector('[name="packing_cost"]')?.value));
@@ -165,23 +194,31 @@
   }
   document.querySelectorAll('#saleFormPro input, #saleFormPro select').forEach(el => el.addEventListener('input', recalc));
 
-  // saleDecimalInputsPatched: input desimal dibuat mudah seperti Parameter Harian.
   document.querySelectorAll('#saleFormPro .numeric-decimal').forEach(function(input){
     input.addEventListener('input', function(){
-      input.value = input.value.replace(',', '.').replace(/[^0-9.]/g,'');
-      const parts = input.value.split('.');
-      if(parts.length > 2) input.value = parts.shift() + '.' + parts.join('');
+      input.value=input.value.replace(/[^0-9.,]/g,'');
+      recalc();
+    });
+    input.addEventListener('focus', function(){
+      const canonical=canonicalDecimal(input.value);
+      if(canonical) input.value=canonical.replace('.',',');
+    });
+    input.addEventListener('blur', function(){
+      if(input.value.trim()) input.value=formatWeight(input.value);
     });
   });
   document.getElementById('saleFormPro')?.addEventListener('submit', function(event){
     const msgs=[];
     document.querySelectorAll('#saleFormPro .numeric-decimal').forEach(function(input){
-      const value=input.value.trim();
-      if(!value || !/^\d+(\.\d+)?$/.test(value)){
+      const canonical=canonicalDecimal(input.value);
+      if(!canonical || Number(canonical)<=0){
         const label=input.closest('.field-pro')?.querySelector('label')?.innerText || input.name;
-        msgs.push(label + ' harus angka desimal valid. Contoh: 120.5');
+        msgs.push(label + ' harus angka valid. Contoh: 1188,40 atau 1.188,40');
         input.classList.add('is-invalid');
-      } else { input.classList.remove('is-invalid'); }
+      } else {
+        input.classList.remove('is-invalid');
+        input.value=canonical;
+      }
     });
     if(msgs.length){ event.preventDefault(); alert('Periksa kembali input angka:\n- ' + msgs.join('\n- ')); }
   });

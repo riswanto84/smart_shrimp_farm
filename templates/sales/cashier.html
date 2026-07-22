@@ -38,7 +38,7 @@
         <div class="section-head-pro"><i class="fa-solid fa-cube"></i><div><h2>Informasi Produk</h2><p>Masukkan ukuran, berat, dan harga jual per kilogram.</p></div></div>
         <div class="field-pro size-field-pro"><label>Ukuran Udang (ekor/kg)</label><input class="form-control" name="size_text" id="sizeInputPro" placeholder="Contoh: 50 / 40-50 / Campur" required><div class="size-pills-pro" data-target="sizeInputPro"><button type="button">30</button><button type="button">40</button><button type="button">50</button><button type="button">60</button><button type="button">70</button><button type="button">80</button><button type="button">100</button></div></div>
         <div class="form-grid-pro two">
-          <div class="field-pro"><label>Berat (Kg)</label><div class="input-icon-pro"><i class="fa-solid fa-scale-balanced"></i><input class="form-control numeric-decimal" type="text" inputmode="decimal" name="weight_kg" id="weightInputPro" placeholder="Contoh: 120.50" required></div></div>
+          <div class="field-pro"><label>Berat (Kg)</label><div class="input-icon-pro"><i class="fa-solid fa-scale-balanced"></i><input class="form-control numeric-decimal" type="text" inputmode="decimal" name="weight_kg" id="weightInputPro" placeholder="Contoh: 1.188,40" required></div></div>
           <div class="field-pro"><label>Harga / Kg (Rp)</label><div class="input-icon-pro prefix"><span>Rp</span><input class="form-control" name="price_per_kg" id="priceInputPro" inputmode="numeric" data-rupiah-input placeholder="70.000" required></div><small>Format otomatis Rupiah, contoh Rp 70.000/kg.</small></div>
         </div>
       </section>
@@ -95,27 +95,41 @@
   }
   bindDatalist('customerSearchPro','customerIdPro','customerListPro');
   bindDatalist('harvestSearchPro','harvestIdPro','harvestListPro');
-  function recalc(){const weight=parseFloat(String(document.getElementById('weightInputPro')?.value||'0').replace(',','.'))||0;const price=Number(digits(document.getElementById('priceInputPro')?.value));const ship=Number(digits(document.querySelector('[name="shipping_cost"]')?.value));const pack=Number(digits(document.querySelector('[name="packing_cost"]')?.value));const other=Number(digits(document.querySelector('[name="other_cost"]')?.value));const out=document.getElementById('grandTotalPreview');if(out)out.textContent=money(weight*price+ship+pack+other)}
+  function parseLocaleDecimal(value){
+    let raw=String(value||'').trim().replace(/\s/g,'').replace(/[^0-9,.-]/g,'');
+    if(!raw) return NaN;
+    const comma=raw.lastIndexOf(','), dot=raw.lastIndexOf('.');
+    if(comma>=0 && dot>=0){
+      const decimalSep=comma>dot?',':'.';
+      const thousandSep=decimalSep===','?'.':',';
+      raw=raw.split(thousandSep).join('');
+      const idx=raw.lastIndexOf(decimalSep);
+      raw=raw.slice(0,idx).replace(/[.,]/g,'')+'.'+raw.slice(idx+1).replace(/[.,]/g,'');
+    }else if(comma>=0){
+      const idx=raw.lastIndexOf(',');
+      raw=raw.slice(0,idx).replace(/,/g,'')+'.'+raw.slice(idx+1).replace(/,/g,'');
+    }else if(dot>=0){
+      const idx=raw.lastIndexOf('.');
+      raw=raw.slice(0,idx).replace(/\./g,'')+'.'+raw.slice(idx+1).replace(/\./g,'');
+    }
+    return Number(raw);
+  }
+  function canonicalDecimal(value){const n=parseLocaleDecimal(value);return Number.isFinite(n)?String(n):''}
+  function formatWeight(value){const n=parseLocaleDecimal(value);return Number.isFinite(n)?n.toLocaleString('id-ID',{minimumFractionDigits:0,maximumFractionDigits:2}):value}
+  function recalc(){const weight=parseLocaleDecimal(document.getElementById('weightInputPro')?.value)||0;const price=Number(digits(document.getElementById('priceInputPro')?.value));const ship=Number(digits(document.querySelector('[name="shipping_cost"]')?.value));const pack=Number(digits(document.querySelector('[name="packing_cost"]')?.value));const other=Number(digits(document.querySelector('[name="other_cost"]')?.value));const out=document.getElementById('grandTotalPreview');if(out)out.textContent=money(weight*price+ship+pack+other)}
 
-  // saleDecimalInputsPatched: input desimal dibuat mudah seperti Parameter Harian.
   document.querySelectorAll('#saleFormPro .numeric-decimal').forEach(function(input){
-    input.addEventListener('input', function(){
-      input.value = input.value.replace(',', '.').replace(/[^0-9.]/g,'');
-      const parts = input.value.split('.');
-      if(parts.length > 2) input.value = parts.shift() + '.' + parts.join('');
-    });
+    input.addEventListener('input',function(){input.value=input.value.replace(/[^0-9.,]/g,'');recalc()});
+    input.addEventListener('focus',function(){const c=canonicalDecimal(input.value);if(c)input.value=c.replace('.',',')});
+    input.addEventListener('blur',function(){if(input.value.trim())input.value=formatWeight(input.value)});
   });
-  document.getElementById('saleFormPro')?.addEventListener('submit', function(event){
+  document.getElementById('saleFormPro')?.addEventListener('submit',function(event){
     const msgs=[];
     document.querySelectorAll('#saleFormPro .numeric-decimal').forEach(function(input){
-      const value=input.value.trim();
-      if(!value || !/^\d+(\.\d+)?$/.test(value)){
-        const label=input.closest('.field-pro')?.querySelector('label')?.innerText || input.name;
-        msgs.push(label + ' harus angka desimal valid. Contoh: 120.5');
-        input.classList.add('is-invalid');
-      } else { input.classList.remove('is-invalid'); }
+      const c=canonicalDecimal(input.value);
+      if(!c||Number(c)<=0){const label=input.closest('.field-pro')?.querySelector('label')?.innerText||input.name;msgs.push(label+' harus angka valid. Contoh: 1188,40 atau 1.188,40');input.classList.add('is-invalid')}else{input.classList.remove('is-invalid');input.value=c}
     });
-    if(msgs.length){ event.preventDefault(); alert('Periksa kembali input angka:\n- ' + msgs.join('\n- ')); }
+    if(msgs.length){event.preventDefault();alert('Periksa kembali input angka:\n- '+msgs.join('\n- '))}
   });
   document.querySelectorAll('#saleFormPro input, #saleFormPro select').forEach(el=>el.addEventListener('input',recalc));document.querySelectorAll('.size-pills-pro button').forEach(btn=>btn.addEventListener('click',function(){const target=document.getElementById(this.parentElement.dataset.target);if(target){target.value=this.textContent.trim();target.dispatchEvent(new Event('input'))}}));recalc();
 })();

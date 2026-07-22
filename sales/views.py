@@ -60,20 +60,58 @@ def _save_sale_documents(request, sale):
             raise ValueError(f'File {uploaded.name} melebihi batas 10 MB.')
         SaleDocument.objects.create(sale=sale, document_type=dtype, file=uploaded, description=desc, uploaded_by=request.user)
 
+def _normalize_decimal_input(value):
+    """Normalisasi angka Indonesia/internasional menjadi format Decimal.
+
+    Contoh yang diterima: 1188,40; 1.188,40; 1188.40; 1,188.40.
+    Pemisah paling kanan dianggap desimal saat titik dan koma sama-sama ada.
+    """
+    raw = str(value or '').strip().replace(' ', '')
+    raw = ''.join(ch for ch in raw if ch.isdigit() or ch in ',.-')
+    if raw.count('-') > 1 or ('-' in raw and not raw.startswith('-')):
+        raise InvalidOperation
+
+    sign = '-' if raw.startswith('-') else ''
+    raw = raw.lstrip('-')
+    if not raw:
+        raise InvalidOperation
+
+    if ',' in raw and '.' in raw:
+        decimal_sep = ',' if raw.rfind(',') > raw.rfind('.') else '.'
+        thousands_sep = '.' if decimal_sep == ',' else ','
+        raw = raw.replace(thousands_sep, '')
+        integer, fraction = raw.rsplit(decimal_sep, 1)
+        normalized = f'{sign}{integer or "0"}.{fraction}'
+    elif ',' in raw:
+        parts = raw.split(',')
+        if len(parts) == 2:
+            normalized = f'{sign}{parts[0] or "0"}.{parts[1]}'
+        else:
+            normalized = sign + ''.join(parts[:-1]) + '.' + parts[-1]
+    elif '.' in raw:
+        parts = raw.split('.')
+        if len(parts) == 2:
+            normalized = f'{sign}{parts[0] or "0"}.{parts[1]}'
+        else:
+            normalized = sign + ''.join(parts[:-1]) + '.' + parts[-1]
+    else:
+        normalized = sign + raw
+    return normalized
+
+
 def _parse_decimal_field(value, label, *, required=True, allow_zero=False):
     raw = str(value or '').strip()
     if not raw:
         if required:
             raise ValueError(f'{label} wajib diisi dengan angka.')
         return Decimal('0')
-    # Field berat memakai input number: hanya angka, titik desimal, atau koma desimal.
-    normalized = raw.replace(',', '.')
-    if normalized.count('.') > 1:
-        raise ValueError(f'{label} harus berupa angka desimal yang valid, contoh 120 atau 120.50.')
     try:
-        number = Decimal(normalized)
+        number = Decimal(_normalize_decimal_input(raw))
     except (InvalidOperation, ValueError):
-        raise ValueError(f'{label} harus berupa angka, bukan huruf atau simbol.')
+        raise ValueError(
+            f'{label} harus berupa angka yang valid. '
+            'Contoh: 1188,40 atau 1.188,40.'
+        )
     if number < 0:
         raise ValueError(f'{label} tidak boleh bernilai negatif.')
     if not allow_zero and number == 0:
