@@ -530,10 +530,16 @@ def production_dashboard(request):
             bucket['sr'].append(sr_value)
         bucket['population'] += int(sample.population or sample.population_index or 0)
 
-    biomass_history = []
+    # Satu DOC hanya boleh memiliki satu titik aktual. Apabila terdapat
+    # beberapa batch/tanggal pada DOC yang sama, gunakan batch paling baru.
+    # Ini mencegah label seperti DOC 50 muncul dua kali dan menjaga urutan
+    # grafik tetap kronologis menurut umur budidaya.
+    history_by_doc = {}
     for date_value, bucket in sorted(history_by_date.items()):
         avg_doc = round(sum(bucket['docs']) / len(bucket['docs'])) if bucket['docs'] else 0
-        biomass_history.append({
+        if avg_doc <= 0:
+            continue
+        history_by_doc[avg_doc] = {
             'label': date_value.strftime('%d %b'),
             'date': date_value.isoformat(),
             'doc': avg_doc,
@@ -544,7 +550,8 @@ def production_dashboard(request):
             'sr': round(sum(bucket['sr']) / len(bucket['sr']), 2) if bucket['sr'] else 0,
             'population': bucket['population'],
             'size': round(1000.0 / (sum(bucket['abw']) / len(bucket['abw'])), 2) if bucket['abw'] and (sum(bucket['abw']) / len(bucket['abw'])) > 0 else 0,
-        })
+        }
+    biomass_history = [history_by_doc[doc] for doc in sorted(history_by_doc)]
 
     # ADG untuk dashboard dihitung ulang dari rumus baku agar nilai impor lama
     # yang keliru (misalnya selisih ABW tanpa dibagi 7) tidak membuat proyeksi
@@ -629,8 +636,14 @@ def production_dashboard(request):
         biomass_projection.append({
             'label': f'DOC {projection_doc}',
             'doc': projection_doc,
-            'biomass_ton': round(total_kg / 1000.0, 3),
+            # Nilai disimpan sekali dan dipakai bersama oleh card, grafik,
+            # tooltip, serta prediksi size (single source of truth).
+            'biomass_ton': round(total_kg / 1000.0, 2),
         })
+
+    target_doc_projection_ton = (
+        biomass_projection[-1]['biomass_ton'] if biomass_projection else 0
+    )
 
     # Size proyeksi pada target DOC dihitung dari total biomassa proyeksi
     # dibagi populasi hidup terbaru. Rumus: ABW = biomassa(kg)*1000/populasi,
@@ -638,7 +651,7 @@ def production_dashboard(request):
     projected_size_doc = 0
     projected_abw_doc = 0
     if biomass_projection and current_population > 0:
-        projected_total_kg = _float(biomass_projection[-1].get('biomass_ton')) * 1000.0
+        projected_total_kg = _float(target_doc_projection_ton) * 1000.0
         projected_abw_doc = projected_total_kg * 1000.0 / current_population
         projected_size_doc = 1000.0 / projected_abw_doc if projected_abw_doc > 0 else 0
 
@@ -740,7 +753,7 @@ def production_dashboard(request):
         'selected_cycle': selected_cycle,
         'biomass_history': biomass_history,
         'biomass_projection': biomass_projection,
-        'doc120_projection_ton': biomass_projection[-1]['biomass_ton'] if biomass_projection else 0,
+        'doc120_projection_ton': target_doc_projection_ton,
         'target_doc': target_doc,
         'target_size': target_size,
         'target_abw_grams': target_abw_grams,

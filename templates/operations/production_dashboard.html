@@ -31,7 +31,7 @@
   <section class="panel-v2">
     <div class="panel-title"><h2>Grafik Perkembangan Biomassa</h2><div class="legend"><span><i style="background:#2d7ff9"></i>Aktual</span><span><i style="background:#62a7ff;border-top:2px dashed #62a7ff;background:transparent"></i>Prediksi DOC {{ target_doc }}</span><span><i style="background:#ef4444"></i>Target {{ target_harvest_ton|floatformat:2 }} ton</span></div></div>
     <div class="chart-wrap"><canvas id="biomassTrendChart"></canvas></div>
-    <div class="chart-note"><i class="fa-solid fa-circle-info"></i> Data aktual berasal dari total Biomassa FR setiap batch sampling. Prediksi memakai ADG aktual, populasi terbaru, dan target yang disimpan pada siklus; bukan data dummy.</div>
+    <div class="chart-note"><i class="fa-solid fa-circle-info"></i> Data aktual memakai satu batch terbaru untuk setiap DOC. Card Estimasi DOC dan titik akhir grafik menggunakan satu nilai prediksi yang sama, dengan pembulatan dua desimal.</div>
   </section>
 
   <section class="panel-v2">
@@ -115,28 +115,64 @@
 (function(){
   const actual = JSON.parse(document.getElementById('biomass-history-data').textContent || '[]');
   const projection = JSON.parse(document.getElementById('biomass-projection-data').textContent || '[]');
-  const labels = actual.map(x => `DOC ${x.doc}`);
-  const actualValues = actual.map(x => x.biomass_ton);
-  projection.forEach(x => { if (!labels.includes(x.label)) labels.push(x.label); });
-  const projectedValues = labels.map(label => {
-    const item = projection.find(x => x.label === label);
-    return item ? item.biomass_ton : null;
-  });
-  if (actual.length && projection.length) {
-    const firstProjectionLabel = projection[0].label;
-    const index = labels.indexOf(firstProjectionLabel);
-    if (index >= 0 && projectedValues[index] == null) projectedValues[index] = actualValues[actualValues.length - 1];
-  }
-  const targetValues = labels.map(() => {{ target_harvest_ton|default:25 }});
+
+  // Gabungkan sumbu berdasarkan angka DOC, bukan posisi array. Dengan cara ini
+  // satu DOC hanya muncul sekali dan nilai target pada grafik persis sama
+  // dengan nilai yang dikirim backend ke card Estimasi DOC.
+  const actualByDoc = new Map(actual.map(x => [Number(x.doc), x]));
+  const projectionByDoc = new Map(projection.map(x => [Number(x.doc), x]));
+  const docs = [...new Set([...actualByDoc.keys(), ...projectionByDoc.keys()])]
+    .filter(Number.isFinite)
+    .sort((a,b) => a-b);
+  const labels = docs.map(doc => `DOC ${doc}`);
+  const actualValues = docs.map(doc => actualByDoc.has(doc) ? Number(actualByDoc.get(doc).biomass_ton) : null);
+  const projectedValues = docs.map(doc => projectionByDoc.has(doc) ? Number(projectionByDoc.get(doc).biomass_ton) : null);
+  const targetValues = docs.map(() => Number('{{ target_harvest_ton|default:25 }}'));
+
+  // Label nilai pada titik prediksi terakhir agar angka di grafik dapat
+  // dibandingkan langsung dengan card tanpa menaksir posisi terhadap sumbu.
+  const terminalProjectionLabel = {
+    id: 'terminalProjectionLabel',
+    afterDatasetsDraw(chart) {
+      const datasetIndex = 1;
+      const meta = chart.getDatasetMeta(datasetIndex);
+      const data = chart.data.datasets[datasetIndex].data;
+      let lastIndex = -1;
+      for (let i = data.length - 1; i >= 0; i--) {
+        if (data[i] !== null && Number.isFinite(Number(data[i]))) { lastIndex = i; break; }
+      }
+      if (lastIndex < 0 || !meta.data[lastIndex]) return;
+      const point = meta.data[lastIndex];
+      const value = Number(data[lastIndex]).toLocaleString('id-ID', {minimumFractionDigits:2, maximumFractionDigits:2});
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.font = '700 12px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      ctx.fillStyle = '#2d7ff9';
+      ctx.fillText(`${value} ton`, point.x - 8, point.y - 8);
+      ctx.restore();
+    }
+  };
+
   const canvas = document.getElementById('biomassTrendChart');
   new Chart(canvas, {
     type:'line',
+    plugins:[terminalProjectionLabel],
     data:{labels,datasets:[
-      {label:'Biomassa aktual (ton)',data:labels.map((_,i)=>i<actualValues.length?actualValues[i]:null),borderColor:'#2d7ff9',backgroundColor:'rgba(45,127,249,.12)',fill:true,tension:.35,pointRadius:5,pointHoverRadius:7,borderWidth:3},
-      {label:'Prediksi DOC {{ target_doc }} (ton)',data:projectedValues,borderColor:'#62a7ff',borderDash:[8,6],tension:.35,pointRadius:4,borderWidth:3,spanGaps:true},
+      {label:'Biomassa aktual (ton)',data:actualValues,borderColor:'#2d7ff9',backgroundColor:'rgba(45,127,249,.12)',fill:true,tension:.35,pointRadius:5,pointHoverRadius:7,borderWidth:3,spanGaps:false},
+      {label:'Prediksi DOC {{ target_doc }} (ton)',data:projectedValues,borderColor:'#62a7ff',borderDash:[8,6],tension:.35,pointRadius:4,pointHoverRadius:6,borderWidth:3,spanGaps:true},
       {label:'Target panen (ton)',data:targetValues,borderColor:'#ef4444',borderDash:[4,4],pointRadius:0,borderWidth:2}
     ]},
-    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{afterBody:(items)=>{const idx=items[0].dataIndex;if(idx<actual.length){const x=actual[idx];return [`Biomassa: ${Number(x.biomass_ton).toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2})} ton`,`ABW: ${Number(x.abw).toLocaleString('id-ID')} g`,`Size: ${Number(x.size || (x.abw ? 1000/x.abw : 0)).toLocaleString('id-ID',{maximumFractionDigits:0})}/kg`,`ADG: ${Number(x.adg).toLocaleString('id-ID')} g/hari`,`FCR: ${Number(x.fcr).toLocaleString('id-ID')}`,`SR: ${Number(x.sr).toLocaleString('id-ID')}%`,`Populasi: ${x.population.toLocaleString('id-ID')} ekor`];}return [];}}}},scales:{x:{grid:{display:false},ticks:{color:'#61718a',font:{weight:'600'}}},y:{beginAtZero:true,title:{display:true,text:'Biomassa (Ton)'},grid:{color:'#e9eef6'},ticks:{callback:v=>Number(v).toLocaleString('id-ID',{maximumFractionDigits:2})+' t'}}}}
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{label:(ctx)=>{
+      if (ctx.raw === null) return '';
+      return `${ctx.dataset.label}: ${Number(ctx.raw).toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2})} ton`;
+    },afterBody:(items)=>{
+      const doc = docs[items[0].dataIndex];
+      const x = actualByDoc.get(doc);
+      if (!x) return [];
+      return [`ABW: ${Number(x.abw).toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2})} g`,`Size: ${Number(x.size || (x.abw ? 1000/x.abw : 0)).toLocaleString('id-ID',{maximumFractionDigits:0})}/kg`,`ADG: ${Number(x.adg).toLocaleString('id-ID',{minimumFractionDigits:3,maximumFractionDigits:3})} g/hari`,`FCR: ${Number(x.fcr).toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2})}`,`SR: ${Number(x.sr).toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2})}%`,`Populasi: ${Number(x.population || 0).toLocaleString('id-ID')} ekor`];
+    }}}},scales:{x:{grid:{display:false},ticks:{color:'#61718a',font:{weight:'600'}}},y:{beginAtZero:true,title:{display:true,text:'Biomassa (Ton)'},grid:{color:'#e9eef6'},ticks:{callback:v=>Number(v).toLocaleString('id-ID',{maximumFractionDigits:2})+' t'}}}}
   });
 })();
 
