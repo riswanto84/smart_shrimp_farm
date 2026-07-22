@@ -1,6 +1,114 @@
-{% extends 'base.html' %}{% load currency %}{% block content %}
-<div class="page-head"><div><h1>{{ title }}</h1><p>Pencatatan saldo, jatuh tempo, pembayaran, dan umur {{ title|lower }}.</p></div><div class="d-flex gap-2"><a class="btn btn-outline-danger" href="{% url 'finance:export_trade_pdf' account_type %}?q={{ request.GET.q|urlencode }}&status={{ request.GET.status|urlencode }}"><i class="fa-solid fa-file-pdf"></i> PDF</a><a class="btn btn-primary" href="{% url 'finance:add_trade_account' account_type %}"><i class="fa-solid fa-plus"></i> Tambah</a></div></div>
-<div class="kpi-grid mb-3"><div class="kpi-card"><div><span>Nilai Awal</span><strong>{{ original|rupiah }}</strong></div></div><div class="kpi-card"><div><span>Sudah Dibayar</span><strong>{{ paid|rupiah }}</strong></div></div><div class="kpi-card"><div><span>Sisa Saldo</span><strong>{{ outstanding|rupiah }}</strong></div></div><div class="kpi-card"><div><span>Lewat Jatuh Tempo</span><strong>{{ overdue|rupiah }}</strong></div></div></div>
-<div class="cardx mb-3"><form class="row g-2"><div class="col-md-7"><input class="form-control" name="q" value="{{ request.GET.q }}" placeholder="Cari {{ partner_label|lower }}, nomor dokumen, atau uraian"></div><div class="col-md-3"><select class="form-select" name="status"><option value="">Semua status</option><option value="open" {% if request.GET.status == 'open' %}selected{% endif %}>Belum lunas</option><option value="overdue" {% if request.GET.status == 'overdue' %}selected{% endif %}>Jatuh tempo</option><option value="paid" {% if request.GET.status == 'paid' %}selected{% endif %}>Lunas</option></select></div><div class="col-md-2 d-grid"><button class="btn btn-outline-primary">Tampilkan</button></div></form></div>
-<div class="cardx table-responsive"><table class="table align-middle"><thead><tr><th>Dokumen</th><th>{{ partner_label }}</th><th>Tanggal</th><th>Jatuh Tempo</th><th class="text-end">Nilai Awal</th><th class="text-end">Dibayar</th><th class="text-end">Saldo</th><th>Status/Umur</th><th></th></tr></thead><tbody>{% for r in rows %}<tr class="{% if r.item.is_overdue %}table-warning{% endif %}"><td><strong>{{ r.item.document_number|default:'-' }}</strong><br><small>{{ r.item.description }}</small></td><td>{{ r.item.partner_name }}</td><td>{{ r.item.transaction_date|date:'d/m/Y' }}</td><td>{{ r.item.due_date|date:'d/m/Y' }}</td><td class="text-end">{{ r.item.original_amount|rupiah }}</td><td class="text-end">{{ r.paid|rupiah }}</td><td class="text-end"><strong>{{ r.outstanding|rupiah }}</strong></td><td>{% if r.outstanding == 0 %}<span class="badge bg-success">Lunas</span>{% elif r.item.is_overdue %}<span class="badge bg-danger">{{ r.bucket }}</span>{% elif r.paid > 0 %}<span class="badge bg-info">Sebagian</span>{% else %}<span class="badge bg-secondary">Belum dibayar</span>{% endif %}</td><td><a class="btn btn-sm btn-outline-primary" href="{% url 'finance:trade_detail' r.item.pk %}"><i class="fa-solid fa-eye"></i></a></td></tr>{% empty %}<tr><td colspan="9" class="text-center py-4">Belum ada data {{ title|lower }}.</td></tr>{% endfor %}</tbody></table></div>
+{% extends 'base.html' %}
+{% load currency %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ title }}</h1>
+    <p>Pencatatan saldo, jatuh tempo, pembayaran, dan umur {{ title|lower }}.</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-danger" href="{% url 'finance:export_trade_pdf' account_type %}?q={{ request.GET.q|urlencode }}&status={{ request.GET.status|urlencode }}">
+      <i class="fa-solid fa-file-pdf"></i> PDF
+    </a>
+    <a class="btn btn-primary" href="{% url 'finance:add_trade_account' account_type %}">
+      <i class="fa-solid fa-plus"></i> Tambah
+    </a>
+  </div>
+</div>
+
+<div class="kpi-grid mb-3">
+  <div class="kpi-card"><div><span>Nilai Awal</span><strong>{{ original|rupiah }}</strong></div></div>
+  <div class="kpi-card"><div><span>Sudah Dibayar</span><strong>{{ paid|rupiah }}</strong></div></div>
+  <div class="kpi-card"><div><span>Sisa Saldo</span><strong>{{ outstanding|rupiah }}</strong></div></div>
+  <div class="kpi-card"><div><span>Lewat Jatuh Tempo</span><strong>{{ overdue|rupiah }}</strong></div></div>
+</div>
+
+<div class="cardx mb-3">
+  <form class="row g-2">
+    <div class="col-md-7">
+      <input class="form-control" name="q" value="{{ request.GET.q }}" placeholder="Cari {{ partner_label|lower }}, nomor dokumen, atau uraian">
+    </div>
+    <div class="col-md-3">
+      <select class="form-select" name="status">
+        <option value="">Semua status</option>
+        <option value="open" {% if request.GET.status == 'open' %}selected{% endif %}>Belum lunas</option>
+        <option value="overdue" {% if request.GET.status == 'overdue' %}selected{% endif %}>Jatuh tempo</option>
+        <option value="paid" {% if request.GET.status == 'paid' %}selected{% endif %}>Lunas</option>
+      </select>
+    </div>
+    <div class="col-md-2 d-grid">
+      <button class="btn btn-outline-primary">Tampilkan</button>
+    </div>
+  </form>
+</div>
+
+<div class="cardx table-responsive">
+  <table class="table align-middle">
+    <thead>
+      <tr>
+        <th>Dokumen</th>
+        <th>{{ partner_label }}</th>
+        <th>Tanggal</th>
+        <th>Jatuh Tempo</th>
+        <th class="text-end">Nilai Awal</th>
+        <th class="text-end">Dibayar</th>
+        <th class="text-end">Saldo</th>
+        <th>Status/Umur</th>
+        <th class="text-center" style="min-width: 132px;">Aksi</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr class="{% if r.item.is_overdue %}table-warning{% endif %}">
+        <td>
+          <strong>{{ r.item.document_number|default:'-' }}</strong><br>
+          <small>{{ r.item.description }}</small>
+        </td>
+        <td>{{ r.item.partner_name }}</td>
+        <td>{{ r.item.transaction_date|date:'d/m/Y' }}</td>
+        <td>{{ r.item.due_date|date:'d/m/Y' }}</td>
+        <td class="text-end">{{ r.item.original_amount|rupiah }}</td>
+        <td class="text-end">{{ r.paid|rupiah }}</td>
+        <td class="text-end"><strong>{{ r.outstanding|rupiah }}</strong></td>
+        <td>
+          {% if r.outstanding == 0 %}
+            <span class="badge bg-success">Lunas</span>
+          {% elif r.item.is_overdue %}
+            <span class="badge bg-danger">{{ r.bucket }}</span>
+          {% elif r.paid > 0 %}
+            <span class="badge bg-info">Sebagian</span>
+          {% else %}
+            <span class="badge bg-secondary">Belum dibayar</span>
+          {% endif %}
+        </td>
+        <td class="text-center text-nowrap">
+          <div class="d-inline-flex gap-1" role="group" aria-label="Aksi transaksi">
+            <a class="btn btn-sm btn-outline-primary"
+               href="{% url 'finance:trade_detail' r.item.pk %}"
+               title="Lihat detail" aria-label="Lihat detail">
+              <i class="fa-solid fa-eye"></i>
+            </a>
+            <a class="btn btn-sm btn-outline-warning"
+               href="{% url 'finance:edit_trade_account' r.item.pk %}"
+               title="Edit" aria-label="Edit">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </a>
+            <form method="post"
+                  action="{% url 'finance:delete_trade_account' r.item.pk %}"
+                  class="d-inline"
+                  onsubmit="return confirm('Hapus {{ r.item.get_account_type_display|escapejs }} milik {{ r.item.partner_name|escapejs }}? Seluruh pembayaran dan dokumen terkait juga akan dihapus. Tindakan ini tidak dapat dibatalkan.');">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus" aria-label="Hapus">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="9" class="text-center py-4">Belum ada data {{ title|lower }}.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% endblock %}
