@@ -26,6 +26,20 @@
     </div>
   </div>
 </div>
+<section class="panel real-harvest-panel" style="margin-bottom:20px;">
+  <div class="panel-head">
+    <div><h2>Realisasi Panen Riil</h2><span>{% if selected_cycle %}Siklus {{ selected_cycle.name }}{% else %}Belum ada siklus terpilih{% endif %}</span></div>
+    <a href="/operations/harvests/">Lihat Data Panen <i class="fa-solid fa-arrow-right"></i></a>
+  </div>
+  <div class="kpi-grid" style="margin-bottom:16px;">
+    <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-shrimp"></i></div><div><span>Total Panen Riil</span><strong>{{ harvest_total_kg|angka:2 }} kg</strong><small>{{ harvest_total_ton|floatformat:2 }} ton · {{ harvest_count }} kali panen</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-bullseye"></i></div><div><span>Target Produksi</span><strong>{{ target_harvest_ton|floatformat:2 }} ton</strong><small>Sisa target {{ harvest_remaining_kg|angka:2 }} kg</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-coins"></i></div><div><span>Omzet Siklus</span><strong>{{ cycle_sales_total|rupiah }}</strong><small>{{ cycle_sales_kg|angka:2 }} kg tercatat di penjualan</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-tag"></i></div><div><span>Harga Jual Rata-rata</span><strong>{{ average_sale_price|rupiah }}</strong><small>Omzet ÷ berat penjualan</small></div></div>
+  </div>
+  <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:7px;font-weight:700;"><span>Progres Target Panen</span><span>{{ harvest_progress_percent|floatformat:1 }}%</span></div>
+  <div style="height:14px;border-radius:999px;background:#e8eef7;overflow:hidden;"><div style="height:100%;width:{{ harvest_progress_percent|stringformat:'s' }}%;max-width:100%;border-radius:999px;background:linear-gradient(90deg,#16a34a,#22c55e);"></div></div>
+</section>
 <section id="weather-card" class="weather-card-pro {% if live_weather.status == 'offline' %}is-offline{% elif live_weather.status == 'cache' %}is-cache{% endif %}" data-weather-updated="{% if live_weather.updated_at %}{{ live_weather.updated_at|date:'c' }}{% endif %}">
   <div class="weather-main">
     <div class="weather-icon-wrap"><i id="weather-icon" class="fa-solid {{ live_weather.icon|default:'fa-cloud' }}"></i></div>
@@ -108,7 +122,28 @@
     </div>
     <p class="text-muted" style="margin:12px 0 0;">Asumsi: ADG aktual tetap, tidak ada panen parsial, dan populasi FR tidak berkurang sampai DOC 120.</p>
   </section>
-  <section class="panel activity-panel"><div class="panel-head"><h2>Aktivitas Terbaru</h2></div><div class="activity-list"><div><i class="fa-solid fa-circle-info"></i><p><b>Belum ada sumber aktivitas terintegrasi</b><small>Panel ini tidak lagi menampilkan data contoh.</small></p></div></div></section>
+  <section class="panel" style="grid-column:1 / -1;">
+    <div class="panel-head"><h2>Grafik Panen Riil <span>10 tanggal panen terakhir</span></h2></div>
+    {% if harvest_chart %}
+    <div style="display:grid;gap:10px;">
+      {% for row in harvest_chart %}
+      <div style="display:grid;grid-template-columns:95px minmax(120px,1fr) 130px;gap:12px;align-items:center;">
+        <small style="font-weight:700;">{{ row.date|date:"d M Y" }}</small>
+        <div style="height:18px;background:#edf2f7;border-radius:999px;overflow:hidden;"><div style="height:100%;width:{{ row.width_percent|stringformat:'s' }}%;background:linear-gradient(90deg,#0d6efd,#22c55e);border-radius:999px;"></div></div>
+        <strong style="text-align:right;">{{ row.total_kg|angka:2 }} kg</strong>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="text-muted mb-0">Belum ada data panen riil pada siklus ini.</p>{% endif %}
+  </section>
+  <section class="panel" style="grid-column:1 / -1;">
+    <div class="panel-head"><h2>Riwayat Panen Terbaru</h2><a href="/operations/harvests/">Lihat Semua</a></div>
+    <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Tanggal</th><th>Kolam</th><th>Jenis Panen</th><th>Size</th><th class="text-end">Berat Riil</th></tr></thead><tbody>
+      {% for harvest in latest_harvests %}<tr><td>{{ harvest.date|date:"d M Y" }}</td><td><b>{{ harvest.pond.name }}</b></td><td>{{ harvest.harvest_type }}</td><td>{{ harvest.size_text|default:"-" }}</td><td class="text-end"><b>{{ harvest.total_kg|angka:2 }} kg</b></td></tr>
+      {% empty %}<tr><td colspan="5" class="text-center text-muted">Belum ada data panen riil pada siklus ini.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  <section class="panel activity-panel"><div class="panel-head"><h2>Aktivitas Terbaru</h2></div><div class="activity-list"><div><i class="fa-solid fa-circle-info"></i><p><b>Data panen riil telah terintegrasi</b><small>Ringkasan di atas diperbarui otomatis dari menu Panen dan Penjualan.</small></p></div></div></section>
 </div>
 
 {% if live_weather.temperature is None %}

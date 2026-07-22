@@ -4,7 +4,7 @@ from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 from accounts.rbac import permission_required
 from ponds.models import Pond
-from operations.models import DailyParameter, SamplingRecord
+from operations.models import DailyParameter, SamplingRecord, Harvest
 from sales.models import Sale
 from finance.models import OperationalExpense
 from django.db.models import Sum
@@ -13,7 +13,7 @@ from decimal import Decimal
 from datetime import timedelta
 import math
 from chat_ai.services import ollama_health
-from cultivation.utils import filter_selected_cycle
+from cultivation.utils import filter_selected_cycle, get_selected_cycle
 from core.weather_service import get_farm_weather
 
 def home(request):
@@ -66,6 +66,50 @@ def dashboard(request):
         sales_change_text = 'Belum ada omzet hari ini maupun kemarin'
 
     expense_total = filter_selected_cycle(request, OperationalExpense.objects.all()).aggregate(s=Sum('amount'))['s'] or 0
+
+    # Realisasi panen riil diambil langsung dari menu Panen pada siklus terpilih.
+    selected_cycle = get_selected_cycle(request)
+    harvest_qs = filter_selected_cycle(
+        request,
+        Harvest.objects.select_related('pond').order_by('-date', '-id'),
+    )
+    harvest_total_kg = harvest_qs.aggregate(total=Sum('total_kg'))['total'] or Decimal('0')
+    harvest_total_ton = harvest_total_kg / Decimal('1000')
+    harvest_count = harvest_qs.count()
+    latest_harvests = list(harvest_qs[:8])
+
+    target_harvest_ton = Decimal(str(getattr(selected_cycle, 'target_biomass_ton', 0) or 0))
+    target_harvest_kg = target_harvest_ton * Decimal('1000')
+    if target_harvest_kg > 0:
+        harvest_progress_percent = min(
+            Decimal('100'),
+            (harvest_total_kg / target_harvest_kg * Decimal('100')).quantize(Decimal('0.1')),
+        )
+        harvest_remaining_kg = max(Decimal('0'), target_harvest_kg - harvest_total_kg)
+    else:
+        harvest_progress_percent = Decimal('0')
+        harvest_remaining_kg = Decimal('0')
+
+    # Omzet siklus dan harga jual rata-rata memakai transaksi valid pada siklus yang sama.
+    cycle_sales_total = valid_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+    cycle_sales_kg = valid_sales.aggregate(total=Sum('total_kg'))['total'] or Decimal('0')
+    average_sale_price = (cycle_sales_total / cycle_sales_kg) if cycle_sales_kg > 0 else Decimal('0')
+
+    # Ringkasan grafik panen berdasarkan tanggal, maksimal 10 tanggal terbaru.
+    harvest_daily_rows = list(
+        harvest_qs.values('date').annotate(total_kg=Sum('total_kg')).order_by('-date')[:10]
+    )
+    harvest_daily_rows.reverse()
+    max_daily_harvest = max((row['total_kg'] or Decimal('0') for row in harvest_daily_rows), default=Decimal('0'))
+    harvest_chart = []
+    for row in harvest_daily_rows:
+        total_kg = row['total_kg'] or Decimal('0')
+        width_percent = float(total_kg / max_daily_harvest * Decimal('100')) if max_daily_harvest > 0 else 0
+        harvest_chart.append({
+            'date': row['date'],
+            'total_kg': total_kg,
+            'width_percent': round(width_percent, 2),
+        })
 
     # Parameter air aktual: tidak pernah memakai angka fallback/dummy.
     parameter_qs = filter_selected_cycle(
@@ -244,6 +288,19 @@ def dashboard(request):
         'sales_change_state': sales_change_state,
         'sales_change_text': sales_change_text,
         'expense_total': expense_total,
+        'selected_cycle': selected_cycle,
+        'harvest_total_kg': harvest_total_kg,
+        'harvest_total_ton': harvest_total_ton,
+        'harvest_count': harvest_count,
+        'latest_harvests': latest_harvests,
+        'target_harvest_ton': target_harvest_ton,
+        'target_harvest_kg': target_harvest_kg,
+        'harvest_progress_percent': harvest_progress_percent,
+        'harvest_remaining_kg': harvest_remaining_kg,
+        'cycle_sales_total': cycle_sales_total,
+        'cycle_sales_kg': cycle_sales_kg,
+        'average_sale_price': average_sale_price,
+        'harvest_chart': harvest_chart,
         'latest': latest,
         'latest_temperature': latest_temperature,
         'latest_ph': latest_ph,
