@@ -8,6 +8,7 @@ from operations.models import DailyParameter, SamplingRecord
 from sales.models import Sale
 from finance.models import OperationalExpense
 from django.db.models import Sum
+from django.utils import timezone
 from decimal import Decimal
 from datetime import timedelta
 import math
@@ -23,7 +24,47 @@ def home(request):
 @permission_required('dashboard')
 def dashboard(request):
     ponds = Pond.objects.all()
-    sales_total = filter_selected_cycle(request, Sale.objects.all()).aggregate(s=Sum('total_amount'))['s'] or 0
+
+    # KPI omzet menggunakan tanggal lokal aplikasi (WIB), bukan total seluruh
+    # siklus. Transaksi gagal, kedaluwarsa, dibatalkan, dan refund tidak dihitung.
+    today = timezone.localdate()
+    yesterday = today - timedelta(days=1)
+    valid_sales = filter_selected_cycle(
+        request,
+        Sale.objects.exclude(status__in=['Gagal', 'Expired', 'Dibatalkan', 'Refund']),
+    )
+    sales_total = (
+        valid_sales.filter(date__date=today).aggregate(s=Sum('total_amount'))['s']
+        or Decimal('0')
+    )
+    yesterday_sales_total = (
+        valid_sales.filter(date__date=yesterday).aggregate(s=Sum('total_amount'))['s']
+        or Decimal('0')
+    )
+
+    if yesterday_sales_total > 0:
+        sales_change_percent = (
+            (sales_total - yesterday_sales_total) / yesterday_sales_total * Decimal('100')
+        ).quantize(Decimal('0.1'))
+        if sales_change_percent > 0:
+            sales_change_state = 'up'
+            sales_change_text = f'Naik {abs(sales_change_percent)}% dari kemarin'
+        elif sales_change_percent < 0:
+            sales_change_state = 'down'
+            sales_change_text = f'Turun {abs(sales_change_percent)}% dari kemarin'
+        else:
+            sales_change_state = 'neutral'
+            sales_change_text = 'Tidak berubah dari kemarin'
+    elif sales_total > 0:
+        # Persentase tidak terdefinisi jika pembanding kemarin bernilai nol.
+        sales_change_percent = None
+        sales_change_state = 'up'
+        sales_change_text = 'Baru ada omzet hari ini'
+    else:
+        sales_change_percent = Decimal('0')
+        sales_change_state = 'neutral'
+        sales_change_text = 'Belum ada omzet hari ini maupun kemarin'
+
     expense_total = filter_selected_cycle(request, OperationalExpense.objects.all()).aggregate(s=Sum('amount'))['s'] or 0
 
     # Parameter air aktual: tidak pernah memakai angka fallback/dummy.
@@ -198,6 +239,10 @@ def dashboard(request):
     context = {
         'ponds': ponds,
         'sales_total': sales_total,
+        'yesterday_sales_total': yesterday_sales_total,
+        'sales_change_percent': sales_change_percent,
+        'sales_change_state': sales_change_state,
+        'sales_change_text': sales_change_text,
         'expense_total': expense_total,
         'latest': latest,
         'latest_temperature': latest_temperature,

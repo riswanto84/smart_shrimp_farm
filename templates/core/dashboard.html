@@ -8,7 +8,7 @@
   </div>
 </div>
 <div class="kpi-grid">
-  <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-chart-line"></i></div><div><span>Omzet Hari Ini</span><strong>{{ sales_total|rupiah }}</strong><small class="up">↑ 12.5% dari kemarin</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-chart-line"></i></div><div><span>Omzet Hari Ini</span><strong>{{ sales_total|rupiah }}</strong><small class="{% if sales_change_state == 'up' %}up{% elif sales_change_state == 'down' %}down{% else %}text-muted{% endif %}">{% if sales_change_state == 'up' %}↑{% elif sales_change_state == 'down' %}↓{% else %}•{% endif %} {{ sales_change_text }}</small></div></div>
   <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-wallet"></i></div><div><span>Pengeluaran Hari Ini</span><strong>{{ expense_total|rupiah }}</strong><small class="down">↓ 5.3% dari kemarin</small></div></div>
   <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-water"></i></div><div><span>Kolam Aktif</span><strong>{{ ponds.count }}</strong><small>dari 6 kolam</small></div></div>
   <div class="kpi-card" id="ollama-status-card">
