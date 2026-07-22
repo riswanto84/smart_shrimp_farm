@@ -332,7 +332,15 @@ def edit_sale(request, pk):
         except ValueError as exc:
             messages.error(request, str(exc))
             return render(request, 'sales/sale_form.html', {'sale': sale, 'item': item, 'customers': customers, 'harvests': harvests, 'mode': 'edit'})
-        method, cash, transfer, qris, other_pay, other_name, paid, auto_status = _payment_data(request, total_amount)
+        try:
+            method, cash, transfer, qris, other_pay, other_name, paid, auto_status = _payment_data(request, total_amount)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return render(request, 'sales/sale_form.html', {'sale': sale, 'item': item, 'customers': customers, 'harvests': harvests, 'mode': 'edit'})
+
+        requested_status = (request.POST.get('status') or auto_status).strip()
+        if requested_status not in {'Lunas', 'Belum Lunas'}:
+            requested_status = auto_status
         old_total_amount = sale.total_amount
 
         sale.invoice_no = invoice_no
@@ -348,7 +356,7 @@ def edit_sale(request, pk):
         sale.qris_amount = qris
         sale.other_payment_amount = other_pay
         sale.other_payment_method = other_name
-        sale.status = auto_status
+        sale.status = requested_status
         sale.notes = request.POST.get('notes', '')
         if old_total_amount != total_amount and sale.status != 'Lunas':
             # Jika total nota berubah, link Snap lama tidak lagi sesuai nominal baru.
