@@ -655,6 +655,86 @@ def production_dashboard(request):
             size30_dates.append(sample.date + timedelta(days=max(days, 0)))
     estimated_size30_date = max(size30_dates) if size30_dates else None
 
+    # ---------------------------------------------------------------
+    # Analisis pakan dari P/H pada menu Cek Anco.
+    # Satu tanggal dijumlahkan untuk seluruh kolam, sedangkan data per kolam
+    # tetap disediakan agar ketimpangan pemberian pakan mudah dipantau.
+    # ---------------------------------------------------------------
+    feed_anco_qs = cycle_qs(AncoCheck.objects.all()).select_related('pond')
+    feed_daily_rows = list(
+        feed_anco_qs.values('date').annotate(
+            total_kg=Sum('daily_feed_kg'),
+            avg_kg=Avg('daily_feed_kg'),
+            pond_count=Count('pond', distinct=True),
+        ).order_by('date')
+    )
+
+    cumulative_feed = 0.0
+    feeding_history = []
+    previous_total = None
+    for row in feed_daily_rows:
+        total_kg = _float(row['total_kg'])
+        cumulative_feed += total_kg
+        change_kg = total_kg - previous_total if previous_total is not None else 0.0
+        change_pct = (change_kg / previous_total * 100.0) if previous_total else 0.0
+        feeding_history.append({
+            'date': row['date'].isoformat(),
+            'label': row['date'].strftime('%d %b'),
+            'total_kg': round(total_kg, 2),
+            'average_kg': round(_float(row['avg_kg']), 2),
+            'cumulative_kg': round(cumulative_feed, 2),
+            'pond_count': int(row['pond_count'] or 0),
+            'change_kg': round(change_kg, 2),
+            'change_pct': round(change_pct, 2),
+        })
+        previous_total = total_kg
+
+    # Batasi grafik utama agar tetap terbaca, tetapi KPI kumulatif memakai
+    # seluruh histori pada siklus terpilih.
+    feeding_chart_history = feeding_history[-30:]
+    feed_today_total = feeding_history[-1]['total_kg'] if feeding_history else 0
+    feed_previous_total = feeding_history[-2]['total_kg'] if len(feeding_history) > 1 else 0
+    feed_change_kg = feed_today_total - feed_previous_total if len(feeding_history) > 1 else 0
+    feed_change_pct = (feed_change_kg / feed_previous_total * 100.0) if feed_previous_total else 0
+    feed_daily_average = cumulative_feed / len(feeding_history) if feeding_history else 0
+
+    latest_feed_date = feed_daily_rows[-1]['date'] if feed_daily_rows else None
+    feed_by_pond_rows = list(
+        feed_anco_qs.values('pond_id', 'pond__name').annotate(
+            total_kg=Sum('daily_feed_kg'),
+            avg_kg=Avg('daily_feed_kg'),
+            record_count=Count('id'),
+        ).order_by('-total_kg', 'pond__name')
+    )
+    feeding_by_pond = [{
+        'pond': row['pond__name'],
+        'total_kg': round(_float(row['total_kg']), 2),
+        'average_kg': round(_float(row['avg_kg']), 2),
+        'days': int(row['record_count'] or 0),
+    } for row in feed_by_pond_rows]
+
+    latest_feed_rows = []
+    if latest_feed_date:
+        latest_feed_rows = list(
+            feed_anco_qs.filter(date=latest_feed_date)
+            .values('pond__name', 'doc', 'daily_feed_kg', 'appetite_status', 'notes')
+            .order_by('pond__name')
+        )
+
+    # Gabungkan pakan harian dengan sampling pada tanggal yang sama untuk
+    # grafik korelasi. Nilai sampling diagregasi per tanggal sebagaimana grafik
+    # produksi sehingga skala tetap konsisten.
+    sample_metric_by_date = {item['date']: item for item in biomass_history}
+    feeding_performance = []
+    for item in feeding_chart_history:
+        sample = sample_metric_by_date.get(item['date'])
+        feeding_performance.append({
+            **item,
+            'biomass_ton': sample.get('biomass_ton', 0) if sample else 0,
+            'adg': sample.get('adg', 0) if sample else 0,
+            'fcr': sample.get('fcr', 0) if sample else 0,
+        })
+
     context = {
         'ponds': ponds,
         'selected_cycle': selected_cycle,
@@ -690,6 +770,17 @@ def production_dashboard(request):
         'stocking_source': stocking_source,
         'latest_samples': latest_samples[:8],
         'pond_cards': pond_cards,
+        'feeding_history': feeding_chart_history,
+        'feeding_performance': feeding_performance,
+        'feeding_by_pond': feeding_by_pond,
+        'latest_feed_rows': latest_feed_rows,
+        'latest_feed_date': latest_feed_date,
+        'feed_cycle_total': cumulative_feed,
+        'feed_daily_average': feed_daily_average,
+        'feed_latest_total': feed_today_total,
+        'feed_previous_total': feed_previous_total,
+        'feed_change_kg': feed_change_kg,
+        'feed_change_pct': feed_change_pct,
         'ollama_health': ollama_health(),
     }
     return render(request, 'operations/production_dashboard.html', context)

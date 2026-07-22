@@ -7,7 +7,8 @@
 .production-v2 .panel-v2{background:#fff;border:1px solid #e2ebf7;border-radius:18px;padding:18px;box-shadow:0 10px 30px rgba(15,35,68,.05);margin-bottom:16px}.production-v2 .panel-title{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.production-v2 .panel-title h2{font-size:18px;margin:0;color:#102849}.production-v2 .legend{display:flex;gap:16px;flex-wrap:wrap;color:#52647e;font-size:12px;font-weight:700}.production-v2 .legend i{width:20px;height:3px;display:inline-block;vertical-align:middle;margin-right:5px}.production-v2 .chart-wrap{height:390px;position:relative}.production-v2 .chart-note{background:#eef6ff;border:1px solid #cfe2ff;border-radius:10px;padding:9px 12px;color:#41658f;font-size:12px;margin-top:10px}
 .production-v2 .mini-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}.production-v2 .mini-card{background:#fff;border:1px solid #e2ebf7;border-radius:16px;padding:15px}.production-v2 .mini-card b{font-size:14px;color:#102849}.production-v2 .mini-card strong{display:block;font-size:21px;margin:7px 0;color:#102849}.production-v2 .mini-card small{color:var(--muted)}
 .production-v2 .lower-grid{display:grid;grid-template-columns:1fr 1.1fr;gap:16px}.production-v2 .gauge{width:220px;height:110px;margin:8px auto 16px;border-radius:220px 220px 0 0;background:conic-gradient(from 270deg at 50% 100%,#2d7ff9 0 var(--gauge),#e8eef7 var(--gauge) 50%,transparent 50%);position:relative}.production-v2 .gauge:after{content:"";position:absolute;left:31px;right:31px;bottom:0;height:79px;background:#fff;border-radius:180px 180px 0 0}.production-v2 .gauge-label{position:absolute;z-index:2;left:0;right:0;bottom:8px;text-align:center;color:#102849}.production-v2 .gauge-label strong{font-size:29px;display:block}.production-v2 .summary-list{display:grid;gap:9px}.production-v2 .summary-row{display:flex;justify-content:space-between;padding:10px 12px;border-radius:10px;background:#f7f9fc;color:#425675}.production-v2 .summary-row b{color:#102849}.production-v2 .table td,.production-v2 .table th{white-space:nowrap}
-@media(max-width:1200px){.production-v2 .metric-grid{grid-template-columns:repeat(3,1fr)}}@media(max-width:768px){.production-v2 .hero{display:block}.production-v2 .cycle-chip{margin-top:10px}.production-v2 .metric-grid{grid-template-columns:repeat(2,1fr)}.production-v2 .mini-grid{grid-template-columns:repeat(2,1fr)}.production-v2 .lower-grid{grid-template-columns:1fr}.production-v2 .chart-wrap{height:300px}}@media(max-width:480px){.production-v2 .metric-grid,.production-v2 .mini-grid{grid-template-columns:1fr}}
+.production-v2 .feed-kpis{display:grid;grid-template-columns:repeat(5,minmax(150px,1fr));gap:12px;margin-bottom:16px}.production-v2 .feed-kpi{background:linear-gradient(145deg,#fff,#f8fbff);border:1px solid #dce8f7;border-radius:15px;padding:15px}.production-v2 .feed-kpi span{display:block;color:#60728c;font-size:12px;font-weight:800}.production-v2 .feed-kpi strong{display:block;color:#102849;font-size:22px;margin:6px 0}.production-v2 .feed-kpi small{color:#718096}.production-v2 .feed-chart-grid{display:grid;grid-template-columns:1.35fr 1fr;gap:16px}.production-v2 .feed-chart{height:310px;position:relative}.production-v2 .status-good{color:#138a52;font-weight:800}.production-v2 .status-warn{color:#d97706;font-weight:800}
+@media(max-width:1200px){.production-v2 .feed-kpis{grid-template-columns:repeat(3,1fr)}.production-v2 .metric-grid{grid-template-columns:repeat(3,1fr)}}@media(max-width:768px){.production-v2 .feed-chart-grid{grid-template-columns:1fr}.production-v2 .feed-kpis{grid-template-columns:repeat(2,1fr)}.production-v2 .hero{display:block}.production-v2 .cycle-chip{margin-top:10px}.production-v2 .metric-grid{grid-template-columns:repeat(2,1fr)}.production-v2 .mini-grid{grid-template-columns:repeat(2,1fr)}.production-v2 .lower-grid{grid-template-columns:1fr}.production-v2 .chart-wrap{height:300px}}@media(max-width:480px){.production-v2 .feed-kpis,.production-v2 .metric-grid,.production-v2 .mini-grid{grid-template-columns:1fr}}
 </style>
 <div class="production-v2">
   <div class="hero">
@@ -31,6 +32,41 @@
     <div class="panel-title"><h2>Grafik Perkembangan Biomassa</h2><div class="legend"><span><i style="background:#2d7ff9"></i>Aktual</span><span><i style="background:#62a7ff;border-top:2px dashed #62a7ff;background:transparent"></i>Prediksi DOC {{ target_doc }}</span><span><i style="background:#ef4444"></i>Target {{ target_harvest_ton|floatformat:2 }} ton</span></div></div>
     <div class="chart-wrap"><canvas id="biomassTrendChart"></canvas></div>
     <div class="chart-note"><i class="fa-solid fa-circle-info"></i> Data aktual berasal dari total Biomassa FR setiap batch sampling. Prediksi memakai ADG aktual, populasi terbaru, dan target yang disimpan pada siklus; bukan data dummy.</div>
+  </section>
+
+  <section class="panel-v2">
+    <div class="panel-title">
+      <div><h2><i class="fa-solid fa-bowl-food"></i> Analisis Pemberian Pakan (P/H)</h2><small>Data bersumber langsung dari P/H pada menu Cek Anco untuk siklus terpilih.</small></div>
+      <a href="{% url 'operations:anco_checks' %}">Buka Cek Anco</a>
+    </div>
+    <div class="feed-kpis">
+      <div class="feed-kpi"><span>Pakan Tanggal Terbaru</span><strong>{{ feed_latest_total|angka2 }} kg</strong><small>{% if latest_feed_date %}{{ latest_feed_date|date:"d M Y" }}{% else %}Belum ada data{% endif %}</small></div>
+      <div class="feed-kpi"><span>Pakan Hari Sebelumnya</span><strong>{{ feed_previous_total|angka2 }} kg</strong><small>Perbandingan tanggal input sebelumnya</small></div>
+      <div class="feed-kpi"><span>Perubahan Pakan</span><strong class="{% if feed_change_kg < 0 %}status-warn{% else %}status-good{% endif %}">{% if feed_change_kg > 0 %}+{% endif %}{{ feed_change_kg|angka2 }} kg</strong><small>{% if feed_change_pct > 0 %}+{% endif %}{{ feed_change_pct|floatformat:1 }}%</small></div>
+      <div class="feed-kpi"><span>Pakan Kumulatif Siklus</span><strong>{{ feed_cycle_total|angka2 }} kg</strong><small>Total seluruh P/H Cek Anco</small></div>
+      <div class="feed-kpi"><span>Rata-rata Harian</span><strong>{{ feed_daily_average|angka2 }} kg</strong><small>Rata-rata total semua kolam/hari</small></div>
+    </div>
+    <div class="feed-chart-grid">
+      <div>
+        <div class="panel-title"><h2>Tren Pakan Harian dan Kumulatif</h2></div>
+        <div class="feed-chart"><canvas id="dailyFeedChart"></canvas></div>
+      </div>
+      <div>
+        <div class="panel-title"><h2>Akumulasi Pakan per Kolam</h2></div>
+        <div class="feed-chart"><canvas id="pondFeedChart"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-note"><i class="fa-solid fa-circle-info"></i> Kenaikan pakan perlu dibaca bersama kondisi anco, ADG, biomassa, dan FCR. Penurunan tidak selalu buruk apabila merupakan respons terhadap sisa pakan atau penurunan nafsu makan.</div>
+  </section>
+
+  <section class="panel-v2">
+    <div class="panel-title"><h2>Pakan vs Kinerja Produksi</h2><small>Biomassa, ADG, dan FCR tampil pada tanggal yang memiliki data sampling.</small></div>
+    <div class="feed-chart" style="height:350px"><canvas id="feedPerformanceChart"></canvas></div>
+  </section>
+
+  <section class="panel-v2">
+    <div class="panel-title"><h2>Rincian Pakan per Kolam{% if latest_feed_date %} — {{ latest_feed_date|date:"d M Y" }}{% endif %}</h2></div>
+    <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>DOC</th><th>P/H</th><th>Status Nafsu Makan</th><th>Catatan</th></tr></thead><tbody>{% for row in latest_feed_rows %}<tr><td><b>{{ row.pond__name }}</b></td><td>{{ row.doc|default:"-" }}</td><td><b>{{ row.daily_feed_kg|angka2 }} kg</b></td><td>{{ row.appetite_status|default:"-" }}</td><td>{{ row.notes|default:"-" }}</td></tr>{% empty %}<tr><td colspan="5" class="text-center text-muted">Belum ada data P/H pada Cek Anco untuk siklus ini.</td></tr>{% endfor %}</tbody></table></div>
   </section>
 
   <div class="mini-grid">
@@ -71,6 +107,9 @@
 
 {{ biomass_history|json_script:"biomass-history-data" }}
 {{ biomass_projection|json_script:"biomass-projection-data" }}
+{{ feeding_history|json_script:"feeding-history-data" }}
+{{ feeding_performance|json_script:"feeding-performance-data" }}
+{{ feeding_by_pond|json_script:"feeding-by-pond-data" }}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 (function(){
@@ -100,5 +139,39 @@
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{callbacks:{afterBody:(items)=>{const idx=items[0].dataIndex;if(idx<actual.length){const x=actual[idx];return [`Biomassa: ${Number(x.biomass_ton).toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2})} ton`,`ABW: ${Number(x.abw).toLocaleString('id-ID')} g`,`Size: ${Number(x.size || (x.abw ? 1000/x.abw : 0)).toLocaleString('id-ID',{maximumFractionDigits:0})}/kg`,`ADG: ${Number(x.adg).toLocaleString('id-ID')} g/hari`,`FCR: ${Number(x.fcr).toLocaleString('id-ID')}`,`SR: ${Number(x.sr).toLocaleString('id-ID')}%`,`Populasi: ${x.population.toLocaleString('id-ID')} ekor`];}return [];}}}},scales:{x:{grid:{display:false},ticks:{color:'#61718a',font:{weight:'600'}}},y:{beginAtZero:true,title:{display:true,text:'Biomassa (Ton)'},grid:{color:'#e9eef6'},ticks:{callback:v=>Number(v).toLocaleString('id-ID',{maximumFractionDigits:2})+' t'}}}}
   });
 })();
+
+(function(){
+  const feed = JSON.parse(document.getElementById('feeding-history-data').textContent || '[]');
+  const performance = JSON.parse(document.getElementById('feeding-performance-data').textContent || '[]');
+  const byPond = JSON.parse(document.getElementById('feeding-by-pond-data').textContent || '[]');
+  const commonTooltip = {mode:'index',intersect:false};
+
+  const dailyCanvas = document.getElementById('dailyFeedChart');
+  if (dailyCanvas) new Chart(dailyCanvas, {
+    data:{labels:feed.map(x=>x.label),datasets:[
+      {type:'bar',label:'Pakan harian (kg)',data:feed.map(x=>x.total_kg),backgroundColor:'rgba(45,127,249,.28)',borderColor:'#2d7ff9',borderWidth:1,borderRadius:5,yAxisID:'y'},
+      {type:'line',label:'Pakan kumulatif (kg)',data:feed.map(x=>x.cumulative_kg),borderColor:'#0b2f62',backgroundColor:'transparent',tension:.3,pointRadius:3,borderWidth:3,yAxisID:'y1'}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:commonTooltip,plugins:{legend:{position:'bottom'}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,title:{display:true,text:'Pakan Harian (kg)'}},y1:{beginAtZero:true,position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'Kumulatif (kg)'}}}}
+  });
+
+  const pondCanvas = document.getElementById('pondFeedChart');
+  if (pondCanvas) new Chart(pondCanvas, {
+    type:'bar',data:{labels:byPond.map(x=>x.pond),datasets:[{label:'Total pakan (kg)',data:byPond.map(x=>x.total_kg),backgroundColor:'rgba(11,47,98,.22)',borderColor:'#0b2f62',borderWidth:1,borderRadius:6}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{afterLabel:(ctx)=>{const x=byPond[ctx.dataIndex];return `Rata-rata ${Number(x.average_kg).toLocaleString('id-ID')} kg • ${x.days} hari input`;}}}},scales:{x:{beginAtZero:true,title:{display:true,text:'Pakan Kumulatif (kg)'}},y:{grid:{display:false}}}}
+  });
+
+  const perfCanvas = document.getElementById('feedPerformanceChart');
+  if (perfCanvas) new Chart(perfCanvas, {
+    data:{labels:performance.map(x=>x.label),datasets:[
+      {type:'bar',label:'Pakan harian (kg)',data:performance.map(x=>x.total_kg),backgroundColor:'rgba(45,127,249,.23)',borderColor:'#2d7ff9',borderWidth:1,yAxisID:'feed'},
+      {type:'line',label:'Biomassa (ton)',data:performance.map(x=>x.biomass_ton||null),borderColor:'#0b2f62',tension:.3,pointRadius:4,borderWidth:3,yAxisID:'production',spanGaps:true},
+      {type:'line',label:'ADG (g/hari)',data:performance.map(x=>x.adg||null),borderColor:'#16a34a',tension:.3,pointRadius:3,borderWidth:2,yAxisID:'ratio',spanGaps:true},
+      {type:'line',label:'FCR',data:performance.map(x=>x.fcr||null),borderColor:'#d97706',borderDash:[6,4],tension:.3,pointRadius:3,borderWidth:2,yAxisID:'ratio',spanGaps:true}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:commonTooltip,plugins:{legend:{position:'bottom'}},scales:{x:{grid:{display:false}},feed:{beginAtZero:true,position:'left',title:{display:true,text:'Pakan (kg)'}},production:{beginAtZero:true,position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'Biomassa (ton)'}},ratio:{beginAtZero:true,position:'right',display:false}}}
+  });
+})();
+
 </script>
 {% endblock %}

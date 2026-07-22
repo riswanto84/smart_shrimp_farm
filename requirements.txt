@@ -1,5 +1,5 @@
-Django==4.2.30
-requests==2.34.2
+Django
+requests
 chardet==5.2.0
 urllib3<3
 charset-normalizer<4
