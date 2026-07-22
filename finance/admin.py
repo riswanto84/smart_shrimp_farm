@@ -1,15 +1,10 @@
 from django.contrib import admin
-from .models import OperationalExpense, OperationalExpenseAttachment, OtherRevenue, BalanceEntry, FixedAsset, TradeAccount, TradePayment
-
-class OperationalExpenseAttachmentInline(admin.TabularInline):
-    model = OperationalExpenseAttachment
-    extra = 0
+from .models import OperationalExpense, OtherRevenue, BalanceEntry, FixedAsset, TradeAccount, TradePayment, TradeDocument
 
 @admin.register(OperationalExpense)
 class OperationalExpenseAdmin(admin.ModelAdmin):
     list_display=('date','category','name','amount','is_fiscal_deductible')
     list_filter=('category','is_fiscal_deductible','date')
-    inlines = (OperationalExpenseAttachmentInline,)
 
 @admin.register(OtherRevenue)
 class OtherRevenueAdmin(admin.ModelAdmin):
@@ -42,3 +37,10 @@ class TradeAccountAdmin(admin.ModelAdmin):
 class TradePaymentAdmin(admin.ModelAdmin):
     list_display=('trade_account','payment_date','amount','payment_method','document_number')
     list_filter=('payment_method','payment_date')
+
+
+@admin.register(TradeDocument)
+class TradeDocumentAdmin(admin.ModelAdmin):
+    list_display=('original_name','trade_account','payment','uploaded_by','uploaded_at')
+    list_filter=('uploaded_at',)
+    search_fields=('original_name','description','trade_account__partner_name','trade_account__document_number')

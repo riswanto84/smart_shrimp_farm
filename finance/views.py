@@ -1,7 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.conf import settings
-from django.core.exceptions import ValidationError
-from django.http import FileResponse
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, Table, TableStyle
@@ -17,42 +15,16 @@ from decimal import Decimal
 import json
 from ponds.models import Pond
 from sales.models import Sale
-from .models import OperationalExpense, OperationalExpenseAttachment
+from .models import OperationalExpense, TradeAccount, TradePayment, TradeDocument
 from core.reporting import get_date_range, filter_by_date_range, format_date_range, export_excel, export_pdf, rupiah
 from core.utils import parse_rupiah
 from core.pagination import paginate_queryset
 from cultivation.utils import get_selected_cycle, filter_selected_cycle
 
 
-
-ALLOWED_EXPENSE_ATTACHMENT_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.webp', '.docx', '.xlsx'}
-MAX_EXPENSE_ATTACHMENT_SIZE = 10 * 1024 * 1024
-MAX_EXPENSE_ATTACHMENTS = 20
-
-
-def _validate_expense_attachments(files, existing_count=0):
-    import os
-    errors = []
-    if existing_count + len(files) > MAX_EXPENSE_ATTACHMENTS:
-        errors.append(f'Maksimal {MAX_EXPENSE_ATTACHMENTS} file per transaksi.')
-    for upload in files:
-        ext = os.path.splitext(upload.name)[1].lower()
-        if ext not in ALLOWED_EXPENSE_ATTACHMENT_EXTENSIONS:
-            errors.append(f'Format file {upload.name} tidak diizinkan.')
-        if upload.size > MAX_EXPENSE_ATTACHMENT_SIZE:
-            errors.append(f'Ukuran file {upload.name} melebihi 10 MB.')
-    return errors
-
-
-def _save_expense_attachments(expense, files):
-    for upload in files:
-        OperationalExpenseAttachment.objects.create(
-            expense=expense, file=upload, original_name=upload.name[:255]
-        )
-
 def _expense_queryset(request):
     date_from, date_to = get_date_range(request)
-    items = filter_selected_cycle(request, OperationalExpense.objects.select_related('pond').prefetch_related('attachments').order_by('-date'))
+    items = filter_selected_cycle(request, OperationalExpense.objects.select_related('pond').order_by('-date'))
     items = filter_by_date_range(items, 'date', date_from, date_to)
     category = request.GET.get('category') or ''
     pond = request.GET.get('pond') or ''
@@ -154,34 +126,19 @@ def export_expenses_pdf(request):
 def add_expense(request):
     ponds = Pond.objects.all()
     if request.method == 'POST':
-        files = request.FILES.getlist('attachments')
-        errors = _validate_expense_attachments(files)
-        if errors:
-            for error in errors:
-                messages.error(request, error)
-            return render(request, 'finance/expense_form.html', {
-                'ponds': ponds, 'categories': OperationalExpense.CATEGORIES,
-                'form_data': request.POST, 'obj': None, 'mode': 'add',
-                'max_files': MAX_EXPENSE_ATTACHMENTS,
-            })
-        obj = OperationalExpense.objects.create(
+        OperationalExpense.objects.create(
             cycle=get_selected_cycle(request, required=True),
             date=request.POST['date'],
             category=request.POST['category'],
             pond_id=request.POST.get('pond') or None,
             name=request.POST['name'],
-            amount=parse_rupiah(request.POST.get('amount')),
+            amount=parse_rupiah(request.POST.get('amount')), 
             payment_method=request.POST.get('payment_method', 'Cash'),
+            receipt=request.FILES.get('receipt'),
             notes=request.POST.get('notes', '')
         )
-        _save_expense_attachments(obj, files)
-        messages.success(request, f'Pengeluaran berhasil disimpan dengan {len(files)} lampiran.')
         return redirect('finance:expenses')
-    return render(request, 'finance/expense_form.html', {
-        'ponds': ponds, 'categories': OperationalExpense.CATEGORIES,
-        'form_data': {}, 'obj': None, 'mode': 'add',
-        'max_files': MAX_EXPENSE_ATTACHMENTS,
-    })
+    return render(request, 'finance/expense_form.html', {'ponds': ponds, 'categories': OperationalExpense.CATEGORIES})
 
 
 def _profit_loss_data(request):
@@ -804,15 +761,6 @@ def edit_expense(request, pk):
     obj = get_object_or_404(OperationalExpense, pk=pk)
     ponds = Pond.objects.all()
     if request.method == 'POST':
-        files = request.FILES.getlist('attachments')
-        errors = _validate_expense_attachments(files, obj.attachments.count())
-        if errors:
-            for error in errors:
-                messages.error(request, error)
-            return render(request, 'finance/expense_form.html', {
-                'ponds': ponds, 'categories': OperationalExpense.CATEGORIES,
-                'obj': obj, 'mode': 'edit', 'max_files': MAX_EXPENSE_ATTACHMENTS,
-            })
         obj.cycle = get_selected_cycle(request, required=True)
         obj.date = request.POST['date']
         obj.category = request.POST['category']
@@ -820,28 +768,12 @@ def edit_expense(request, pk):
         obj.name = request.POST['name']
         obj.amount = parse_rupiah(request.POST.get('amount'))
         obj.payment_method = request.POST.get('payment_method', 'Cash')
+        if request.FILES.get('receipt'):
+            obj.receipt = request.FILES.get('receipt')
         obj.notes = request.POST.get('notes', '')
         obj.save()
-        _save_expense_attachments(obj, files)
-        messages.success(request, f'Pengeluaran diperbarui. {len(files)} lampiran baru ditambahkan.')
         return redirect('finance:expenses')
-    return render(request, 'finance/expense_form.html', {
-        'ponds': ponds, 'categories': OperationalExpense.CATEGORIES,
-        'obj': obj, 'mode': 'edit', 'max_files': MAX_EXPENSE_ATTACHMENTS,
-    })
-
-@login_required
-@permission_required('finance.expenses')
-@require_POST
-def delete_expense_attachment(request, pk):
-    attachment = get_object_or_404(OperationalExpenseAttachment, pk=pk)
-    expense_id = attachment.expense_id
-    if attachment.file:
-        attachment.file.delete(save=False)
-    attachment.delete()
-    messages.success(request, 'Lampiran berhasil dihapus.')
-    return redirect('finance:edit_expense', pk=expense_id)
-
+    return render(request, 'finance/expense_form.html', {'ponds': ponds, 'categories': OperationalExpense.CATEGORIES, 'obj': obj, 'mode': 'edit'})
 
 @login_required
 @permission_required('finance.expenses')
@@ -1147,6 +1079,35 @@ def export_depreciation_pdf(request):
         d=_asset_depreciation(a,as_of); tc+=a.total_cost; ta+=d['accumulated']; tb+=d['book_value']; rows.append([a.code,a.name,a.get_fiscal_group_display(),rupiah(a.total_cost),rupiah(d['annual']),rupiah(d['accumulated']),rupiah(d['book_value'])])
     return export_pdf('daftar_aset_penyusutan','Daftar Aset dan Penyusutan Fiskal',f"Posisi per {as_of.strftime('%d/%m/%Y')}",['Kode','Nama Aset','Kelompok','Perolehan','Penyusutan/Tahun','Akumulasi','Nilai Buku'],rows,[['','','TOTAL',rupiah(tc),'',rupiah(ta),rupiah(tb)]])
 
+
+
+ALLOWED_TRADE_DOCUMENT_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.webp', '.doc', '.docx', '.xls', '.xlsx'}
+MAX_TRADE_DOCUMENT_SIZE = 10 * 1024 * 1024
+
+def _save_trade_documents(request, trade_account, payment=None):
+    uploaded_files = request.FILES.getlist('documents')
+    saved = 0
+    rejected = []
+    for uploaded in uploaded_files:
+        from pathlib import Path
+        extension = Path(uploaded.name).suffix.lower()
+        if extension not in ALLOWED_TRADE_DOCUMENT_EXTENSIONS:
+            rejected.append(f"{uploaded.name} (format tidak didukung)")
+            continue
+        if uploaded.size > MAX_TRADE_DOCUMENT_SIZE:
+            rejected.append(f"{uploaded.name} (lebih dari 10 MB)")
+            continue
+        TradeDocument.objects.create(
+            trade_account=trade_account, payment=payment, file=uploaded,
+            original_name=uploaded.name[:255],
+            description=(request.POST.get('document_description') or '').strip()[:180],
+            uploaded_by=request.user if request.user.is_authenticated else None,
+        )
+        saved += 1
+    if rejected:
+        messages.warning(request, 'Sebagian dokumen tidak diunggah: ' + '; '.join(rejected))
+    return saved
+
 # =============================================================================
 # UTANG DAN PIUTANG USAHA
 # =============================================================================
@@ -1233,7 +1194,8 @@ def add_trade_account(request, account_type):
                 description=request.POST.get('description','').strip(),
                 original_amount=amount, notes=request.POST.get('notes','').strip(),
             )
-            messages.success(request, f'{obj.get_account_type_display()} berhasil disimpan.')
+            document_count = _save_trade_documents(request, obj)
+            messages.success(request, f'{obj.get_account_type_display()} berhasil disimpan' + (f' dengan {document_count} dokumen.' if document_count else '.'))
             return redirect('finance:trade_detail', pk=obj.pk)
     return render(request, 'finance/trade_account_form.html', {
         'account_type': account_type,
@@ -1260,7 +1222,8 @@ def edit_trade_account(request, pk):
             obj.partner_name=request.POST.get('partner_name','').strip()
             obj.description=request.POST.get('description','').strip()
             obj.original_amount=amount; obj.notes=request.POST.get('notes','').strip(); obj.save()
-            messages.success(request, 'Data berhasil diperbarui.')
+            document_count = _save_trade_documents(request, obj)
+            messages.success(request, 'Data berhasil diperbarui' + (f' dan {document_count} dokumen ditambahkan.' if document_count else '.'))
             return redirect('finance:trade_detail', pk=obj.pk)
     return render(request, 'finance/trade_account_form.html', {
         'obj':obj, 'account_type':obj.account_type,
@@ -1272,10 +1235,11 @@ def edit_trade_account(request, pk):
 @login_required
 @permission_required('finance.tax_reports')
 def trade_detail(request, pk):
-    obj = get_object_or_404(TradeAccount.objects.prefetch_related('payments'), pk=pk)
+    obj = get_object_or_404(TradeAccount.objects.prefetch_related('payments__documents', 'documents'), pk=pk)
     return render(request, 'finance/trade_account_detail.html', {
         'obj':obj, 'payments':obj.payments.all(), 'paid':obj.paid_amount,
         'outstanding':obj.outstanding_amount,
+        'account_documents': obj.documents.filter(payment__isnull=True),
     })
 
 
@@ -1292,13 +1256,14 @@ def add_trade_payment(request, pk):
     elif amount > obj.outstanding_amount:
         messages.error(request, 'Pembayaran tidak boleh melebihi sisa saldo.')
     else:
-        TradePayment.objects.create(
+        payment = TradePayment.objects.create(
             trade_account=obj, payment_date=payment_date, amount=amount,
             payment_method=request.POST.get('payment_method','Transfer'),
             document_number=request.POST.get('document_number','').strip(),
             notes=request.POST.get('notes','').strip(),
         )
-        messages.success(request, 'Pembayaran berhasil dicatat.')
+        document_count = _save_trade_documents(request, obj, payment=payment)
+        messages.success(request, 'Pembayaran berhasil dicatat' + (f' dengan {document_count} dokumen.' if document_count else '.'))
     return redirect('finance:trade_detail', pk=obj.pk)
 
 
@@ -1310,6 +1275,34 @@ def delete_trade_payment(request, pk):
     account_pk = payment.trade_account_id
     payment.delete()
     messages.success(request, 'Pembayaran berhasil dihapus.')
+    return redirect('finance:trade_detail', pk=account_pk)
+
+
+@login_required
+@permission_required('finance.tax_reports')
+@require_POST
+def upload_trade_documents(request, pk):
+    obj = get_object_or_404(TradeAccount, pk=pk)
+    count = _save_trade_documents(request, obj)
+    if count:
+        messages.success(request, f'{count} dokumen berhasil diunggah.')
+    elif not request.FILES.getlist('documents'):
+        messages.error(request, 'Pilih minimal satu dokumen untuk diunggah.')
+    return redirect('finance:trade_detail', pk=obj.pk)
+
+
+@login_required
+@permission_required('finance.tax_reports')
+@require_POST
+def delete_trade_document(request, pk):
+    document = get_object_or_404(TradeDocument, pk=pk)
+    account_pk = document.trade_account_id
+    storage = document.file.storage
+    file_name = document.file.name
+    document.delete()
+    if file_name and storage.exists(file_name):
+        storage.delete(file_name)
+    messages.success(request, 'Dokumen berhasil dihapus.')
     return redirect('finance:trade_detail', pk=account_pk)
 
 
