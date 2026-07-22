@@ -5,7 +5,7 @@ from django.contrib.auth.decorators import login_required
 from accounts.rbac import permission_required
 from ponds.models import Pond
 from operations.models import DailyParameter, SamplingRecord, Harvest
-from sales.models import Sale
+from sales.models import Sale, SaleItem
 from finance.models import OperationalExpense
 from django.db.models import Sum
 from django.utils import timezone
@@ -77,6 +77,44 @@ def dashboard(request):
     harvest_total_ton = harvest_total_kg / Decimal('1000')
     harvest_count = harvest_qs.count()
     latest_harvests = list(harvest_qs[:8])
+
+    # Harga jual dan size riil dipadankan dari detail nota penjualan yang
+    # menunjuk ke record panen. Tidak memerlukan perubahan model/migrasi.
+    latest_harvest_ids = [harvest.id for harvest in latest_harvests]
+    linked_sale_items = (
+        SaleItem.objects.select_related('sale', 'harvest')
+        .filter(
+            harvest_id__in=latest_harvest_ids,
+            sale__in=valid_sales,
+        )
+        .order_by('sale__date', 'id')
+    )
+    sale_items_by_harvest = {}
+    for item in linked_sale_items:
+        sale_items_by_harvest.setdefault(item.harvest_id, []).append(item)
+
+    latest_harvest_rows = []
+    for harvest in latest_harvests:
+        items = sale_items_by_harvest.get(harvest.id, [])
+        sold_kg = sum((item.weight_kg or Decimal('0') for item in items), Decimal('0'))
+        sold_subtotal = sum((item.subtotal or Decimal('0') for item in items), Decimal('0'))
+        weighted_price = sold_subtotal / sold_kg if sold_kg > 0 else Decimal('0')
+        sale_sizes = []
+        for item in items:
+            size = (item.size_text or '').strip()
+            if size and size not in sale_sizes:
+                sale_sizes.append(size)
+        latest_harvest_rows.append({
+            'harvest': harvest,
+            'actual_size': ' / '.join(sale_sizes) or harvest.size_text or '-',
+            'sold_kg': sold_kg,
+            'price_per_kg': weighted_price,
+            'subtotal': sold_subtotal,
+            'has_sale': bool(items),
+        })
+
+    latest_harvest_size = latest_harvest_rows[0]['actual_size'] if latest_harvest_rows else '-'
+    latest_harvest_price = latest_harvest_rows[0]['price_per_kg'] if latest_harvest_rows else Decimal('0')
 
     target_harvest_ton = Decimal(str(getattr(selected_cycle, 'target_biomass_ton', 0) or 0))
     target_harvest_kg = target_harvest_ton * Decimal('1000')
@@ -293,6 +331,9 @@ def dashboard(request):
         'harvest_total_ton': harvest_total_ton,
         'harvest_count': harvest_count,
         'latest_harvests': latest_harvests,
+        'latest_harvest_rows': latest_harvest_rows,
+        'latest_harvest_size': latest_harvest_size,
+        'latest_harvest_price': latest_harvest_price,
         'target_harvest_ton': target_harvest_ton,
         'target_harvest_kg': target_harvest_kg,
         'harvest_progress_percent': harvest_progress_percent,
