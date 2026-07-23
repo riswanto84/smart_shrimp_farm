@@ -18,7 +18,7 @@ from pathlib import Path
 import json
 import mimetypes
 from ponds.models import Pond
-from sales.models import Sale
+from sales.models import Sale, Customer
 from .models import OperationalExpense, ExpenseDocument, TradeAccount, TradePayment, TradeDocument
 from core.reporting import get_date_range, filter_by_date_range, format_date_range, export_excel, export_pdf, rupiah
 from core.utils import parse_rupiah
@@ -1244,6 +1244,32 @@ def _trade_summary(rows):
     return original, paid, outstanding, overdue
 
 
+def _sale_from_trade_account(obj):
+    """Ambil nota sumber dari penanda kartu piutang otomatis."""
+    from .receivable_sync import AUTO_NOTE_PREFIX
+    notes = obj.notes or ''
+    for line in notes.splitlines():
+        if line.startswith(AUTO_NOTE_PREFIX):
+            try:
+                return Sale.objects.filter(pk=int(line[len(AUTO_NOTE_PREFIX):].strip())).first()
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
+def _sync_sale_status_from_receivable(obj):
+    """Samakan status nota dengan saldo kartu piutang setelah cicilan berubah."""
+    if obj.account_type != TradeAccount.RECEIVABLE:
+        return
+    sale = _sale_from_trade_account(obj)
+    if not sale:
+        return
+    new_status = 'Lunas' if obj.outstanding_amount <= 0 else 'Belum Lunas'
+    if sale.status != new_status:
+        sale.status = new_status
+        sale.save(update_fields=['status'])
+
+
 @login_required
 @permission_required('finance.tax_reports')
 def receivables(request):
@@ -1280,7 +1306,12 @@ def add_trade_account(request, account_type):
         amount = parse_rupiah(request.POST.get('original_amount'))
         transaction_date = parse_date(request.POST.get('transaction_date') or '')
         due_date = parse_date(request.POST.get('due_date') or '')
-        if amount <= 0 or not transaction_date or not due_date:
+        customer = None
+        if account_type == TradeAccount.RECEIVABLE:
+            customer = Customer.objects.filter(pk=request.POST.get('customer_id')).first()
+        if account_type == TradeAccount.RECEIVABLE and customer is None:
+            messages.error(request, 'Pilih pelanggan dari Master Pelanggan.')
+        elif amount <= 0 or not transaction_date or not due_date:
             messages.error(request, 'Tanggal dan nilai transaksi wajib diisi dengan benar.')
         elif due_date < transaction_date:
             messages.error(request, 'Tanggal jatuh tempo tidak boleh sebelum tanggal transaksi.')
@@ -1289,7 +1320,8 @@ def add_trade_account(request, account_type):
                 cycle=get_selected_cycle(request), account_type=account_type,
                 transaction_date=transaction_date, due_date=due_date,
                 document_number=request.POST.get('document_number','').strip(),
-                partner_name=request.POST.get('partner_name','').strip(),
+                customer=customer,
+                partner_name=customer.name if customer else request.POST.get('partner_name','').strip(),
                 description=request.POST.get('description','').strip(),
                 original_amount=amount, notes=request.POST.get('notes','').strip(),
             )
@@ -1300,6 +1332,7 @@ def add_trade_account(request, account_type):
         'account_type': account_type,
         'title': 'Tambah Piutang Usaha' if account_type == TradeAccount.RECEIVABLE else 'Tambah Utang Usaha',
         'partner_label': 'Pelanggan' if account_type == TradeAccount.RECEIVABLE else 'Supplier/Pemasok',
+        'customers': Customer.objects.order_by('name') if account_type == TradeAccount.RECEIVABLE else None,
     })
 
 
@@ -1311,14 +1344,20 @@ def edit_trade_account(request, pk):
         amount = parse_rupiah(request.POST.get('original_amount'))
         transaction_date = parse_date(request.POST.get('transaction_date') or '')
         due_date = parse_date(request.POST.get('due_date') or '')
-        if amount < obj.paid_amount:
+        customer = obj.customer
+        if obj.account_type == TradeAccount.RECEIVABLE:
+            customer = Customer.objects.filter(pk=request.POST.get('customer_id')).first()
+        if obj.account_type == TradeAccount.RECEIVABLE and customer is None:
+            messages.error(request, 'Pilih pelanggan dari Master Pelanggan.')
+        elif amount < obj.paid_amount:
             messages.error(request, 'Nilai awal tidak boleh lebih kecil dari total pembayaran yang sudah dicatat.')
         elif not transaction_date or not due_date or due_date < transaction_date:
             messages.error(request, 'Periksa kembali tanggal transaksi dan jatuh tempo.')
         else:
             obj.transaction_date=transaction_date; obj.due_date=due_date
             obj.document_number=request.POST.get('document_number','').strip()
-            obj.partner_name=request.POST.get('partner_name','').strip()
+            obj.customer = customer
+            obj.partner_name = customer.name if customer else request.POST.get('partner_name','').strip()
             obj.description=request.POST.get('description','').strip()
             obj.original_amount=amount; obj.notes=request.POST.get('notes','').strip(); obj.save()
             document_count = _save_trade_documents(request, obj)
@@ -1328,6 +1367,7 @@ def edit_trade_account(request, pk):
         'obj':obj, 'account_type':obj.account_type,
         'title':'Edit '+obj.get_account_type_display(),
         'partner_label':'Pelanggan' if obj.account_type == TradeAccount.RECEIVABLE else 'Supplier/Pemasok',
+        'customers': Customer.objects.order_by('name') if obj.account_type == TradeAccount.RECEIVABLE else None,
     })
 
 
@@ -1362,7 +1402,8 @@ def add_trade_payment(request, pk):
             notes=request.POST.get('notes','').strip(),
         )
         document_count = _save_trade_documents(request, obj, payment=payment)
-        messages.success(request, 'Pembayaran berhasil dicatat' + (f' dengan {document_count} dokumen.' if document_count else '.'))
+        _sync_sale_status_from_receivable(obj)
+        messages.success(request, 'Pembayaran sebagian berhasil dicatat' + (f' dengan {document_count} dokumen.' if document_count else '.') + f' Sisa saldo: {rupiah(obj.outstanding_amount)}.')
     return redirect('finance:trade_detail', pk=obj.pk)
 
 
@@ -1372,8 +1413,10 @@ def add_trade_payment(request, pk):
 def delete_trade_payment(request, pk):
     payment = get_object_or_404(TradePayment, pk=pk)
     account_pk = payment.trade_account_id
+    account = payment.trade_account
     payment.delete()
-    messages.success(request, 'Pembayaran berhasil dihapus.')
+    _sync_sale_status_from_receivable(account)
+    messages.success(request, 'Pembayaran berhasil dihapus dan saldo piutang diperbarui.')
     return redirect('finance:trade_detail', pk=account_pk)
 
 

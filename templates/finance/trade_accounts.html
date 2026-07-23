@@ -64,7 +64,7 @@
           <strong>{{ r.item.document_number|default:'-' }}</strong><br>
           <small>{{ r.item.description }}</small>
         </td>
-        <td>{{ r.item.partner_name }}</td>
+        <td><strong>{{ r.item.customer.name|default:r.item.partner_name }}</strong>{% if r.item.customer.phone %}<br><small class="text-muted">{{ r.item.customer.phone }}</small>{% endif %}</td>
         <td>{{ r.item.transaction_date|date:'d/m/Y' }}</td>
         <td>{{ r.item.due_date|date:'d/m/Y' }}</td>
         <td class="text-end">{{ r.item.original_amount|rupiah }}</td>

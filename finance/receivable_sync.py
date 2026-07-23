@@ -34,14 +34,16 @@ def sale_paid_amount(sale):
     metode pembayaran.
     """
     total = max(_money(sale.total_amount), Decimal('0'))
-    if sale.status == 'Lunas':
-        return total
     paid = sum((
         _money(getattr(sale, 'cash_amount', 0)),
         _money(getattr(sale, 'transfer_amount', 0)),
         _money(getattr(sale, 'qris_amount', 0)),
         _money(getattr(sale, 'other_payment_amount', 0)),
     ), Decimal('0'))
+    # Nota lama kadang berstatus Lunas tanpa rincian nominal pembayaran.
+    # Hanya pada kondisi itu pembayaran dianggap sama dengan total nota.
+    if sale.status == 'Lunas' and paid <= 0:
+        return total
     return min(max(paid, Decimal('0')), total)
 
 
@@ -110,6 +112,7 @@ def sync_sale_receivable(sale):
             transaction_date=transaction_date,
             due_date=transaction_date + timedelta(days=DEFAULT_DUE_DAYS),
             document_number=sale.invoice_no,
+            customer=sale.customer,
             partner_name=customer_name,
             description=f'Piutang otomatis dari Nota Penjualan {sale.invoice_no}',
             original_amount=total,
@@ -122,6 +125,7 @@ def sync_sale_receivable(sale):
         if not account.due_date:
             account.due_date = transaction_date + timedelta(days=DEFAULT_DUE_DAYS)
         account.document_number = sale.invoice_no
+        account.customer = sale.customer
         account.partner_name = customer_name
         account.description = f'Piutang otomatis dari Nota Penjualan {sale.invoice_no}'
         account.original_amount = total

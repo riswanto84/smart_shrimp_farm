@@ -121,6 +121,10 @@ class TradeAccount(models.Model):
     transaction_date = models.DateField(verbose_name='Tanggal transaksi')
     due_date = models.DateField(verbose_name='Tanggal jatuh tempo')
     document_number = models.CharField(max_length=80, blank=True, verbose_name='Nomor dokumen')
+    customer = models.ForeignKey(
+        'sales.Customer', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='receivables', verbose_name='Pelanggan'
+    )
     partner_name = models.CharField(max_length=180, verbose_name='Pelanggan/Supplier')
     description = models.CharField(max_length=220)
     original_amount = models.DecimalField(max_digits=16, decimal_places=2, verbose_name='Nilai awal')
