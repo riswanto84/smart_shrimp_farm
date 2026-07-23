@@ -5,7 +5,7 @@ from datetime import timedelta
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum, Avg, Count
+from django.db.models import Sum, Avg, Count, Max
 from django.utils import timezone
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -326,6 +326,218 @@ def _sampling_payload(request):
 
 @login_required
 @permission_required('operations.production_dashboard')
+@permission_required('operations.growth_prediction')
+def growth_prediction_dashboard(request):
+    """Prediksi ukuran/ABW per kolam berbasis histori sampling aktual.
+
+    Algoritma bawaan sengaja transparan dan tidak bergantung pada Ollama:
+    laju pertumbuhan memakai slope ABW terhadap DOC dari maksimal empat
+    sampling terakhir. Jika histori belum cukup, sistem memakai ADG aktual,
+    ADG kumulatif, lalu target ADG siklus sebagai fallback.
+    """
+    selected_cycle = get_selected_cycle(request)
+    ponds = Pond.objects.all().order_by('name')
+    samples_qs = filter_selected_cycle(
+        request,
+        SamplingRecord.objects.select_related('pond').all(),
+    )
+
+    pond_id = request.GET.get('pond') or ''
+    try:
+        pond_id_int = int(pond_id) if pond_id else None
+    except (TypeError, ValueError):
+        pond_id_int = None
+
+    target_doc = int(getattr(selected_cycle, 'target_doc', 120) or 120)
+    duration_doc = int(getattr(selected_cycle, 'target_duration_days', 135) or 135)
+    requested_horizon = request.GET.get('horizon') or str(max(target_doc, 120))
+    try:
+        horizon_doc = int(requested_horizon)
+    except (TypeError, ValueError):
+        horizon_doc = max(target_doc, 120)
+
+    # Target DOC diketik manual. Pastikan tidak lebih kecil dari DOC sampling
+    # terakhir kolam terpilih dan batasi sampai DOC 250 agar proyeksi tetap wajar.
+    horizon_sample_qs = samples_qs
+    if pond_id_int:
+        horizon_sample_qs = horizon_sample_qs.filter(pond_id=pond_id_int)
+    latest_input_doc = int(horizon_sample_qs.aggregate(value=Max('doc')).get('value') or 0)
+    minimum_horizon_doc = max(1, latest_input_doc)
+    horizon_doc = max(minimum_horizon_doc, min(horizon_doc, 250))
+    target_adg = _float(getattr(selected_cycle, 'target_adg', 0.25) or 0.25)
+    cycle_start = getattr(selected_cycle, 'start_date', None)
+
+    def unique_doc_samples(pond):
+        # Satu titik per DOC: bila ada duplikat impor, pakai record terbaru.
+        by_doc = {}
+        for sample in samples_qs.filter(pond=pond).order_by('doc', '-date', '-id'):
+            doc = int(sample.doc or 0)
+            if doc > 0 and doc not in by_doc and _float(sample.abw_g) > 0:
+                by_doc[doc] = sample
+        return [by_doc[d] for d in sorted(by_doc)]
+
+    def estimate_adg(records):
+        recent = records[-4:]
+        slopes = []
+        for left, right in zip(recent, recent[1:]):
+            delta_doc = int(right.doc or 0) - int(left.doc or 0)
+            delta_abw = _float(right.abw_g) - _float(left.abw_g)
+            if delta_doc > 0 and delta_abw > 0:
+                slopes.append(delta_abw / delta_doc)
+        if slopes:
+            # Rata-rata interval aktual, dengan pembatas untuk meredam outlier input.
+            adg = sum(slopes) / len(slopes)
+        elif records:
+            latest = records[-1]
+            adg = _float(latest.adg_weekly) or _float(latest.adg_cumulative) or target_adg
+        else:
+            adg = target_adg
+        return max(0.03, min(adg, 0.60))
+
+    def date_for_doc(doc, latest=None):
+        if cycle_start:
+            return cycle_start + timedelta(days=max(int(doc) - 1, 0))
+        if latest and latest.date:
+            return latest.date + timedelta(days=max(int(doc) - int(latest.doc or 0), 0))
+        return None
+
+    pond_payloads = []
+    all_chart_rows = {}
+    milestone_sizes = [100, 80, 70, 60, 50, 40, 30]
+
+    for pond in ponds:
+        records = unique_doc_samples(pond)
+        if not records:
+            continue
+        latest = records[-1]
+        latest_doc = int(latest.doc or 0)
+        latest_abw = _float(latest.abw_g)
+        latest_size = 1000.0 / latest_abw if latest_abw > 0 else 0
+        adg = estimate_adg(records)
+        population = int(latest.population or latest.population_index or 0)
+        if population <= 0:
+            stocking = int(latest.stocking_count or getattr(pond, 'capacity_seed', 0) or 0)
+            sr = _float(latest.estimated_sr) or _float(latest.sr_index_percent) or _float(getattr(selected_cycle, 'target_sr_percent', 85) or 85)
+            population = round(stocking * sr / 100.0) if stocking and sr else 0
+        latest_fcr = _float(latest.fcr)
+
+        actual = []
+        for sample in records:
+            abw = _float(sample.abw_g)
+            size = 1000.0 / abw if abw > 0 else 0
+            biomass = _float(sample.biomass_kg) or _float(sample.biomass_index_kg)
+            if biomass <= 0:
+                pop = int(sample.population or sample.population_index or 0)
+                biomass = pop * abw / 1000.0 if pop and abw else 0
+            actual.append({
+                'doc': int(sample.doc or 0),
+                'date': sample.date.strftime('%d %b %Y'),
+                'abw': round(abw, 2),
+                'size': round(size, 1),
+                'biomass_ton': round(biomass / 1000.0, 3),
+                'adg': round(_float(sample.adg_weekly) or _float(sample.adg_cumulative), 3),
+                'fcr': round(_float(sample.fcr), 3),
+            })
+
+        projection = []
+        end_doc = max(horizon_doc, latest_doc)
+        projection_docs = list(range(latest_doc, end_doc + 1, 7))
+        if end_doc not in projection_docs:
+            projection_docs.append(end_doc)
+        for doc in projection_docs:
+            abw = latest_abw + adg * max(doc - latest_doc, 0)
+            size = 1000.0 / abw if abw > 0 else 0
+            biomass_kg = population * abw / 1000.0 if population else 0
+            predicted_date = date_for_doc(doc, latest)
+            row = {
+                'doc': doc,
+                'date': predicted_date.strftime('%d %b %Y') if predicted_date else '',
+                'abw': round(abw, 2),
+                'size': round(size, 1),
+                'biomass_ton': round(biomass_kg / 1000.0, 3),
+            }
+            projection.append(row)
+            all_chart_rows.setdefault(doc, {'doc': doc})[f'p{pond.id}'] = round(size, 1)
+
+        # Masukkan titik aktual ke grafik perbandingan agar garis dimulai dari data nyata.
+        for row in actual:
+            all_chart_rows.setdefault(row['doc'], {'doc': row['doc']})[f'p{pond.id}'] = row['size']
+
+        milestones = []
+        for target_size in milestone_sizes:
+            target_abw = 1000.0 / target_size
+            if latest_abw >= target_abw:
+                days_needed = 0
+                status = 'Tercapai'
+            elif adg > 0:
+                days_needed = math.ceil((target_abw - latest_abw) / adg)
+                status = 'Prediksi'
+            else:
+                days_needed = None
+                status = 'Belum cukup data'
+            target_date = latest.date + timedelta(days=days_needed) if days_needed is not None else None
+            target_doc_value = latest_doc + days_needed if days_needed is not None else None
+            milestones.append({
+                'size': target_size,
+                'date': target_date,
+                'doc': target_doc_value,
+                'days': days_needed,
+                'status': status,
+            })
+
+        if adg >= target_adg * 1.05:
+            growth_status, status_class = 'Lebih cepat dari target', 'good'
+        elif adg >= target_adg * 0.85:
+            growth_status, status_class = 'Sesuai target', 'normal'
+        else:
+            growth_status, status_class = 'Perlu perhatian', 'warn'
+
+        target_projection = next((x for x in projection if x['doc'] == end_doc), projection[-1])
+        pond_payloads.append({
+            'pond': pond,
+            'actual': actual,
+            'projection': projection,
+            'latest': latest,
+            'latest_doc': latest_doc,
+            'latest_abw': round(latest_abw, 2),
+            'latest_size': round(latest_size, 1),
+            'adg': round(adg, 3),
+            'fcr': round(latest_fcr, 3),
+            'population': population,
+            'projected_size': target_projection['size'],
+            'projected_abw': target_projection['abw'],
+            'projected_biomass_ton': target_projection['biomass_ton'],
+            'milestones': milestones,
+            'growth_status': growth_status,
+            'status_class': status_class,
+        })
+
+    selected_payload = None
+    if pond_payloads:
+        selected_payload = next((x for x in pond_payloads if x['pond'].id == pond_id_int), pond_payloads[0])
+        pond_id_int = selected_payload['pond'].id
+
+    all_series = [
+        {'key': f"p{x['pond'].id}", 'label': x['pond'].name}
+        for x in pond_payloads
+    ]
+    all_chart = [all_chart_rows[d] for d in sorted(all_chart_rows)]
+
+    context = {
+        'ponds': ponds,
+        'pond_payloads': pond_payloads,
+        'selected_payload': selected_payload,
+        'selected_pond_id': pond_id_int,
+        'selected_cycle': selected_cycle,
+        'target_doc': target_doc,
+        'horizon_doc': horizon_doc,
+        'target_adg': target_adg,
+        'all_chart': all_chart,
+        'all_series': all_series,
+    }
+    return render(request, 'operations/growth_prediction_dashboard.html', context)
+
+
 def production_dashboard(request):
     """Dashboard produksi dengan data aktual berdasarkan siklus terpilih.
 

@@ -6,6 +6,7 @@ urlpatterns = [
     path('import/<str:module>/', cycle_write_guard(views.import_excel), name='import_excel'),
     path('import/<str:module>/template/', views.download_import_template, name='download_import_template'),
     path('production-dashboard/', views.production_dashboard, name='production_dashboard'),
+    path('growth-prediction/', views.growth_prediction_dashboard, name='growth_prediction_dashboard'),
     path('parameter-dashboard/', views.parameter_dashboard, name='parameter_dashboard'),
     path('daily-records/', views.daily_records, name='daily_records'),
     path('daily-records/add/', cycle_write_guard(views.add_daily_record), name='add_daily_record'),

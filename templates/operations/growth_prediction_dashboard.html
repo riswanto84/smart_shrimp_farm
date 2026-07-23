@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% load currency %}
+{% block title %}Prediksi Pertumbuhan | Smart Shrimp Farm{% endblock %}
+{% block content %}
+<style>
+.growth-page{--navy:#0b2f62;--blue:#2377ee;--muted:#65758b;--border:#dfe8f3;max-width:1600px;margin:0 auto}.growth-page *{box-sizing:border-box}.growth-page .growth-head{display:flex;justify-content:space-between;gap:20px;align-items:center;margin:0 0 18px}.growth-page h1{font-size:28px;line-height:1.15;margin:0;color:#102849;font-weight:800;letter-spacing:-.025em}.growth-page .subtitle{color:var(--muted);margin:7px 0 0;font-size:14px}.growth-page .growth-card{background:#fff;border:1px solid var(--border);border-radius:18px;box-shadow:0 10px 28px rgba(15,42,79,.055);padding:20px;margin-bottom:16px}.growth-page .filter-card{padding:18px 20px}.growth-page .filter-row{display:grid;grid-template-columns:minmax(360px,1fr) minmax(280px,340px) 160px;gap:16px;align-items:start}.growth-page .filter-row>.field-block,.growth-page .filter-action{display:flex;flex-direction:column;min-width:0}.growth-page .filter-action-label{display:block;font-size:12px;font-weight:800;color:transparent;margin-bottom:7px;user-select:none}.growth-page .filter-action-help{height:23px;margin-top:7px}.growth-page .field-block{min-width:0}.growth-page label{display:block;font-size:12px;font-weight:800;color:#40536d;margin-bottom:7px}.growth-page .form-select,.growth-page .form-control,.growth-page .input-group-text{min-height:50px;border-color:#d7e2ef}.growth-page .form-select,.growth-page .form-control{font-size:15px;color:#162b49}.growth-page .form-select:focus,.growth-page .form-control:focus{border-color:#6ca5f6;box-shadow:0 0 0 .2rem rgba(45,127,249,.13)}.growth-page .input-group-text{background:#f6f9fd;color:#40536d;font-weight:800}.growth-page .doc-help{display:flex;justify-content:space-between;gap:10px;margin-top:7px;color:#748399;font-size:11px}.growth-page .filter-submit{height:50px;min-height:50px;width:100%;border-radius:11px;font-weight:800;box-shadow:0 8px 18px rgba(11,47,98,.16);display:flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}.growth-page .kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(155px,1fr)) minmax(210px,1.2fr);gap:12px;margin-bottom:16px}.growth-page .kpi{position:relative;overflow:hidden;background:#fff;border:1px solid var(--border);border-radius:17px;padding:17px 17px 15px;min-height:142px;box-shadow:0 8px 24px rgba(15,42,79,.045)}.growth-page .kpi:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:#dbeafe}.growth-page .kpi-icon{width:36px;height:36px;display:grid;place-items:center;border-radius:11px;background:#edf5ff;color:var(--blue);font-size:17px}.growth-page .kpi span{display:block;font-size:10.5px;font-weight:900;color:#687990;margin-top:11px;text-transform:uppercase;letter-spacing:.075em}.growth-page .kpi strong{display:block;font-size:23px;line-height:1.25;color:#102849;margin:5px 0 4px;font-weight:800;letter-spacing:-.025em}.growth-page .kpi small{display:block;color:var(--muted);font-size:12px;line-height:1.45}.growth-page .kpi.status-card:before{background:#67c996}.growth-page .kpi.status-card{background:linear-gradient(145deg,#fff 0%,#f5fff9 100%)}.growth-page .status-good{color:#118650!important}.growth-page .status-normal{color:#2563eb!important}.growth-page .status-warn{color:#d97706!important}.growth-page .chart-title{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}.growth-page .chart-title h2{font-size:18px;margin:0;color:#102849;font-weight:800}.growth-page .chart-title small{font-size:12px;color:#6d7d92;text-align:right}.growth-page .chart-box{height:410px;position:relative;border:1px solid #edf2f8;border-radius:14px;padding:10px;background:linear-gradient(180deg,#fff,#fbfdff)}.growth-page .grid-2{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(360px,1fr);gap:16px}.growth-page .legend-note{font-size:12px;color:#536a87;background:#eef6ff;border:1px solid #d4e6ff;border-radius:10px;padding:10px 12px;margin-top:12px}.growth-page .milestone-table{margin-bottom:0}.growth-page .milestone-table th{font-size:10.5px;text-transform:uppercase;color:#62738b;letter-spacing:.065em}.growth-page .milestone-table td{vertical-align:middle;color:#233750}.growth-page .badge-predict,.growth-page .badge-done{border-radius:999px;padding:6px 10px;font-size:10.5px;font-weight:900}.growth-page .badge-predict{background:#eaf2ff;color:#1766cc}.growth-page .badge-done{background:#e5f8ef;color:#118650}.growth-page .pond-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.growth-page .summary-row{border:1px solid #e4ebf4;background:#f8fafc;border-radius:12px;padding:12px;min-width:0}.growth-page .summary-row span{display:block;color:#687a91;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;font-weight:800}.growth-page .summary-row b{display:block;color:#102849;font-size:16px;margin-top:5px;overflow-wrap:anywhere}.growth-page .empty{padding:50px;text-align:center;color:#718096}.growth-page .formula{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.growth-page .formula div{background:#f8fafc;border:1px solid #e8eef6;border-radius:12px;padding:12px;color:#52647e;font-size:11.5px;line-height:1.5}.growth-page .formula b{display:block;color:#102849;margin-bottom:4px;font-size:12px}
+@media(max-width:1380px){.growth-page .kpi-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:1050px){.growth-page .grid-2{grid-template-columns:1fr}.growth-page .filter-row{grid-template-columns:minmax(300px,1fr) minmax(240px,300px) 150px}}
+@media(max-width:760px){.growth-page .filter-row{grid-template-columns:1fr}.growth-page .filter-action-label,.growth-page .filter-action-help{display:none}.growth-page .kpi-grid{grid-template-columns:repeat(2,1fr)}.growth-page .formula{grid-template-columns:1fr}.growth-page .pond-summary{grid-template-columns:repeat(2,1fr)}.growth-page .chart-box{height:330px}.growth-page .chart-title{display:block}.growth-page .chart-title small{display:block;text-align:left;margin-top:5px}}
+@media(max-width:520px){.growth-page .growth-head{display:block}.growth-page .growth-head .btn{margin-top:12px}.growth-page h1{font-size:23px}.growth-page .kpi-grid{grid-template-columns:1fr}.growth-page .pond-summary{grid-template-columns:1fr}.growth-page .growth-card{padding:15px}.growth-page .chart-box{height:300px}}
+</style>
+<div class="growth-page">
+  <div class="growth-head">
+    <div>
+      <h1><i class="fa-solid fa-arrow-trend-up"></i> Prediksi Pertumbuhan per Kolam</h1>
+      <p class="subtitle">Pantau size aktual dan proyeksi ukuran udang sampai akhir masa budidaya berdasarkan histori sampling.</p>
+    </div>
+    <a class="btn btn-outline-primary" href="{% url 'operations:production_dashboard' %}"><i class="fa-solid fa-chart-column"></i> Dashboard Produksi</a>
+  </div>
+
+  <section class="growth-card filter-card">
+    <form method="get" class="filter-row">
+      <div class="field-block"><label for="pond">Kolam budidaya</label><select class="form-select" id="pond" name="pond">{% for item in pond_payloads %}<option value="{{ item.pond.id }}" {% if selected_pond_id == item.pond.id %}selected{% endif %}>{{ item.pond.name }} — DOC {{ item.latest_doc }}</option>{% empty %}<option value="">Belum ada sampling</option>{% endfor %}</select></div>
+      <div class="field-block">
+        <label for="horizon">Target proyeksi DOC</label>
+        <div class="input-group">
+          <span class="input-group-text">DOC</span>
+          <input class="form-control" id="horizon" name="horizon" type="number" inputmode="numeric" min="{% if selected_payload %}{{ selected_payload.latest_doc }}{% else %}1{% endif %}" max="250" step="1" value="{{ horizon_doc }}" required aria-describedby="horizonHelp">
+          <span class="input-group-text">hari</span>
+        </div>
+        <div id="horizonHelp" class="doc-help"><span>Minimal mengikuti DOC saat ini</span><span>Maks. DOC 250</span></div>
+      </div>
+      <div class="filter-action">
+        <span class="filter-action-label" aria-hidden="true">Aksi</span>
+        <button class="btn btn-primary filter-submit" type="submit"><i class="fa-solid fa-filter"></i> Tampilkan</button>
+        <span class="filter-action-help" aria-hidden="true"></span>
+      </div>
+    </form>
+  </section>
+
+  {% if selected_payload %}
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-icon"><i class="fa-solid fa-calendar-day"></i></div><span>DOC Saat Ini</span><strong>{{ selected_payload.latest_doc }}</strong><small>Sampling {{ selected_payload.latest.date|date:"d M Y" }}</small></div>
+    <div class="kpi"><div class="kpi-icon"><i class="fa-solid fa-shrimp"></i></div><span>Size Aktual</span><strong>{{ selected_payload.latest_size|floatformat:0 }}/kg</strong><small>ABW {{ selected_payload.latest_abw|floatformat:2 }} g</small></div>
+    <div class="kpi"><div class="kpi-icon"><i class="fa-solid fa-gauge-high"></i></div><span>ADG Prediksi</span><strong>{{ selected_payload.adg|floatformat:3 }} g/hari</strong><small>Target siklus {{ target_adg|floatformat:3 }}</small></div>
+    <div class="kpi"><div class="kpi-icon"><i class="fa-solid fa-bullseye"></i></div><span>Size DOC {{ horizon_doc }}</span><strong>{{ selected_payload.projected_size|floatformat:0 }}/kg</strong><small>ABW {{ selected_payload.projected_abw|floatformat:2 }} g</small></div>
+    <div class="kpi"><div class="kpi-icon"><i class="fa-solid fa-weight-hanging"></i></div><span>Biomassa Prediksi</span><strong>{{ selected_payload.projected_biomass_ton|floatformat:2 }} ton</strong><small>Populasi tetap {{ selected_payload.population|angka0 }} ekor</small></div>
+    <div class="kpi status-card"><div class="kpi-icon"><i class="fa-solid fa-circle-check"></i></div><span>Status Pertumbuhan</span><strong class="status-{{ selected_payload.status_class }}">{{ selected_payload.growth_status }}</strong><small>Dibanding target ADG siklus</small></div>
+  </div>
+
+  <section class="growth-card">
+    <div class="chart-title"><h2>Perbandingan Prediksi Size Semua Kolam</h2><small>Semakin kecil nilai size (/kg), semakin besar ukuran udang.</small></div>
+    <div class="chart-box"><canvas id="allPondSizeChart"></canvas></div>
+    <div class="legend-note"><i class="fa-solid fa-circle-info"></i> Setiap garis memakai data sampling aktual kolam masing-masing dan dilanjutkan dengan proyeksi berbasis tren ABW terbaru.</div>
+  </section>
+
+  <div class="grid-2">
+    <section class="growth-card">
+      <div class="chart-title"><h2>Size Aktual vs Prediksi — {{ selected_payload.pond.name }}</h2><small>Unit: ekor/kg</small></div>
+      <div class="chart-box"><canvas id="sizePredictionChart"></canvas></div>
+    </section>
+    <section class="growth-card">
+      <div class="chart-title"><h2>ABW dan Biomassa Prediksi</h2><small>Sampai DOC {{ horizon_doc }}</small></div>
+      <div class="chart-box"><canvas id="abwBiomassChart"></canvas></div>
+    </section>
+  </div>
+
+  <div class="grid-2">
+    <section class="growth-card">
+      <div class="chart-title"><h2>Timeline Target Size</h2><small>Prediksi berdasarkan ADG {{ selected_payload.adg|floatformat:3 }} g/hari</small></div>
+      <div class="table-responsive"><table class="table milestone-table align-middle"><thead><tr><th>Target</th><th>Prediksi DOC</th><th>Tanggal</th><th>Status</th></tr></thead><tbody>{% for item in selected_payload.milestones %}<tr><td><b>Size {{ item.size }}/kg</b></td><td>{% if item.doc %}DOC {{ item.doc }}{% else %}-{% endif %}</td><td>{% if item.date %}{{ item.date|date:"d M Y" }}{% else %}-{% endif %}</td><td>{% if item.status == 'Tercapai' %}<span class="badge-done">Tercapai</span>{% else %}<span class="badge-predict">Prediksi</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+    </section>
+    <section class="growth-card">
+      <div class="chart-title"><h2>Ringkasan Kolam</h2></div>
+      <div class="pond-summary">
+        <div class="summary-row"><span>Kolam</span><b>{{ selected_payload.pond.name }}</b></div>
+        <div class="summary-row"><span>Status Master</span><b>{{ selected_payload.pond.status }}</b></div>
+        <div class="summary-row"><span>Sampling Tersedia</span><b>{{ selected_payload.actual|length }} titik</b></div>
+        <div class="summary-row"><span>FCR Terakhir</span><b>{{ selected_payload.fcr|floatformat:2 }}</b></div>
+        <div class="summary-row"><span>Populasi Estimasi</span><b>{{ selected_payload.population|angka0 }}</b></div>
+        <div class="summary-row"><span>Proyeksi Hingga</span><b>DOC {{ horizon_doc }}</b></div>
+      </div>
+      <hr>
+      <div class="formula">
+        <div><b>Sumber aktual</b>ABW dan size berasal langsung dari Sampling per kolam.</div>
+        <div><b>Prediksi pertumbuhan</b>Rata-rata slope ABW dari maksimal empat sampling terakhir.</div>
+        <div><b>Fallback</b>ADG sampling terakhir, ADG kumulatif, atau target ADG siklus.</div>
+      </div>
+    </section>
+  </div>
+  {% else %}
+  <section class="growth-card empty"><i class="fa-solid fa-chart-line fa-3x mb-3"></i><h3>Belum ada data sampling</h3><p>Masukkan minimal satu data sampling yang memiliki DOC dan ABW untuk menampilkan prediksi.</p><a class="btn btn-primary" href="{% url 'operations:add_sampling_record' %}">Tambah Sampling</a></section>
+  {% endif %}
+</div>
+
+{% if selected_payload %}
+{{ selected_payload.actual|json_script:"growth-actual" }}
+{{ selected_payload.projection|json_script:"growth-projection" }}
+{{ all_chart|json_script:"growth-all-chart" }}
+{{ all_series|json_script:"growth-all-series" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function(){
+  const actual=JSON.parse(document.getElementById('growth-actual').textContent||'[]');
+  const projection=JSON.parse(document.getElementById('growth-projection').textContent||'[]');
+  const allRows=JSON.parse(document.getElementById('growth-all-chart').textContent||'[]');
+  const allSeries=JSON.parse(document.getElementById('growth-all-series').textContent||'[]');
+  const idFmt=v=>Number(v).toLocaleString('id-ID',{maximumFractionDigits:2});
+
+  new Chart(document.getElementById('allPondSizeChart'),{type:'line',data:{labels:allRows.map(x=>'DOC '+x.doc),datasets:allSeries.map(s=>({label:s.label,data:allRows.map(x=>x[s.key]??null),tension:.32,borderWidth:2.5,pointRadius:2,spanGaps:true}))},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${idFmt(c.raw)}/kg`}}},scales:{x:{grid:{display:false}},y:{reverse:true,title:{display:true,text:'Size (ekor/kg)'},ticks:{callback:v=>v+'/kg'}}}});
+
+  const docSet=[...new Set([...actual.map(x=>x.doc),...projection.map(x=>x.doc)])].sort((a,b)=>a-b);
+  const actualMap=new Map(actual.map(x=>[x.doc,x])); const predMap=new Map(projection.map(x=>[x.doc,x]));
+  new Chart(document.getElementById('sizePredictionChart'),{type:'line',data:{labels:docSet.map(x=>'DOC '+x),datasets:[{label:'Size aktual',data:docSet.map(d=>actualMap.get(d)?.size??null),borderColor:'#16a34a',backgroundColor:'rgba(22,163,74,.10)',pointRadius:5,borderWidth:3,tension:.3,spanGaps:false},{label:'Size prediksi',data:docSet.map(d=>predMap.get(d)?.size??null),borderColor:'#2d7ff9',borderDash:[7,5],pointRadius:4,borderWidth:3,tension:.3,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.raw==null?'':`${c.dataset.label}: ${idFmt(c.raw)}/kg`}}},scales:{x:{grid:{display:false}},y:{reverse:true,title:{display:true,text:'Size (ekor/kg)'},ticks:{callback:v=>v+'/kg'}}}});
+
+  new Chart(document.getElementById('abwBiomassChart'),{data:{labels:projection.map(x=>'DOC '+x.doc),datasets:[{type:'line',label:'ABW (g)',data:projection.map(x=>x.abw),borderColor:'#2d7ff9',pointRadius:4,tension:.3,borderWidth:3,yAxisID:'abw'},{type:'bar',label:'Biomassa (ton)',data:projection.map(x=>x.biomass_ton),backgroundColor:'rgba(11,47,98,.20)',borderColor:'#0b2f62',borderWidth:1,borderRadius:5,yAxisID:'bio'}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'bottom'}},scales:{x:{grid:{display:false}},abw:{beginAtZero:true,position:'left',title:{display:true,text:'ABW (gram)'}},bio:{beginAtZero:true,position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'Biomassa (ton)'}}}});
+})();
+</script>
+{% endif %}
+{% endblock %}
