@@ -3,29 +3,57 @@
 {% load l10n %}
 {% block content %}
 <style id="invoice-desktop-layout-fix">
-/* Critical layout is kept in the template so VPS static-file cache cannot move the summary below the form. */
-.invoice-edit-page{max-width:none !important;width:100% !important;}
+/* Paksa layout desktop dua kolom tanpa wrapping. Ini menghindari perbedaan viewport/zoom VPS. */
+.invoice-edit-page{
+  max-width:none !important;
+  width:100% !important;
+  overflow-x:auto !important;
+}
 .invoice-edit-shell{
-  display:grid !important;
-  grid-template-columns:minmax(0,1fr) 320px !important;
-  align-items:start !important;
+  display:flex !important;
+  flex-direction:row !important;
+  flex-wrap:nowrap !important;
+  align-items:flex-start !important;
   gap:22px !important;
   width:100% !important;
+  min-width:980px !important;
 }
-.invoice-edit-shell>.form-pro{min-width:0 !important;width:100% !important;}
+.invoice-edit-shell>.form-pro{
+  flex:1 1 auto !important;
+  width:auto !important;
+  min-width:620px !important;
+  max-width:none !important;
+}
 .invoice-edit-shell>.invoice-summary-side{
   display:flex !important;
+  flex:0 0 320px !important;
+  width:320px !important;
+  min-width:320px !important;
+  max-width:320px !important;
   flex-direction:column !important;
-  grid-template-columns:none !important;
-  width:100% !important;
-  min-width:0 !important;
   position:sticky !important;
   top:18px !important;
-  align-self:start !important;
+  align-self:flex-start !important;
+  margin:0 !important;
+  order:2 !important;
 }
-@media (max-width:680px){
-  .invoice-edit-shell{grid-template-columns:1fr !important;}
-  .invoice-edit-shell>.invoice-summary-side{position:static !important;margin-top:0 !important;}
+@media (max-width:520px){
+  .invoice-edit-page{overflow-x:visible !important;}
+  .invoice-edit-shell{
+    display:block !important;
+    min-width:0 !important;
+  }
+  .invoice-edit-shell>.form-pro{
+    min-width:0 !important;
+    width:100% !important;
+  }
+  .invoice-edit-shell>.invoice-summary-side{
+    position:static !important;
+    width:100% !important;
+    min-width:0 !important;
+    max-width:none !important;
+    margin-top:18px !important;
+  }
 }
 </style>
 <div class="form-page-pro invoice-edit-page">
