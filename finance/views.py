@@ -1076,6 +1076,92 @@ def add_balance_entry(request):
     return render(request,'finance/balance_form.html',{'account_types':BalanceEntry.ACCOUNT_TYPES,'asset_groups':BalanceEntry.ASSET_GROUPS,'liability_groups':BalanceEntry.LIABILITY_GROUPS,'equity_groups':BalanceEntry.EQUITY_GROUPS})
 
 
+
+OPENING_BALANCE_ACCOUNTS = (
+    ('cash', 'asset', 'Kas dan Bank', 'Kas Tunai'),
+    ('bank_bca', 'asset', 'Kas dan Bank', 'Bank BCA'),
+    ('bank_mandiri', 'asset', 'Kas dan Bank', 'Bank Mandiri'),
+    ('bank_bri', 'asset', 'Kas dan Bank', 'Bank BRI'),
+    ('bank_other', 'asset', 'Kas dan Bank', 'Bank Lainnya'),
+    ('owner_capital', 'equity', 'Modal Pemilik', 'Modal Pemilik'),
+    ('retained_earnings', 'equity', 'Laba Ditahan', 'Laba Ditahan'),
+)
+
+
+def _opening_balance_values(as_of):
+    values = {}
+    for field, account_type, group, account_name in OPENING_BALANCE_ACCOUNTS:
+        entry = (BalanceEntry.objects
+                 .filter(as_of_date__lte=as_of, account_type=account_type,
+                         group=group, account_name=account_name)
+                 .order_by('-as_of_date', '-id').first())
+        values[field] = entry.amount if entry else Decimal('0')
+    return values
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def opening_balance(request):
+    """Input saldo pembukaan inti tanpa menduplikasi saldo otomatis.
+
+    Piutang, utang, aset tetap, dan penyusutan tetap berasal dari modul
+    transaksinya masing-masing. Halaman ini hanya menyimpan Kas/Bank, Modal
+    Pemilik, dan Laba Ditahan sebagai BalanceEntry bertanggal posisi awal.
+    """
+    as_of = parse_date(request.POST.get('as_of_date') or request.GET.get('as_of')) or timezone.localdate()
+
+    if request.method == 'POST':
+        parsed = {}
+        errors = []
+        for field, account_type, group, account_name in OPENING_BALANCE_ACCOUNTS:
+            value = parse_rupiah(request.POST.get(field, '0'))
+            if account_type == 'asset' and value < 0:
+                errors.append(f'{account_name} tidak boleh bernilai negatif.')
+            parsed[field] = value
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+        else:
+            # Satu snapshot per akun dan tanggal. Riwayat tanggal sebelumnya
+            # dipertahankan agar neraca historis tetap dapat ditampilkan.
+            for field, account_type, group, account_name in OPENING_BALANCE_ACCOUNTS:
+                BalanceEntry.objects.update_or_create(
+                    as_of_date=as_of,
+                    account_type=account_type,
+                    group=group,
+                    account_name=account_name,
+                    defaults={
+                        'amount': parsed[field],
+                        'notes': 'Saldo awal melalui menu Saldo Awal',
+                    },
+                )
+            messages.success(request, 'Saldo awal berhasil disimpan dan langsung digunakan pada laporan neraca.')
+            return redirect(f"{request.path}?as_of={as_of.isoformat()}")
+
+    values = _opening_balance_values(as_of)
+    cash_bank_total = sum((values[k] for k in ('cash','bank_bca','bank_mandiri','bank_bri','bank_other')), Decimal('0'))
+    equity_opening_total = values['owner_capital'] + values['retained_earnings']
+
+    # Informasi otomatis hanya untuk referensi; tidak dapat diedit di halaman ini.
+    def outstanding_as_of(account):
+        paid = account.payments.filter(payment_date__lte=as_of).aggregate(s=Sum('amount'))['s'] or Decimal('0')
+        return max((account.original_amount or Decimal('0')) - paid, Decimal('0'))
+    auto_receivables = sum((outstanding_as_of(x) for x in TradeAccount.objects.filter(account_type=TradeAccount.RECEIVABLE, transaction_date__lte=as_of)), Decimal('0'))
+    auto_payables = sum((outstanding_as_of(x) for x in TradeAccount.objects.filter(account_type=TradeAccount.PAYABLE, transaction_date__lte=as_of)), Decimal('0'))
+    auto_fixed_assets = sum((a.total_cost for a in FixedAsset.objects.filter(use_date__lte=as_of).exclude(status='disposed')), Decimal('0'))
+
+    context = {
+        'as_of': as_of,
+        'values': values,
+        'cash_bank_total': cash_bank_total,
+        'equity_opening_total': equity_opening_total,
+        'auto_receivables': auto_receivables,
+        'auto_payables': auto_payables,
+        'auto_fixed_assets': auto_fixed_assets,
+    }
+    return render(request, 'finance/opening_balance.html', context)
+
 def _balance_sheet_data(request):
     """Susun neraca dengan sumber data operasional yang transparan.
 

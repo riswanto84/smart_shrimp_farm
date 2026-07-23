@@ -46,6 +46,7 @@ MENU_DEFINITIONS = [
     {'type': 'item', 'label': 'Peredaran Bruto', 'url': '/finance/tax/gross-turnover/', 'icon': 'fa-solid fa-coins', 'perm': 'finance.tax_reports'},
     {'type': 'item', 'label': 'Laba Rugi Pajak', 'url': '/finance/tax/profit-loss/', 'icon': 'fa-solid fa-chart-line', 'perm': 'finance.tax_reports'},
     {'type': 'item', 'label': 'Neraca', 'url': '/finance/tax/balance/', 'icon': 'fa-solid fa-scale-balanced', 'perm': 'finance.tax_reports'},
+    {'type': 'item', 'label': 'Saldo Awal', 'url': '/finance/tax/opening-balance/', 'icon': 'fa-solid fa-vault', 'perm': 'finance.tax_reports'},
     {'type': 'item', 'label': 'Piutang Usaha', 'url': '/finance/tax/receivables/', 'icon': 'fa-solid fa-hand-holding-dollar', 'perm': 'finance.tax_reports'},
     {'type': 'item', 'label': 'Utang Usaha', 'url': '/finance/tax/payables/', 'icon': 'fa-solid fa-file-invoice-dollar', 'perm': 'finance.tax_reports'},
     {'type': 'item', 'label': 'Daftar Aset', 'url': '/finance/tax/assets/', 'icon': 'fa-solid fa-gears', 'perm': 'finance.tax_reports'},

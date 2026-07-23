@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load currency %}
+{% block content %}
+<style>
+.opening-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}.opening-section{border:1px solid #dce6f3;border-radius:18px;padding:20px;background:#fff}.opening-section+.opening-section{margin-top:16px}.opening-title{display:flex;align-items:center;gap:12px;margin-bottom:18px}.opening-icon{width:42px;height:42px;border-radius:12px;background:#eef5ff;color:#0d6efd;display:grid;place-items:center}.opening-title h3{font-size:18px;margin:0;color:#0a2855}.opening-title p{margin:2px 0 0;color:#64748b;font-size:13px}.money-wrap{position:relative}.money-prefix{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-weight:700;color:#64748b}.money-input{padding-left:45px!important;text-align:right;font-weight:700}.summary-blue{background:linear-gradient(135deg,#083b82,#0d6efd);color:#fff;border-radius:18px;padding:22px;box-shadow:0 15px 30px rgba(13,110,253,.2)}.summary-row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.18)}.summary-row:last-child{border-bottom:0}.auto-card{background:#fff;border:1px solid #dce6f3;border-radius:16px;padding:17px;margin-top:14px}.auto-line{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #edf2f7}.auto-line:last-child{border:0}.sticky-side{position:sticky;top:20px}.help-box{background:#fff8df;border:1px solid #f5d878;color:#6b5200;border-radius:14px;padding:14px;margin-top:14px;font-size:13px}.action-bar{display:flex;gap:10px;align-items:center;margin-top:18px}.field-help{font-size:12px;color:#64748b;margin-top:5px}@media(max-width:900px){.opening-grid{grid-template-columns:1fr}.sticky-side{position:static}}
+</style>
+<div class="page-head">
+  <div><h1>Saldo Awal</h1><p>Masukkan posisi Kas/Bank, Modal Pemilik, dan Laba Ditahan saat pembukuan mulai digunakan.</p></div>
+  <a class="btn btn-outline-primary" href="{% url 'finance:balance_sheet' %}?as_of={{ as_of|date:'Y-m-d' }}"><i class="fa-solid fa-scale-balanced"></i> Lihat Neraca</a>
+</div>
+<form method="post" id="openingBalanceForm">{% csrf_token %}
+<div class="opening-grid">
+  <div>
+    <div class="opening-section">
+      <div class="opening-title"><div class="opening-icon"><i class="fa-solid fa-calendar-day"></i></div><div><h3>Tanggal Posisi Awal</h3><p>Gunakan tanggal mulai pembukuan atau tanggal saldo terakhir sebelum aplikasi dipakai.</p></div></div>
+      <div class="row"><div class="col-md-5"><label class="form-label fw-semibold">Tanggal saldo awal</label><input type="date" required name="as_of_date" value="{{ as_of|date:'Y-m-d' }}" class="form-control"></div></div>
+    </div>
+
+    <div class="opening-section">
+      <div class="opening-title"><div class="opening-icon"><i class="fa-solid fa-wallet"></i></div><div><h3>Kas dan Bank</h3><p>Saldo uang yang benar-benar tersedia pada tanggal posisi awal.</p></div></div>
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label fw-semibold">Kas Tunai</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="cash" value="{{ values.cash|floatformat:0 }}" class="form-control money-input rupiah-input" inputmode="numeric"></div></div>
+        <div class="col-md-6"><label class="form-label fw-semibold">Bank BCA</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="bank_bca" value="{{ values.bank_bca|floatformat:0 }}" class="form-control money-input rupiah-input" inputmode="numeric"></div></div>
+        <div class="col-md-6"><label class="form-label fw-semibold">Bank Mandiri</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="bank_mandiri" value="{{ values.bank_mandiri|floatformat:0 }}" class="form-control money-input rupiah-input" inputmode="numeric"></div></div>
+        <div class="col-md-6"><label class="form-label fw-semibold">Bank BRI</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="bank_bri" value="{{ values.bank_bri|floatformat:0 }}" class="form-control money-input rupiah-input" inputmode="numeric"></div></div>
+        <div class="col-md-6"><label class="form-label fw-semibold">Bank/Rekening Lainnya</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="bank_other" value="{{ values.bank_other|floatformat:0 }}" class="form-control money-input rupiah-input" inputmode="numeric"></div><div class="field-help">Gabungkan rekening lain yang belum dibuatkan akun khusus.</div></div>
+      </div>
+    </div>
+
+    <div class="opening-section">
+      <div class="opening-title"><div class="opening-icon"><i class="fa-solid fa-landmark"></i></div><div><h3>Ekuitas Awal</h3><p>Masukkan sumber modal usaha sebelum transaksi periode berjalan.</p></div></div>
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label fw-semibold">Modal Pemilik</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="owner_capital" value="{{ values.owner_capital|floatformat:0 }}" class="form-control money-input rupiah-input" inputmode="numeric"></div><div class="field-help">Setoran modal bersih pemilik sampai tanggal posisi awal.</div></div>
+        <div class="col-md-6"><label class="form-label fw-semibold">Laba Ditahan</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="retained_earnings" value="{{ values.retained_earnings|floatformat:0 }}" class="form-control money-input rupiah-input" inputmode="text"></div><div class="field-help">Boleh negatif apabila terdapat akumulasi rugi periode sebelumnya.</div></div>
+      </div>
+      <div class="action-bar"><button class="btn btn-primary btn-lg" type="submit"><i class="fa-solid fa-floppy-disk"></i> Simpan Saldo Awal</button><a href="{% url 'finance:balance_sheet' %}?as_of={{ as_of|date:'Y-m-d' }}" class="btn btn-outline-secondary btn-lg">Batal</a></div>
+    </div>
+  </div>
+
+  <aside class="sticky-side">
+    <div class="summary-blue"><div class="small opacity-75">Ringkasan input</div><h3 class="mt-1 mb-3">Posisi {{ as_of|date:'d M Y' }}</h3><div class="summary-row"><span>Total Kas & Bank</span><strong id="cashBankSummary">{{ cash_bank_total|rupiah }}</strong></div><div class="summary-row"><span>Modal + Laba Ditahan</span><strong id="equitySummary">{{ equity_opening_total|rupiah }}</strong></div></div>
+    <div class="auto-card"><h5 class="mb-2"><i class="fa-solid fa-arrows-rotate text-primary"></i> Data Otomatis</h5><p class="small text-muted">Pos berikut berasal dari modul terkait dan tidak perlu diinput ulang.</p><div class="auto-line"><span>Piutang Usaha</span><strong>{{ auto_receivables|rupiah }}</strong></div><div class="auto-line"><span>Utang Usaha</span><strong>{{ auto_payables|rupiah }}</strong></div><div class="auto-line"><span>Aset Tetap</span><strong>{{ auto_fixed_assets|rupiah }}</strong></div></div>
+    <div class="help-box"><strong>Perhatian:</strong> masukkan saldo berdasarkan rekening koran, kas fisik, dan catatan modal yang dapat dipertanggungjawabkan. Jangan memasukkan kembali piutang, utang, atau aset yang sudah tercatat pada modulnya.</div>
+  </aside>
+</div>
+</form>
+<script>
+(function(){
+ const fields=[...document.querySelectorAll('.rupiah-input')];
+ const parse=v=>{v=String(v||'').trim();const neg=v.startsWith('-');v=v.replace(/[^0-9]/g,'');return (neg?-1:1)*(parseInt(v||'0',10));};
+ const format=n=>(n<0?'-':'')+Math.abs(n).toLocaleString('id-ID');
+ fields.forEach(el=>{el.value=format(parse(el.value));el.addEventListener('input',()=>{const pos=el.selectionStart;el.value=format(parse(el.value));update();});});
+ function money(n){return 'Rp '+format(n)}
+ function value(name){const el=document.querySelector('[name="'+name+'"]');return parse(el&&el.value)}
+ function update(){document.getElementById('cashBankSummary').textContent=money(value('cash')+value('bank_bca')+value('bank_mandiri')+value('bank_bri')+value('bank_other'));document.getElementById('equitySummary').textContent=money(value('owner_capital')+value('retained_earnings'));}
+ document.getElementById('openingBalanceForm').addEventListener('submit',()=>fields.forEach(el=>el.value=String(parse(el.value))));update();
+})();
+</script>
+{% endblock %}

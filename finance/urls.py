@@ -14,6 +14,7 @@ urlpatterns = [
     path('tax/',views.tax_dashboard,name='tax_dashboard'),
     path('tax/gross-turnover/',views.gross_turnover,name='gross_turnover'), path('tax/gross-turnover/add/',views.add_other_revenue,name='add_other_revenue'), path('tax/gross-turnover/excel/',views.export_gross_turnover_excel,name='export_gross_turnover_excel'), path('tax/gross-turnover/pdf/',views.export_gross_turnover_pdf,name='export_gross_turnover_pdf'),
     path('tax/profit-loss/',views.tax_profit_loss,name='tax_profit_loss'), path('tax/profit-loss/pdf/',views.export_tax_profit_loss_pdf,name='export_tax_profit_loss_pdf'),
+    path('tax/opening-balance/', views.opening_balance, name='opening_balance'),
     path('tax/balance/entries/',views.balance_entries,name='balance_entries'), path('tax/balance/entries/add/',views.add_balance_entry,name='add_balance_entry'), path('tax/balance/',views.balance_sheet,name='balance_sheet'), path('tax/balance/pdf/',views.export_balance_sheet_pdf,name='export_balance_sheet_pdf'),
     path('tax/assets/',views.assets,name='assets'), path('tax/assets/add/',views.add_asset,name='add_asset'), path('tax/assets/<int:pk>/edit/',views.edit_asset,name='edit_asset'),
 
