@@ -1,25 +1,111 @@
 {% extends 'base.html' %}{% load currency %}{% block content %}
-<div class="page-head"><div><h1>Laporan Neraca</h1><p>Posisi per {{ as_of|date:'d F Y' }}</p></div><div><a class="btn btn-outline-primary" href="{% url 'finance:opening_balance' %}?as_of={{ as_of|date:'Y-m-d' }}"><i class="fa-solid fa-vault"></i> Saldo Awal</a> <a class="btn btn-outline-secondary" href="{% url 'finance:balance_entries' %}">Kelola Pos</a> <a class="btn btn-danger" href="{% url 'finance:export_balance_sheet_pdf' %}?as_of={{ as_of|date:'Y-m-d' }}">PDF</a></div></div>
-<div class="cardx mb-3"><form class="row g-2"><div class="col-md-6"><input type="date" name="as_of" value="{{ as_of|date:'Y-m-d' }}" class="form-control"></div><div class="col-md-2"><button class="btn btn-primary">Tampilkan</button></div></form></div>
-<div class="row g-3">
-<div class="col-lg-6"><div class="cardx h-100"><h5>ASET</h5><table class="table">
-{% for e in assets %}<tr><td>{{ e.account_name }}</td><td class="text-end">{{ e.amount|rupiah }}</td></tr>{% endfor %}
-<tr><td>Piutang Usaha</td><td class="text-end">{{ receivable_total|rupiah }}</td></tr>
-<tr><td>Aset tetap—harga perolehan</td><td class="text-end">{{ fixed_cost|rupiah }}</td></tr>
-<tr><td>Akumulasi penyusutan</td><td class="text-end">({{ accumulated|rupiah }})</td></tr>
-<tr><th>Total Aset</th><th class="text-end">{{ total_assets|rupiah }}</th></tr></table></div></div>
-<div class="col-lg-6"><div class="cardx h-100"><h5>KEWAJIBAN</h5><table class="table">
-{% for e in liabilities %}<tr><td>{{ e.account_name }}</td><td class="text-end">{{ e.amount|rupiah }}</td></tr>{% endfor %}
-<tr><td>Utang Usaha</td><td class="text-end">{{ payable_total|rupiah }}</td></tr><tr><th>Total Kewajiban</th><th class="text-end">{{ total_liabilities|rupiah }}</th></tr></table>
-<h5>EKUITAS</h5><table class="table">{% for e in equities %}<tr><td>{{ e.account_name }}</td><td class="text-end">{{ e.amount|rupiah }}</td></tr>{% endfor %}
-<tr><td>Laba/Rugi tahun berjalan</td><td class="text-end">{{ current_profit|rupiah }}</td></tr>
-{% if reconciliation_equity != 0 %}<tr class="table-warning"><td><strong>Saldo awal/modal belum direkonsiliasi</strong><div class="small text-muted">Akun sementara sampai saldo Kas/Bank dan Modal Pemilik dilengkapi.</div></td><td class="text-end"><strong>{{ reconciliation_equity|rupiah }}</strong></td></tr>{% endif %}
-<tr><th>Total Ekuitas</th><th class="text-end">{{ total_equity_with_profit|rupiah }}</th></tr></table></div></div></div>
-<div class="alert {% if difference == 0 %}alert-success{% else %}alert-danger{% endif %} mt-3"><strong>Selisih neraca setelah rekonsiliasi: {{ difference|rupiah }}</strong>. {% if difference == 0 %}Persamaan Aset = Kewajiban + Ekuitas telah seimbang.{% else %}Masih terdapat kesalahan perhitungan yang perlu diperiksa.{% endif %}</div>
-<div class="cardx mt-3"><h5>Rekonsiliasi Otomatis</h5><div class="row g-3">
-<div class="col-md-3"><div class="small text-muted">Pendapatan Penjualan</div><strong>{{ sales_revenue|rupiah }}</strong></div>
-<div class="col-md-3"><div class="small text-muted">Pendapatan Lain</div><strong>{{ other_revenue|rupiah }}</strong></div>
-<div class="col-md-3"><div class="small text-muted">Beban Operasional</div><strong>{{ operating_cost|rupiah }}</strong></div>
-<div class="col-md-3"><div class="small text-muted">Penyusutan Tahun Berjalan</div><strong>{{ current_year_depreciation|rupiah }}</strong></div>
-</div>{% if warnings %}<hr>{% for warning in warnings %}<div class="alert alert-warning py-2 mb-2">{{ warning }}</div>{% endfor %}{% endif %}</div>
+<style>
+.balance-page{--navy:#0b2f5b;--blue:#1769e0;--soft:#f5f8fc;--line:#e3eaf4;--green:#138a5b;--red:#dc3545;--amber:#c8860a}
+.balance-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:18px}
+.balance-title h1{font-size:30px;margin:0;color:#102443;font-weight:800}.balance-title p{margin:5px 0 0;color:#6b7c93}
+.balance-actions{display:flex;gap:8px;flex-wrap:wrap}.balance-filter{display:flex;gap:10px;align-items:center;padding:14px 16px;background:white;border:1px solid var(--line);border-radius:16px;margin-bottom:16px}.balance-filter input{max-width:420px}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:16px}.kpi-card{background:white;border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 8px 24px rgba(25,55,95,.05)}.kpi-label{font-size:13px;color:#687a91;font-weight:700}.kpi-value{font-size:25px;font-weight:850;color:#102443;margin-top:6px}.kpi-sub{font-size:12px;color:#78899e;margin-top:5px}.status-ok{color:var(--green)}.status-bad{color:var(--red)}
+.balance-main{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);gap:16px}.panel{background:white;border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 8px 24px rgba(25,55,95,.045)}.panel h2{font-size:18px;color:#102443;font-weight:800;margin:0 0 14px}.section-title{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#60738d;font-weight:800;padding:10px 0 6px;border-bottom:1px solid var(--line)}
+.balance-table{width:100%;border-collapse:collapse}.balance-table td,.balance-table th{padding:10px 6px;border-bottom:1px solid #edf1f6}.balance-table td:last-child,.balance-table th:last-child{text-align:right;white-space:nowrap}.balance-table .subtotal th{background:#f6f9fd}.balance-table .grand th{font-size:16px;color:#102443;border-top:2px solid #ced8e7;background:#eef4fb}.warning-row td{background:#fff7d9;color:#664d03}.negative{color:#b3261e}
+.composition-list{display:grid;gap:13px}.composition-row{display:grid;grid-template-columns:135px 1fr 92px;gap:10px;align-items:center}.composition-label{font-size:13px;font-weight:700;color:#31445f}.bar-track{height:10px;background:#edf2f8;border-radius:99px;overflow:hidden}.bar-fill{height:100%;background:linear-gradient(90deg,#1769e0,#24b79b);border-radius:99px}.composition-value{text-align:right;font-size:12px;font-weight:700;color:#40536d}
+.ratio-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.ratio-card{border:1px solid var(--line);background:#f8fbff;border-radius:14px;padding:13px}.ratio-card span{display:block;color:#6c7e94;font-size:12px}.ratio-card strong{display:block;color:#102443;font-size:20px;margin-top:4px}
+.validation-list{display:grid;gap:8px}.validation-item{display:flex;gap:9px;align-items:center;padding:9px 10px;border-radius:12px;background:#f7f9fc;font-size:13px}.validation-item.ok i{color:var(--green)}.validation-item.bad i{color:var(--red)}
+.status-banner{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:15px 17px;border-radius:16px;margin:16px 0}.status-banner.ok{background:#e8f7f0;color:#0a6844;border:1px solid #b8e4d2}.status-banner.bad{background:#fdecec;color:#a51d2d;border:1px solid #f4bfc5}.status-banner strong{font-size:16px}.badge-status{font-weight:800;background:rgba(255,255,255,.7);padding:6px 10px;border-radius:99px}
+.recon-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.recon-item{padding:12px;border-radius:13px;background:#f7f9fc}.recon-item span{display:block;font-size:12px;color:#6f8197}.recon-item strong{display:block;margin-top:4px;color:#102443}.warnings{margin-top:12px}.warnings .alert{margin-bottom:8px}
+@media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(2,1fr)}.balance-main{grid-template-columns:1fr}.recon-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:650px){.balance-head{display:block}.balance-actions{margin-top:12px}.kpi-grid,.recon-grid{grid-template-columns:1fr}.balance-filter{display:block}.balance-filter button{margin-top:10px}.composition-row{grid-template-columns:110px 1fr}.composition-value{grid-column:2}.ratio-grid{grid-template-columns:1fr}}
+</style>
+<div class="balance-page">
+  <div class="balance-head">
+    <div class="balance-title"><h1>Laporan Neraca</h1><p>Posisi keuangan per {{ as_of|date:'d F Y' }}</p></div>
+    <div class="balance-actions">
+      <a class="btn btn-outline-primary" href="{% url 'finance:opening_balance' %}?as_of={{ as_of|date:'Y-m-d' }}"><i class="fa-solid fa-vault"></i> Saldo Awal</a>
+      <a class="btn btn-outline-secondary" href="{% url 'finance:balance_entries' %}"><i class="fa-solid fa-list"></i> Kelola Pos</a>
+      <a class="btn btn-danger" href="{% url 'finance:export_balance_sheet_pdf' %}?as_of={{ as_of|date:'Y-m-d' }}"><i class="fa-solid fa-file-pdf"></i> PDF</a>
+    </div>
+  </div>
+
+  <form class="balance-filter">
+    <input type="date" name="as_of" value="{{ as_of|date:'Y-m-d' }}" class="form-control">
+    <button class="btn btn-primary"><i class="fa-solid fa-filter"></i> Tampilkan</button>
+  </form>
+
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">TOTAL ASET</div><div class="kpi-value">{{ total_assets|rupiah }}</div><div class="kpi-sub">Aset lancar dan aset tetap bersih</div></div>
+    <div class="kpi-card"><div class="kpi-label">TOTAL KEWAJIBAN</div><div class="kpi-value">{{ total_liabilities|rupiah }}</div><div class="kpi-sub">Termasuk utang usaha</div></div>
+    <div class="kpi-card"><div class="kpi-label">TOTAL EKUITAS</div><div class="kpi-value {% if total_equity_with_profit < 0 %}negative{% endif %}">{{ total_equity_with_profit|rupiah }}</div><div class="kpi-sub">Modal, laba ditahan, dan laba berjalan</div></div>
+    <div class="kpi-card"><div class="kpi-label">STATUS NERACA</div><div class="kpi-value {% if is_balanced %}status-ok{% else %}status-bad{% endif %}">{% if is_balanced %}<i class="fa-solid fa-circle-check"></i> Seimbang{% else %}<i class="fa-solid fa-triangle-exclamation"></i> Belum Seimbang{% endif %}</div><div class="kpi-sub">Selisih {{ difference|rupiah }}</div></div>
+  </div>
+
+  <div class="balance-main">
+    <div class="panel">
+      <h2><i class="fa-solid fa-wallet"></i> Aset</h2>
+      <table class="balance-table">
+        <tr><td colspan="2" class="section-title">Aset Lancar</td></tr>
+        {% for e in assets %}{% if e.group == 'Kas dan Bank' %}<tr><td>{{ e.account_name }}</td><td>{{ e.amount|rupiah }}</td></tr>{% endif %}{% endfor %}
+        <tr><td>Piutang Usaha</td><td>{{ receivable_total|rupiah }}</td></tr>
+        {% for e in assets %}{% if e.group != 'Kas dan Bank' %}<tr><td>{{ e.account_name }}</td><td>{{ e.amount|rupiah }}</td></tr>{% endif %}{% endfor %}
+        <tr class="subtotal"><th>Subtotal Aset Lancar</th><th>{{ current_assets|rupiah }}</th></tr>
+        <tr><td colspan="2" class="section-title">Aset Tetap</td></tr>
+        <tr><td>Harga Perolehan Aset Tetap</td><td>{{ fixed_cost|rupiah }}</td></tr>
+        <tr><td>Akumulasi Penyusutan</td><td class="negative">({{ accumulated|rupiah }})</td></tr>
+        <tr class="subtotal"><th>Aset Tetap Bersih</th><th>{{ net_fixed_assets|rupiah }}</th></tr>
+        <tr class="grand"><th>Total Aset</th><th>{{ total_assets|rupiah }}</th></tr>
+      </table>
+    </div>
+
+    <div>
+      <div class="panel" style="margin-bottom:16px">
+        <h2><i class="fa-solid fa-chart-pie"></i> Komposisi Aset</h2>
+        <div class="composition-list">
+          {% for item in asset_composition %}
+          <div class="composition-row">
+            <div class="composition-label">{{ item.label }}</div>
+            <div class="bar-track"><div class="bar-fill" style="width:{% if item.percent > 100 %}100{% else %}{{ item.percent|floatformat:1 }}{% endif %}%"></div></div>
+            <div class="composition-value">{{ item.percent|floatformat:1 }}%</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="panel">
+        <h2><i class="fa-solid fa-scale-balanced"></i> Kewajiban & Ekuitas</h2>
+        <table class="balance-table">
+          <tr><td colspan="2" class="section-title">Kewajiban</td></tr>
+          {% for e in liabilities %}<tr><td>{{ e.account_name }}</td><td>{{ e.amount|rupiah }}</td></tr>{% endfor %}
+          <tr><td>Utang Usaha</td><td>{{ payable_total|rupiah }}</td></tr>
+          <tr class="subtotal"><th>Total Kewajiban</th><th>{{ total_liabilities|rupiah }}</th></tr>
+          <tr><td colspan="2" class="section-title">Ekuitas</td></tr>
+          {% for e in equities %}<tr><td>{{ e.account_name }}</td><td>{{ e.amount|rupiah }}</td></tr>{% endfor %}
+          <tr><td>Laba/Rugi Tahun Berjalan</td><td class="{% if current_profit < 0 %}negative{% endif %}">{{ current_profit|rupiah }}</td></tr>
+          {% if reconciliation_equity != 0 %}<tr class="warning-row"><td><strong>Saldo awal/modal belum direkonsiliasi</strong><div class="small">Akun sementara sampai saldo pembukaan lengkap.</div></td><td><strong>{{ reconciliation_equity|rupiah }}</strong></td></tr>{% endif %}
+          <tr class="grand"><th>Total Ekuitas</th><th>{{ total_equity_with_profit|rupiah }}</th></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-banner {% if is_balanced %}ok{% else %}bad{% endif %}">
+    <div><strong>{% if is_balanced %}<i class="fa-solid fa-circle-check"></i> Neraca Seimbang{% else %}<i class="fa-solid fa-triangle-exclamation"></i> Neraca Belum Seimbang{% endif %}</strong><div class="small">Persamaan Aset = Kewajiban + Ekuitas{% if is_balanced %} telah terpenuhi{% else %} belum terpenuhi{% endif %}.</div></div>
+    <div class="badge-status">Selisih {{ difference|rupiah }}</div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-5"><div class="panel h-100"><h2><i class="fa-solid fa-gauge-high"></i> Rasio Keuangan</h2><div class="ratio-grid">
+      <div class="ratio-card"><span>Current Ratio</span><strong>{% if current_ratio != None %}{{ current_ratio|floatformat:2 }}x{% else %}-{% endif %}</strong></div>
+      <div class="ratio-card"><span>Cash Ratio</span><strong>{% if cash_ratio != None %}{{ cash_ratio|floatformat:2 }}x{% else %}-{% endif %}</strong></div>
+      <div class="ratio-card"><span>Debt to Equity</span><strong>{% if debt_to_equity != None %}{{ debt_to_equity|floatformat:2 }}x{% else %}-{% endif %}</strong></div>
+      <div class="ratio-card"><span>Debt Ratio</span><strong>{% if debt_ratio != None %}{{ debt_ratio|floatformat:2 }}{% else %}-{% endif %}</strong></div>
+    </div></div></div>
+    <div class="col-lg-7"><div class="panel h-100"><h2><i class="fa-solid fa-list-check"></i> Validasi Otomatis</h2><div class="validation-list">
+      {% for check in validation_checks %}<div class="validation-item {% if check.ok %}ok{% else %}bad{% endif %}"><i class="fa-solid {% if check.ok %}fa-circle-check{% else %}fa-circle-exclamation{% endif %}"></i><span>{{ check.label }}</span></div>{% endfor %}
+    </div></div></div>
+  </div>
+
+  <div class="panel" style="margin-top:16px"><h2><i class="fa-solid fa-rotate"></i> Rekonsiliasi Otomatis</h2><div class="recon-grid">
+    <div class="recon-item"><span>Pendapatan Penjualan</span><strong>{{ sales_revenue|rupiah }}</strong></div>
+    <div class="recon-item"><span>Pendapatan Lain</span><strong>{{ other_revenue|rupiah }}</strong></div>
+    <div class="recon-item"><span>Beban Operasional</span><strong>{{ operating_cost|rupiah }}</strong></div>
+    <div class="recon-item"><span>Penyusutan Tahun Berjalan</span><strong>{{ current_year_depreciation|rupiah }}</strong></div>
+  </div>{% if warnings %}<div class="warnings">{% for warning in warnings %}<div class="alert alert-warning py-2"><i class="fa-solid fa-triangle-exclamation"></i> {{ warning }}</div>{% endfor %}</div>{% endif %}</div>
+</div>
 {% endblock %}

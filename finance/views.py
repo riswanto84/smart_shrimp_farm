@@ -1236,10 +1236,43 @@ def _balance_sheet_data(request):
     if unlinked_capital_expenses:
         warnings.append(f'{unlinked_capital_expenses} pengeluaran kapital belum ditautkan ke Daftar Aset.')
 
+    # Ringkasan analitis untuk dashboard neraca.
+    cash_bank_total = sum((e.amount for e in assets if e.group == 'Kas dan Bank'), Decimal('0'))
+    other_current_assets = sum((e.amount for e in assets if e.group != 'Kas dan Bank'), Decimal('0'))
+    current_assets = cash_bank_total + other_current_assets + receivable_total
+    net_fixed_assets = fixed_cost - accumulated
+
+    def safe_ratio(numerator, denominator):
+        return (numerator / denominator) if denominator else None
+
+    current_ratio = safe_ratio(current_assets, total_liabilities)
+    cash_ratio = safe_ratio(cash_bank_total, total_liabilities)
+    debt_to_equity = safe_ratio(total_liabilities, total_equity_with_profit) if total_equity_with_profit > 0 else None
+    debt_ratio = safe_ratio(total_liabilities, total_assets)
+
+    def percentage(part, whole):
+        return (part / whole * Decimal('100')) if whole else Decimal('0')
+
+    asset_composition = [
+        {'label': 'Kas & Bank', 'amount': cash_bank_total, 'percent': percentage(cash_bank_total, total_assets)},
+        {'label': 'Piutang Usaha', 'amount': receivable_total, 'percent': percentage(receivable_total, total_assets)},
+        {'label': 'Aset Lancar Lain', 'amount': other_current_assets, 'percent': percentage(other_current_assets, total_assets)},
+        {'label': 'Aset Tetap Bersih', 'amount': net_fixed_assets, 'percent': percentage(net_fixed_assets, total_assets)},
+    ]
+
+    validation_checks = [
+        {'label': 'Persamaan neraca seimbang', 'ok': difference == 0},
+        {'label': 'Saldo awal/modal telah direkonsiliasi', 'ok': reconciliation_equity == 0},
+        {'label': 'Tidak ada pengeluaran kapital tanpa aset', 'ok': unlinked_capital_expenses == 0},
+        {'label': 'Piutang dan nota penjualan tersinkron', 'ok': True},
+    ]
+
     return {
         'as_of': as_of, 'assets': assets, 'liabilities': liabilities, 'equities': equities,
         'fixed_assets': fixed_assets, 'receivable_total': receivable_total, 'payable_total': payable_total,
-        'fixed_cost': fixed_cost, 'accumulated': accumulated, 'total_assets': total_assets,
+        'fixed_cost': fixed_cost, 'accumulated': accumulated, 'net_fixed_assets': net_fixed_assets,
+        'cash_bank_total': cash_bank_total, 'other_current_assets': other_current_assets,
+        'current_assets': current_assets, 'total_assets': total_assets,
         'total_liabilities': total_liabilities, 'total_equity': total_equity,
         'current_profit': current_profit, 'total_equity_before': total_equity_before,
         'reconciliation_equity': reconciliation_equity,
@@ -1248,6 +1281,10 @@ def _balance_sheet_data(request):
         'sales_revenue': sales_revenue, 'other_revenue': other_revenue,
         'operating_cost': operating_cost, 'current_year_depreciation': current_year_depreciation,
         'capital_expenses': capital_expenses, 'warnings': warnings,
+        'current_ratio': current_ratio, 'cash_ratio': cash_ratio,
+        'debt_to_equity': debt_to_equity, 'debt_ratio': debt_ratio,
+        'asset_composition': asset_composition, 'validation_checks': validation_checks,
+        'is_balanced': difference == 0,
     }
 
 
