@@ -30,7 +30,6 @@ MENU_DEFINITIONS = [
     {'type': 'group', 'label': 'OPERASIONAL'},
     {'type': 'item', 'label': 'Master Kolam', 'url': '/ponds/', 'icon': 'fa-solid fa-water', 'perm': 'ponds.view'},
     {'type': 'item', 'label': 'Dashboard Produksi', 'url': '/operations/production-dashboard/', 'icon': 'fa-solid fa-chart-line', 'perm': 'operations.production_dashboard'},
-    {'type': 'item', 'label': 'Prediksi Pertumbuhan', 'url': '/operations/growth-prediction/', 'icon': 'fa-solid fa-arrow-trend-up', 'perm': 'operations.production_dashboard'},
     {'type': 'item', 'label': 'Dashboard Parameter Harian', 'url': '/operations/parameter-dashboard/', 'icon': 'fa-solid fa-gauge-high', 'perm': 'operations.parameter_dashboard'},
     {'type': 'item', 'label': 'Cek Anco Harian', 'url': '/operations/anco/', 'icon': 'fa-solid fa-clipboard-check', 'perm': 'operations.anco'},
     {'type': 'item', 'label': 'Data Sampling', 'url': '/operations/sampling/', 'icon': 'fa-solid fa-weight-scale', 'perm': 'operations.sampling'},
