@@ -326,7 +326,7 @@ def _sampling_payload(request):
 
 @login_required
 @permission_required('operations.production_dashboard')
-@permission_required('operations.growth_prediction')
+@permission_required('operations.production_dashboard')
 def growth_prediction_dashboard(request):
     """Prediksi ukuran/ABW per kolam berbasis histori sampling aktual.
 
