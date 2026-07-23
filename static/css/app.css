@@ -168,3 +168,14 @@
 .invoice-edit-shell{align-items:start}.invoice-edit-shell .form-pro{padding:18px}.invoice-edit-shell .form-section-pro{padding:17px}.invoice-summary-side{position:sticky;top:18px}.invoice-total-card .summary-divider{height:1px;background:rgba(255,255,255,.25);margin:15px 0}.summary-money-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:9px 0}.summary-money-row span{font-size:13px;color:#dbeafe}.summary-money-row b{font-size:15px;color:#fff}.transaction-card-pro{display:grid;gap:9px}.side-card-title{display:flex;align-items:center;gap:9px}.side-card-title>i{width:34px;height:34px;border-radius:10px;background:#eef6ff;color:#0d6efd;display:flex;align-items:center;justify-content:center}.side-card-title h3{margin:0}.transaction-card-pro>strong{font-size:16px;color:#0f172a}.transaction-card-pro>span{display:flex;gap:8px;color:#64748b;font-size:13px;line-height:1.45}.mini-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:3px}.mini-info-grid>div{padding:10px;border-radius:12px;background:#f8fafc;border:1px solid #e5edf6}.mini-info-grid small{display:block;color:#64748b;font-size:11px;margin-bottom:3px}.mini-info-grid b{display:block;color:#0f172a;font-size:13px}.empty-side-info{padding:12px;border-radius:12px;background:#f8fafc}.sticky-side-actions{padding-top:2px}.invoice-edit-shell .form-actions-pro{position:sticky;bottom:0;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);padding:14px 0 2px;border-top:1px solid #e8eef6;z-index:4}
 @media(max-width:1180px){.invoice-summary-side{position:static}.invoice-header-meta{justify-content:flex-start}.invoice-edit-hero{align-items:flex-start}}
 @media(max-width:760px){.invoice-edit-hero{padding:15px}.invoice-title-line{display:block}.invoice-number-chip{display:inline-block;margin-top:7px}.invoice-header-meta{margin-top:14px}.status-chip,.meta-chip{font-size:12px;padding:8px 10px}.invoice-edit-shell .form-pro{padding:12px}.mini-info-grid{grid-template-columns:1fr 1fr}}
+
+/* Invoice edit: keep summary panel on the right on desktop, including VPS/browser zoom variants. */
+@media (min-width:901px){
+  .invoice-edit-shell{display:grid!important;grid-template-columns:minmax(0,1fr) 320px!important;align-items:start!important;gap:22px!important;width:100%!important}
+  .invoice-edit-shell>.form-pro{min-width:0!important;width:100%!important}
+  .invoice-edit-shell>.invoice-summary-side{display:flex!important;flex-direction:column!important;grid-template-columns:none!important;position:sticky!important;top:18px!important;align-self:start!important;width:100%!important;min-width:0!important}
+}
+@media (max-width:900px){
+  .invoice-edit-shell{grid-template-columns:1fr!important}
+  .invoice-edit-shell>.invoice-summary-side{position:static!important;margin-top:0!important}
+}
