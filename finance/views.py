@@ -1,4 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
+from django.http import FileResponse, Http404
 from django.conf import settings
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
@@ -15,6 +16,7 @@ from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
 import json
+import mimetypes
 from ponds.models import Pond
 from sales.models import Sale
 from .models import OperationalExpense, ExpenseDocument, TradeAccount, TradePayment, TradeDocument
@@ -809,6 +811,42 @@ def edit_expense(request, pk):
         return redirect('finance:expenses')
     return render(request, 'finance/expense_form.html', {'ponds': ponds, 'categories': OperationalExpense.CATEGORIES, 'obj': obj, 'mode': 'edit'})
 
+
+
+@login_required
+@permission_required('finance.expenses')
+def preview_expense_document(request, pk):
+    """Menampilkan dokumen pengeluaran secara inline dengan pemeriksaan hak akses."""
+    document = get_object_or_404(ExpenseDocument.objects.select_related('expense'), pk=pk)
+    if not document.file:
+        raise Http404('Dokumen tidak tersedia.')
+    try:
+        file_handle = document.file.open('rb')
+    except (FileNotFoundError, OSError):
+        raise Http404('Berkas dokumen tidak ditemukan pada media penyimpanan.')
+    filename = document.original_name or Path(document.file.name).name
+    content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+    response = FileResponse(file_handle, as_attachment=False, filename=filename, content_type=content_type)
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
+
+
+@login_required
+@permission_required('finance.expenses')
+def preview_expense_receipt(request, pk):
+    """Preview bukti lama (field receipt) tanpa membuka URL media secara langsung."""
+    expense = get_object_or_404(OperationalExpense, pk=pk)
+    if not expense.receipt:
+        raise Http404('Bukti pengeluaran tidak tersedia.')
+    try:
+        file_handle = expense.receipt.open('rb')
+    except (FileNotFoundError, OSError):
+        raise Http404('Berkas bukti tidak ditemukan pada media penyimpanan.')
+    filename = Path(expense.receipt.name).name
+    content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+    response = FileResponse(file_handle, as_attachment=False, filename=filename, content_type=content_type)
+    response['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 @login_required
 @permission_required('finance.expenses')

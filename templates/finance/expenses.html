@@ -15,6 +15,20 @@
 .finance-action-primary:hover{color:#fff;transform:translateY(-1px);box-shadow:0 10px 22px rgba(11,47,94,.28)}
 @media (max-width:991.98px){.page-head{align-items:flex-start}.finance-page-actions{width:100%;justify-content:flex-start}.finance-action-link{flex:1 1 185px}.finance-action-primary{flex:1 1 185px}}
 @media (max-width:575.98px){.finance-page-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}.finance-action-link{width:100%;min-width:0;padding:8px 10px}.finance-action-copy small{white-space:normal}.finance-action-primary{grid-column:1/-1;width:100%}}
+.expense-preview-btn{display:inline-flex;align-items:center;gap:6px;border:0;background:#eef5ff;color:#0866df;border-radius:9px;padding:6px 10px;font-size:12px;font-weight:800;white-space:nowrap}
+.expense-preview-btn:hover{background:#dcecff;color:#0759c5}
+.expense-doc-list{max-height:420px;overflow:auto;border-right:1px solid #e8eef6}
+.expense-doc-item{width:100%;display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid #e1e9f3;border-radius:10px;background:#fff;text-align:left;margin-bottom:8px;transition:.15s ease}
+.expense-doc-item:hover,.expense-doc-item.active{border-color:#86b7fe;background:#f2f7ff}
+.expense-doc-icon{width:34px;height:34px;border-radius:9px;background:#edf4ff;color:#1268dc;display:flex;align-items:center;justify-content:center;flex:0 0 34px}
+.expense-doc-name{font-size:12px;font-weight:800;color:#14213d;word-break:break-word}
+.expense-doc-meta{font-size:10px;color:#74829a;margin-top:2px}
+.expense-preview-stage{min-height:460px;background:#f3f6fa;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+.expense-preview-stage iframe{width:100%;height:68vh;min-height:460px;border:0;background:#fff}
+.expense-preview-stage img{max-width:100%;max-height:68vh;object-fit:contain}
+.expense-preview-empty{text-align:center;color:#718096;padding:30px}
+.expense-preview-empty i{font-size:42px;color:#9eb0c8;margin-bottom:12px}
+@media(max-width:767.98px){.expense-doc-list{border-right:0;border-bottom:1px solid #e8eef6;max-height:190px;margin-bottom:12px}.expense-preview-stage,.expense-preview-stage iframe{min-height:380px;height:58vh}}
 </style>
 <div class="page-head">
   <div>
@@ -37,6 +51,80 @@
 </div>
 <div class="kpi-grid mb-3"><div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-wallet"></i></div><div><span>Total Pengeluaran</span><strong>{{ total|rupiah }}</strong><small>Periode terpilih</small></div></div><div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-calendar-day"></i></div><div><span>Rata-rata/Hari</span><strong>{{ average_per_day|rupiah }}</strong><small>{{ average_label }}</small></div></div><div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-seedling"></i></div><div><span>Terbesar</span><strong>{{ largest_category }}</strong><small>{{ largest_category_amount|rupiah }}</small></div></div><div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-file-invoice"></i></div><div><span>Export Laporan</span><strong>PDF/Excel</strong><small>Filter rentang tanggal</small></div></div></div>
 <div class="cardx mb-3"><form method="get" class="row g-2 align-items-end"><div class="col-md-3"><label class="form-label">Tanggal Mulai</label><input class="form-control" type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"></div><div class="col-md-3"><label class="form-label">Tanggal Selesai</label><input class="form-control" type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"></div><div class="col-md-2"><label class="form-label">Kategori</label><select class="form-select" name="category"><option value="">Semua</option>{% for value,label in categories %}<option value="{{value}}" {% if request.GET.category == value %}selected{% endif %}>{{label}}</option>{% endfor %}</select></div><div class="col-md-2"><label class="form-label">Kolam</label><select class="form-select" name="pond"><option value="">Semua</option>{% for p in ponds %}<option value="{{p.id}}" {% if request.GET.pond == p.id|stringformat:'s' %}selected{% endif %}>{{p.name}}</option>{% endfor %}</select></div><div class="col-md-2 d-grid"><button class="btn btn-outline-primary">Terapkan Filter</button></div></form><div class="mt-3 d-flex gap-2 flex-wrap"><a class="btn btn-success" href="{% url 'finance:export_expenses_excel' %}?{{ request.GET.urlencode }}">Export Excel</a><a class="btn btn-danger" href="{% url 'finance:export_expenses_pdf' %}?{{ request.GET.urlencode }}">Export PDF</a></div></div>
-<div class="cardx table-responsive"><table class="table app-table align-middle"><thead><tr><th>Tanggal</th><th>Kategori</th><th>Nama</th><th>Kolam</th><th>Jumlah</th><th>Metode</th><th>Dokumen</th><th class="text-end">Aksi</th></tr></thead><tbody>{% for i in items %}<tr><td>{{i.date}}</td><td><span class="badge-soft">{{i.category}}</span></td><td><b>{{i.name}}</b></td><td>{{i.pond.name|default:'Semua'}}</td><td>{{ i.amount|rupiah }}</td><td>{{i.payment_method}}</td><td>{% if i.documents.count %}<span class="badge-soft"><i class="fa-solid fa-paperclip"></i> {{ i.documents.count }} file</span>{% elif i.receipt %}<a href="{{i.receipt.url}}" target="_blank" rel="noopener">Bukti lama</a>{% else %}-{% endif %}</td><td><div class="d-flex gap-2 flex-wrap justify-content-end"><a class="btn btn-sm btn-warning text-dark" href="{% url 'finance:edit_expense' i.id %}"><i class="fa-solid fa-pen-to-square"></i> Edit</a><form method="post" action="{% url 'finance:delete_expense' i.id %}" onsubmit="return confirm('Hapus data pengeluaran ini?');">{% csrf_token %}<button class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i> Hapus</button></form></div></td></tr>{% empty %}<tr><td colspan="8" class="text-center text-muted">Tidak ada data pada filter ini.</td></tr>{% endfor %}</tbody></table></div>
+<div class="cardx table-responsive"><table class="table app-table align-middle"><thead><tr><th>Tanggal</th><th>Kategori</th><th>Nama</th><th>Kolam</th><th>Jumlah</th><th>Metode</th><th>Dokumen</th><th class="text-end">Aksi</th></tr></thead><tbody>{% for i in items %}<tr><td>{{i.date}}</td><td><span class="badge-soft">{{i.category}}</span></td><td><b>{{i.name}}</b></td><td>{{i.pond.name|default:'Semua'}}</td><td>{{ i.amount|rupiah }}</td><td>{{i.payment_method}}</td><td>{% if i.documents.count or i.receipt %}<button type="button" class="expense-preview-btn" data-bs-toggle="modal" data-bs-target="#expensePreviewModal{{ i.id }}"><i class="fa-solid fa-eye"></i> Preview {% if i.documents.count %}({{ i.documents.count }}){% else %}(1){% endif %}</button>{% else %}-{% endif %}</td><td><div class="d-flex gap-2 flex-wrap justify-content-end"><a class="btn btn-sm btn-warning text-dark" href="{% url 'finance:edit_expense' i.id %}"><i class="fa-solid fa-pen-to-square"></i> Edit</a><form method="post" action="{% url 'finance:delete_expense' i.id %}" onsubmit="return confirm('Hapus data pengeluaran ini?');">{% csrf_token %}<button class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i> Hapus</button></form></div></td></tr>{% empty %}<tr><td colspan="8" class="text-center text-muted">Tidak ada data pada filter ini.</td></tr>{% endfor %}</tbody></table></div>
 {% include '_pagination.html' %}
+
+{% for i in items %}
+  {% if i.documents.count or i.receipt %}
+  <div class="modal fade" id="expensePreviewModal{{ i.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header">
+          <div><h5 class="modal-title mb-1"><i class="fa-solid fa-file-magnifying-glass me-2 text-primary"></i>Dokumen Pengeluaran</h5><small class="text-muted">{{ i.name }} · {{ i.date }}</small></div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-4 expense-doc-list">
+              {% for doc in i.documents.all %}
+              <button type="button" class="expense-doc-item js-expense-doc-preview {% if forloop.first %}active{% endif %}" data-url="{% url 'finance:preview_expense_document' doc.id %}" data-extension="{{ doc.file_extension }}" data-filename="{{ doc.original_name|default:doc.file.name|escapejs }}">
+                <span class="expense-doc-icon"><i class="fa-solid {% if doc.file_extension == 'pdf' %}fa-file-pdf{% elif doc.file_extension == 'jpg' or doc.file_extension == 'jpeg' or doc.file_extension == 'png' or doc.file_extension == 'webp' %}fa-file-image{% elif doc.file_extension == 'doc' or doc.file_extension == 'docx' %}fa-file-word{% elif doc.file_extension == 'xls' or doc.file_extension == 'xlsx' %}fa-file-excel{% else %}fa-file{% endif %}"></i></span>
+                <span><span class="expense-doc-name d-block">{{ doc.original_name|default:doc.file.name }}</span><span class="expense-doc-meta">{{ doc.file_extension|upper }} · {{ doc.uploaded_at|date:'d M Y H:i' }}</span></span>
+              </button>
+              {% empty %}
+                {% if i.receipt %}<button type="button" class="expense-doc-item js-expense-doc-preview active" data-url="{% url 'finance:preview_expense_receipt' i.id %}" data-extension="jpg" data-filename="Bukti lama"><span class="expense-doc-icon"><i class="fa-solid fa-file-image"></i></span><span><span class="expense-doc-name d-block">Bukti lama</span><span class="expense-doc-meta">Gambar bukti pengeluaran</span></span></button>{% endif %}
+              {% endfor %}
+              {% if i.documents.count and i.receipt %}<button type="button" class="expense-doc-item js-expense-doc-preview" data-url="{% url 'finance:preview_expense_receipt' i.id %}" data-extension="jpg" data-filename="Bukti lama"><span class="expense-doc-icon"><i class="fa-solid fa-file-image"></i></span><span><span class="expense-doc-name d-block">Bukti lama</span><span class="expense-doc-meta">Dokumen versi sebelumnya</span></span></button>{% endif %}
+            </div>
+            <div class="col-md-8">
+              <div class="d-flex justify-content-between align-items-center mb-2 gap-2"><strong class="js-preview-filename text-truncate">Pilih dokumen</strong><a class="btn btn-sm btn-outline-primary js-preview-open" href="#" target="_blank" rel="noopener"><i class="fa-solid fa-up-right-from-square me-1"></i>Buka/Unduh</a></div>
+              <div class="expense-preview-stage">
+                <iframe class="js-preview-frame d-none" title="Preview dokumen"></iframe>
+                <img class="js-preview-image d-none" alt="Preview bukti pengeluaran">
+                <div class="expense-preview-empty js-preview-empty"><i class="fa-regular fa-file-lines d-block"></i><strong>Preview belum dipilih</strong><div class="small mt-2">PDF dan gambar dapat ditampilkan langsung. File Word/Excel dapat dibuka atau diunduh.</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+{% endfor %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const imageExts = ['jpg','jpeg','png','webp','gif'];
+  const frameExts = ['pdf','txt'];
+  function showPreview(button) {
+    const modal = button.closest('.modal');
+    if (!modal) return;
+    modal.querySelectorAll('.js-expense-doc-preview').forEach(el => el.classList.remove('active'));
+    button.classList.add('active');
+    const url = button.dataset.url;
+    const ext = (button.dataset.extension || '').toLowerCase();
+    const filename = button.dataset.filename || 'Dokumen';
+    const frame = modal.querySelector('.js-preview-frame');
+    const image = modal.querySelector('.js-preview-image');
+    const empty = modal.querySelector('.js-preview-empty');
+    const openLink = modal.querySelector('.js-preview-open');
+    modal.querySelector('.js-preview-filename').textContent = filename;
+    openLink.href = url;
+    frame.classList.add('d-none'); frame.removeAttribute('src');
+    image.classList.add('d-none'); image.removeAttribute('src');
+    empty.classList.add('d-none');
+    if (imageExts.includes(ext)) { image.src = url; image.classList.remove('d-none'); }
+    else if (frameExts.includes(ext)) { frame.src = url; frame.classList.remove('d-none'); }
+    else {
+      empty.innerHTML = '<i class="fa-regular fa-file-lines d-block"></i><strong>Format ini tidak dapat dipreview langsung di browser.</strong><div class="small mt-2">Gunakan tombol <b>Buka/Unduh</b> untuk melihat file ' + ext.toUpperCase() + '.</div>';
+      empty.classList.remove('d-none');
+    }
+  }
+  document.querySelectorAll('.js-expense-doc-preview').forEach(button => button.addEventListener('click', () => showPreview(button)));
+  document.querySelectorAll('[id^="expensePreviewModal"]').forEach(modal => {
+    modal.addEventListener('shown.bs.modal', function () { const first = modal.querySelector('.js-expense-doc-preview.active') || modal.querySelector('.js-expense-doc-preview'); if (first) showPreview(first); });
+    modal.addEventListener('hidden.bs.modal', function () { const frame = modal.querySelector('.js-preview-frame'); const image = modal.querySelector('.js-preview-image'); if(frame) frame.removeAttribute('src'); if(image) image.removeAttribute('src'); });
+  });
+});
+</script>
 {% endblock %}
