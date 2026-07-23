@@ -4,6 +4,7 @@
 {% block content %}
 <style id="invoice-desktop-layout-fix">
 /* Critical layout is kept in the template so VPS static-file cache cannot move the summary below the form. */
+.invoice-edit-page{max-width:none !important;width:100% !important;}
 .invoice-edit-shell{
   display:grid !important;
   grid-template-columns:minmax(0,1fr) 320px !important;
@@ -22,12 +23,12 @@
   top:18px !important;
   align-self:start !important;
 }
-@media (max-width:900px){
+@media (max-width:680px){
   .invoice-edit-shell{grid-template-columns:1fr !important;}
   .invoice-edit-shell>.invoice-summary-side{position:static !important;margin-top:0 !important;}
 }
 </style>
-<div class="form-page-pro">
+<div class="form-page-pro invoice-edit-page">
   <div class="form-hero-pro invoice-edit-hero">
     <div class="form-title-wrap">
       <div class="form-title-icon"><i class="fa-solid fa-file-invoice-dollar"></i></div>
