@@ -4,6 +4,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, Table, TableStyle
 from django.contrib.auth.decorators import login_required
+from django.contrib import messages
 from django.views.decorators.http import require_POST
 from accounts.rbac import permission_required
 from django.db.models import Sum, Count, Min, Max
@@ -12,6 +13,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from datetime import timedelta
 from decimal import Decimal
+from pathlib import Path
 import json
 from ponds.models import Pond
 from sales.models import Sale
@@ -30,17 +32,19 @@ def _save_expense_documents(request, expense):
     description = request.POST.get('document_description', '').strip()
     saved_count = 0
     for uploaded_file in request.FILES.getlist('documents'):
-        extension = Path(uploaded_file.name).suffix.lower()
+        # Path.name membuang komponen folder dari nama file yang dikirim browser.
+        safe_name = Path(uploaded_file.name).name
+        extension = Path(safe_name).suffix.lower()
         if extension not in EXPENSE_DOCUMENT_EXTENSIONS:
-            messages.error(request, f'File {uploaded_file.name} tidak didukung.')
+            messages.error(request, f'File {safe_name} tidak didukung.')
             continue
         if uploaded_file.size > EXPENSE_DOCUMENT_MAX_SIZE:
-            messages.error(request, f'File {uploaded_file.name} melebihi batas 10 MB.')
+            messages.error(request, f'File {safe_name} melebihi batas 10 MB.')
             continue
         ExpenseDocument.objects.create(
             expense=expense,
             file=uploaded_file,
-            original_name=uploaded_file.name[:255],
+            original_name=safe_name[:255],
             description=description[:180],
             uploaded_by=request.user if request.user.is_authenticated else None,
         )
@@ -842,7 +846,6 @@ def delete_expense(request, pk):
 # Neraca, laba rugi, peredaran bruto, aset dan penyusutan
 # =============================================================================
 from calendar import monthrange
-from django.contrib import messages
 from django.db.models import Q
 from django.http import HttpResponse
 from .models import OtherRevenue, BalanceEntry, FixedAsset, TradeAccount, TradePayment
