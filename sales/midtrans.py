@@ -142,6 +142,8 @@ def create_snap_transaction(sale, request):
         'midtrans_snap_token', 'midtrans_payment_url', 'payment_method',
         'status', 'midtrans_status', 'midtrans_raw_response'
     ])
+    from finance.receivable_sync import sync_sale_receivable
+    sync_sale_receivable(sale)
     return data
 
 
@@ -190,6 +192,8 @@ def apply_midtrans_status(sale, payload):
         'status', 'payment_method', 'midtrans_status', 'midtrans_transaction_id',
         'midtrans_payment_type', 'midtrans_raw_response', 'paid_at'
     ])
+    from finance.receivable_sync import sync_sale_receivable
+    sync_sale_receivable(sale)
     return sale
 
 

@@ -1247,6 +1247,9 @@ def _trade_summary(rows):
 @login_required
 @permission_required('finance.tax_reports')
 def receivables(request):
+    # Nota lama yang masih belum lunas otomatis dibuatkan kartu piutang.
+    from .receivable_sync import sync_open_sales
+    sync_open_sales()
     rows = _trade_queryset(request, TradeAccount.RECEIVABLE)
     original, paid, outstanding, overdue = _trade_summary(rows)
     return render(request, 'finance/trade_accounts.html', {

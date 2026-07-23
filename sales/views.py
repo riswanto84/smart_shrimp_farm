@@ -23,6 +23,7 @@ from core.utils import parse_rupiah
 from core.pagination import paginate_queryset
 
 from cultivation.utils import get_selected_cycle, filter_selected_cycle
+from finance.receivable_sync import sync_sale_receivable
 
 
 
@@ -341,6 +342,7 @@ def cashier(request):
             )
             SaleItem.objects.create(sale=sale, harvest_id=harvest_id, size_text=request.POST.get('size_text', ''), weight_kg=weight, price_per_kg=price, subtotal=subtotal)
             _save_sale_documents(request, sale)
+            sync_sale_receivable(sale)
             return redirect('sales:invoice', pk=sale.pk)
         except ValueError as exc:
             messages.error(request, str(exc))
@@ -414,8 +416,9 @@ def edit_sale(request, pk):
         item.subtotal = subtotal
         item.save()
         _save_sale_documents(request, sale)
+        sync_sale_receivable(sale)
 
-        messages.success(request, 'Nota penjualan berhasil diperbarui.')
+        messages.success(request, 'Nota penjualan berhasil diperbarui dan piutang usaha telah disinkronkan.')
         return redirect('sales:invoice', pk=sale.pk)
 
     return render(request, 'sales/sale_form.html', {'sale': sale, 'item': item, 'customers': customers, 'harvests': harvests, 'mode': 'edit'})
