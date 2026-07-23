@@ -1,19 +1,26 @@
 {% extends 'base.html' %}{% load currency %}{% block content %}
 <style>
-.balance-page{--navy:#0b2f5b;--blue:#1769e0;--soft:#f5f8fc;--line:#e3eaf4;--green:#138a5b;--red:#dc3545;--amber:#c8860a}
+.balance-page{--navy:#0b2f5b;--blue:#1769e0;--soft:#f5f8fc;--line:#e3eaf4;--green:#138a5b;--red:#dc3545;--amber:#c8860a;width:100%;max-width:none!important;min-width:0;box-sizing:border-box}
+.balance-page *{box-sizing:border-box}
+.balance-page .neraca-kpi-card{display:block!important;position:relative!important;min-width:0!important;width:auto!important;height:auto!important;align-items:initial!important;justify-content:initial!important;flex-direction:initial!important;text-align:left!important;overflow:hidden}
+.balance-page .neraca-kpi-label,.balance-page .neraca-kpi-value,.balance-page .neraca-kpi-sub{display:block!important;width:100%!important;max-width:100%!important;position:static!important;float:none!important;flex:none!important;text-align:left!important;white-space:normal!important}
+.balance-page .neraca-kpi-value{line-height:1.18!important;overflow-wrap:anywhere}
+.balance-page .neraca-bar-track{display:block!important;width:100%!important;min-width:70px!important;padding:0!important;border:0!important}
+.balance-page .neraca-bar-fill{display:block!important;margin:0!important;padding:0!important}
+.balance-page .panel{min-width:0}
 .balance-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:18px}
 .balance-title h1{font-size:30px;margin:0;color:#102443;font-weight:800}.balance-title p{margin:5px 0 0;color:#6b7c93}
 .balance-actions{display:flex;gap:8px;flex-wrap:wrap}.balance-filter{display:flex;gap:10px;align-items:center;padding:14px 16px;background:white;border:1px solid var(--line);border-radius:16px;margin-bottom:16px}.balance-filter input{max-width:420px}
-.kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:16px}.kpi-card{background:white;border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 8px 24px rgba(25,55,95,.05)}.kpi-label{font-size:13px;color:#687a91;font-weight:700}.kpi-value{font-size:25px;font-weight:850;color:#102443;margin-top:6px}.kpi-sub{font-size:12px;color:#78899e;margin-top:5px}.status-ok{color:var(--green)}.status-bad{color:var(--red)}
+.neraca-kpi-grid{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:14px;margin-bottom:16px;width:100%}.neraca-kpi-card{background:white;border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 8px 24px rgba(25,55,95,.05)}.neraca-kpi-label{font-size:12px;color:#687a91;font-weight:800;letter-spacing:.025em}.neraca-kpi-value{font-size:clamp(20px,1.65vw,26px);font-weight:850;color:#102443;margin-top:8px}.neraca-kpi-sub{font-size:12px;color:#78899e;margin-top:8px;line-height:1.4}.status-ok{color:var(--green)}.status-bad{color:var(--red)}
 .balance-main{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);gap:16px}.panel{background:white;border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 8px 24px rgba(25,55,95,.045)}.panel h2{font-size:18px;color:#102443;font-weight:800;margin:0 0 14px}.section-title{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#60738d;font-weight:800;padding:10px 0 6px;border-bottom:1px solid var(--line)}
 .balance-table{width:100%;border-collapse:collapse}.balance-table td,.balance-table th{padding:10px 6px;border-bottom:1px solid #edf1f6}.balance-table td:last-child,.balance-table th:last-child{text-align:right;white-space:nowrap}.balance-table .subtotal th{background:#f6f9fd}.balance-table .grand th{font-size:16px;color:#102443;border-top:2px solid #ced8e7;background:#eef4fb}.warning-row td{background:#fff7d9;color:#664d03}.negative{color:#b3261e}
-.composition-list{display:grid;gap:13px}.composition-row{display:grid;grid-template-columns:135px 1fr 92px;gap:10px;align-items:center}.composition-label{font-size:13px;font-weight:700;color:#31445f}.bar-track{height:10px;background:#edf2f8;border-radius:99px;overflow:hidden}.bar-fill{height:100%;background:linear-gradient(90deg,#1769e0,#24b79b);border-radius:99px}.composition-value{text-align:right;font-size:12px;font-weight:700;color:#40536d}
-.ratio-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.ratio-card{border:1px solid var(--line);background:#f8fbff;border-radius:14px;padding:13px}.ratio-card span{display:block;color:#6c7e94;font-size:12px}.ratio-card strong{display:block;color:#102443;font-size:20px;margin-top:4px}
+.neraca-composition-list{display:grid;gap:13px}.neraca-composition-row{display:grid;grid-template-columns:135px 1fr 92px;gap:10px;align-items:center}.neraca-composition-label{font-size:13px;font-weight:700;color:#31445f}.neraca-bar-track{height:10px;background:#edf2f8;border-radius:99px;overflow:hidden}.neraca-bar-fill{height:100%;background:linear-gradient(90deg,#1769e0,#24b79b);border-radius:99px}.neraca-composition-value{text-align:right;font-size:12px;font-weight:700;color:#40536d}
+.neraca-ratio-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.neraca-ratio-card{border:1px solid var(--line);background:#f8fbff;border-radius:14px;padding:13px}.neraca-ratio-card span{display:block;color:#6c7e94;font-size:12px}.neraca-ratio-card strong{display:block;color:#102443;font-size:20px;margin-top:4px}
 .validation-list{display:grid;gap:8px}.validation-item{display:flex;gap:9px;align-items:center;padding:9px 10px;border-radius:12px;background:#f7f9fc;font-size:13px}.validation-item.ok i{color:var(--green)}.validation-item.bad i{color:var(--red)}
 .status-banner{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:15px 17px;border-radius:16px;margin:16px 0}.status-banner.ok{background:#e8f7f0;color:#0a6844;border:1px solid #b8e4d2}.status-banner.bad{background:#fdecec;color:#a51d2d;border:1px solid #f4bfc5}.status-banner strong{font-size:16px}.badge-status{font-weight:800;background:rgba(255,255,255,.7);padding:6px 10px;border-radius:99px}
-.recon-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.recon-item{padding:12px;border-radius:13px;background:#f7f9fc}.recon-item span{display:block;font-size:12px;color:#6f8197}.recon-item strong{display:block;margin-top:4px;color:#102443}.warnings{margin-top:12px}.warnings .alert{margin-bottom:8px}
-@media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(2,1fr)}.balance-main{grid-template-columns:1fr}.recon-grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:650px){.balance-head{display:block}.balance-actions{margin-top:12px}.kpi-grid,.recon-grid{grid-template-columns:1fr}.balance-filter{display:block}.balance-filter button{margin-top:10px}.composition-row{grid-template-columns:110px 1fr}.composition-value{grid-column:2}.ratio-grid{grid-template-columns:1fr}}
+.neraca-recon-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.neraca-recon-item{padding:12px;border-radius:13px;background:#f7f9fc}.neraca-recon-item span{display:block;font-size:12px;color:#6f8197}.neraca-recon-item strong{display:block;margin-top:4px;color:#102443}.warnings{margin-top:12px}.warnings .alert{margin-bottom:8px}
+@media(max-width:1180px){.neraca-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.balance-main{grid-template-columns:1fr}.neraca-recon-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:650px){.balance-head{display:block}.balance-actions{margin-top:12px}.neraca-kpi-grid,.neraca-recon-grid{grid-template-columns:1fr!important}.balance-filter{display:block}.balance-filter button{margin-top:10px}.neraca-composition-row{grid-template-columns:110px 1fr}.neraca-composition-value{grid-column:2}.neraca-ratio-grid{grid-template-columns:1fr}}
 </style>
 <div class="balance-page">
   <div class="balance-head">
@@ -30,11 +37,11 @@
     <button class="btn btn-primary"><i class="fa-solid fa-filter"></i> Tampilkan</button>
   </form>
 
-  <div class="kpi-grid">
-    <div class="kpi-card"><div class="kpi-label">TOTAL ASET</div><div class="kpi-value">{{ total_assets|rupiah }}</div><div class="kpi-sub">Aset lancar dan aset tetap bersih</div></div>
-    <div class="kpi-card"><div class="kpi-label">TOTAL KEWAJIBAN</div><div class="kpi-value">{{ total_liabilities|rupiah }}</div><div class="kpi-sub">Termasuk utang usaha</div></div>
-    <div class="kpi-card"><div class="kpi-label">TOTAL EKUITAS</div><div class="kpi-value {% if total_equity_with_profit < 0 %}negative{% endif %}">{{ total_equity_with_profit|rupiah }}</div><div class="kpi-sub">Modal, laba ditahan, dan laba berjalan</div></div>
-    <div class="kpi-card"><div class="kpi-label">STATUS NERACA</div><div class="kpi-value {% if is_balanced %}status-ok{% else %}status-bad{% endif %}">{% if is_balanced %}<i class="fa-solid fa-circle-check"></i> Seimbang{% else %}<i class="fa-solid fa-triangle-exclamation"></i> Belum Seimbang{% endif %}</div><div class="kpi-sub">Selisih {{ difference|rupiah }}</div></div>
+  <div class="neraca-kpi-grid">
+    <div class="neraca-kpi-card"><div class="neraca-kpi-label">TOTAL ASET</div><div class="neraca-kpi-value">{{ total_assets|rupiah }}</div><div class="neraca-kpi-sub">Aset lancar dan aset tetap bersih</div></div>
+    <div class="neraca-kpi-card"><div class="neraca-kpi-label">TOTAL KEWAJIBAN</div><div class="neraca-kpi-value">{{ total_liabilities|rupiah }}</div><div class="neraca-kpi-sub">Termasuk utang usaha</div></div>
+    <div class="neraca-kpi-card"><div class="neraca-kpi-label">TOTAL EKUITAS</div><div class="neraca-kpi-value {% if total_equity_with_profit < 0 %}negative{% endif %}">{{ total_equity_with_profit|rupiah }}</div><div class="neraca-kpi-sub">Modal, laba ditahan, dan laba berjalan</div></div>
+    <div class="neraca-kpi-card"><div class="neraca-kpi-label">STATUS NERACA</div><div class="neraca-kpi-value {% if is_balanced %}status-ok{% else %}status-bad{% endif %}">{% if is_balanced %}<i class="fa-solid fa-circle-check"></i> Seimbang{% else %}<i class="fa-solid fa-triangle-exclamation"></i> Belum Seimbang{% endif %}</div><div class="neraca-kpi-sub">Selisih {{ difference|rupiah }}</div></div>
   </div>
 
   <div class="balance-main">
@@ -57,12 +64,12 @@
     <div>
       <div class="panel" style="margin-bottom:16px">
         <h2><i class="fa-solid fa-chart-pie"></i> Komposisi Aset</h2>
-        <div class="composition-list">
+        <div class="neraca-composition-list">
           {% for item in asset_composition %}
-          <div class="composition-row">
-            <div class="composition-label">{{ item.label }}</div>
-            <div class="bar-track"><div class="bar-fill" style="width:{% if item.percent > 100 %}100{% else %}{{ item.percent|floatformat:1 }}{% endif %}%"></div></div>
-            <div class="composition-value">{{ item.percent|floatformat:1 }}%</div>
+          <div class="neraca-composition-row">
+            <div class="neraca-composition-label">{{ item.label }}</div>
+            <div class="neraca-bar-track"><div class="neraca-bar-fill" style="width:{% if item.percent > 100 %}100{% else %}{{ item.percent|floatformat:1 }}{% endif %}%"></div></div>
+            <div class="neraca-composition-value">{{ item.percent|floatformat:1 }}%</div>
           </div>
           {% endfor %}
         </div>
@@ -90,22 +97,22 @@
   </div>
 
   <div class="row g-3">
-    <div class="col-lg-5"><div class="panel h-100"><h2><i class="fa-solid fa-gauge-high"></i> Rasio Keuangan</h2><div class="ratio-grid">
-      <div class="ratio-card"><span>Current Ratio</span><strong>{% if current_ratio != None %}{{ current_ratio|floatformat:2 }}x{% else %}-{% endif %}</strong></div>
-      <div class="ratio-card"><span>Cash Ratio</span><strong>{% if cash_ratio != None %}{{ cash_ratio|floatformat:2 }}x{% else %}-{% endif %}</strong></div>
-      <div class="ratio-card"><span>Debt to Equity</span><strong>{% if debt_to_equity != None %}{{ debt_to_equity|floatformat:2 }}x{% else %}-{% endif %}</strong></div>
-      <div class="ratio-card"><span>Debt Ratio</span><strong>{% if debt_ratio != None %}{{ debt_ratio|floatformat:2 }}{% else %}-{% endif %}</strong></div>
+    <div class="col-lg-5"><div class="panel h-100"><h2><i class="fa-solid fa-gauge-high"></i> Rasio Keuangan</h2><div class="neraca-ratio-grid">
+      <div class="neraca-ratio-card"><span>Current Ratio</span><strong>{% if current_ratio != None %}{{ current_ratio|floatformat:2 }}x{% else %}-{% endif %}</strong></div>
+      <div class="neraca-ratio-card"><span>Cash Ratio</span><strong>{% if cash_ratio != None %}{{ cash_ratio|floatformat:2 }}x{% else %}-{% endif %}</strong></div>
+      <div class="neraca-ratio-card"><span>Debt to Equity</span><strong>{% if debt_to_equity != None %}{{ debt_to_equity|floatformat:2 }}x{% else %}-{% endif %}</strong></div>
+      <div class="neraca-ratio-card"><span>Debt Ratio</span><strong>{% if debt_ratio != None %}{{ debt_ratio|floatformat:2 }}{% else %}-{% endif %}</strong></div>
     </div></div></div>
     <div class="col-lg-7"><div class="panel h-100"><h2><i class="fa-solid fa-list-check"></i> Validasi Otomatis</h2><div class="validation-list">
       {% for check in validation_checks %}<div class="validation-item {% if check.ok %}ok{% else %}bad{% endif %}"><i class="fa-solid {% if check.ok %}fa-circle-check{% else %}fa-circle-exclamation{% endif %}"></i><span>{{ check.label }}</span></div>{% endfor %}
     </div></div></div>
   </div>
 
-  <div class="panel" style="margin-top:16px"><h2><i class="fa-solid fa-rotate"></i> Rekonsiliasi Otomatis</h2><div class="recon-grid">
-    <div class="recon-item"><span>Pendapatan Penjualan</span><strong>{{ sales_revenue|rupiah }}</strong></div>
-    <div class="recon-item"><span>Pendapatan Lain</span><strong>{{ other_revenue|rupiah }}</strong></div>
-    <div class="recon-item"><span>Beban Operasional</span><strong>{{ operating_cost|rupiah }}</strong></div>
-    <div class="recon-item"><span>Penyusutan Tahun Berjalan</span><strong>{{ current_year_depreciation|rupiah }}</strong></div>
+  <div class="panel" style="margin-top:16px"><h2><i class="fa-solid fa-rotate"></i> Rekonsiliasi Otomatis</h2><div class="neraca-recon-grid">
+    <div class="neraca-recon-item"><span>Pendapatan Penjualan</span><strong>{{ sales_revenue|rupiah }}</strong></div>
+    <div class="neraca-recon-item"><span>Pendapatan Lain</span><strong>{{ other_revenue|rupiah }}</strong></div>
+    <div class="neraca-recon-item"><span>Beban Operasional</span><strong>{{ operating_cost|rupiah }}</strong></div>
+    <div class="neraca-recon-item"><span>Penyusutan Tahun Berjalan</span><strong>{{ current_year_depreciation|rupiah }}</strong></div>
   </div>{% if warnings %}<div class="warnings">{% for warning in warnings %}<div class="alert alert-warning py-2"><i class="fa-solid fa-triangle-exclamation"></i> {{ warning }}</div>{% endfor %}</div>{% endif %}</div>
 </div>
 {% endblock %}
