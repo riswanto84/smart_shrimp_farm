@@ -3,17 +3,26 @@
 {% load l10n %}
 {% block content %}
 <div class="form-page-pro">
-  <div class="form-hero-pro">
+  <div class="form-hero-pro invoice-edit-hero">
     <div class="form-title-wrap">
       <div class="form-title-icon"><i class="fa-solid fa-file-invoice-dollar"></i></div>
       <div>
-        <h1>{% if mode == 'edit' %}Edit Nota Penjualan{% else %}Kasir Penjualan{% endif %}</h1>
-        <p>{% if mode == 'edit' %}Perbarui detail nota penjualan sesuai kebutuhan.{% else %}Input penjualan udang fresh mentah dengan biaya opsional dan pembayaran online.{% endif %}</p>
+        <div class="invoice-title-line">
+          <h1>{% if mode == 'edit' %}Edit Nota Penjualan{% else %}Kasir Penjualan{% endif %}</h1>
+          {% if mode == 'edit' %}<span class="invoice-number-chip">{{ sale.invoice_no }}</span>{% endif %}
+        </div>
+        <p>{% if mode == 'edit' %}Perbarui transaksi, pembayaran, dan dokumen dalam satu tampilan yang ringkas.{% else %}Input penjualan udang fresh mentah dengan biaya opsional dan pembayaran online.{% endif %}</p>
       </div>
     </div>
-    <div class="form-breadcrumb-pro">
-      <i class="fa-solid fa-house"></i><span>/</span><a href="{% url 'sales:invoices' %}">Nota</a><span>/</span><b>{% if mode == 'edit' %}Edit Nota Penjualan{% else %}Kasir Penjualan{% endif %}</b>
+    {% if mode == 'edit' %}
+    <div class="invoice-header-meta">
+      <span class="status-chip {% if sale.status == 'Lunas' %}paid{% else %}unpaid{% endif %}"><i class="fa-solid {% if sale.status == 'Lunas' %}fa-circle-check{% else %}fa-clock{% endif %}"></i>{{ sale.status }}</span>
+      <span class="meta-chip"><i class="fa-regular fa-credit-card"></i>{{ sale.payment_method|default:'-' }}</span>
+      <span class="meta-chip"><i class="fa-regular fa-calendar"></i>{{ sale.date|date:'d M Y' }}</span>
     </div>
+    {% else %}
+    <div class="form-breadcrumb-pro"><i class="fa-solid fa-house"></i><span>/</span><a href="{% url 'sales:invoices' %}">Nota</a><span>/</span><b>Kasir Penjualan</b></div>
+    {% endif %}
   </div>
 
   {% if messages %}
@@ -22,7 +31,7 @@
     {% endfor %}
   {% endif %}
 
-  <div class="form-shell-pro">
+  <div class="form-shell-pro invoice-edit-shell">
     <form method="post" enctype="multipart/form-data" class="form-pro" id="saleFormPro">{% csrf_token %}
       {% if mode == 'edit' %}
       <section class="form-section-pro">
@@ -95,7 +104,7 @@
           <div class="field-pro"><label>Metode Pembayaran</label><div class="input-icon-pro"><i class="fa-regular fa-credit-card"></i><select class="form-select" name="payment_method" id="paymentMethodPro">
             <option value="Cash" {% if sale.payment_method == 'Cash' %}selected{% endif %}>Cash</option><option value="Transfer" {% if sale.payment_method == 'Transfer' %}selected{% endif %}>Transfer</option><option value="QRIS" {% if sale.payment_method == 'QRIS' %}selected{% endif %}>QRIS</option><option value="Tempo" {% if sale.payment_method == 'Tempo' %}selected{% endif %}>Tempo</option><option value="Midtrans" {% if sale.payment_method == 'Midtrans' %}selected{% endif %}>Midtrans</option><option value="Campuran" {% if sale.payment_method == 'Campuran' %}selected{% endif %}>Pembayaran Campuran</option><option value="Lainnya" {% if sale.payment_method == 'Lainnya' %}selected{% endif %}>Metode Lainnya</option>
           </select></div><small>Pilih metode pembayaran yang digunakan pelanggan.</small></div>
-          {% if mode == 'edit' %}<div class="field-pro"><label>Status Pembayaran</label><div class="input-icon-pro"><i class="fa-solid fa-circle-check"></i><select class="form-select" name="status" required><option value="Belum Lunas" {% if sale.status == 'Belum Lunas' %}selected{% endif %}>Belum Lunas</option><option value="Lunas" {% if sale.status == 'Lunas' %}selected{% endif %}>Lunas</option></select></div><small>Status dapat diperbarui secara manual saat mengedit nota.</small></div>{% endif %}
+          {% if mode == 'edit' %}<div class="field-pro"><label>Status Pembayaran</label><div class="input-icon-pro"><i class="fa-solid fa-circle-check"></i><select class="form-select" name="status" id="paymentStatusPro" required><option value="Belum Lunas" {% if sale.status == 'Belum Lunas' %}selected{% endif %}>Belum Lunas</option><option value="Lunas" {% if sale.status == 'Lunas' %}selected{% endif %}>Lunas</option></select></div><small>Status dapat diperbarui secara manual saat mengedit nota.</small></div>{% endif %}
         </div>
         <div id="mixedPaymentFields" class="form-grid-pro two" style="display:none">
           <div class="field-pro"><label>Cash (Rp)</label><input class="form-control" name="cash_amount" inputmode="numeric" data-rupiah-input value="{% if sale %}{{ sale.cash_amount|floatformat:0 }}{% endif %}"></div>
@@ -119,25 +128,42 @@
       </div>
     </form>
 
-    <aside class="form-side-pro">
-      <div class="side-card-pro total-card-pro">
-        <span>Estimasi Total</span>
+    <aside class="form-side-pro invoice-summary-side">
+      <div class="side-card-pro total-card-pro invoice-total-card">
+        <span>Total Penjualan</span>
         <strong id="grandTotalPreview">Rp 0</strong>
-        <small>Berat × harga/kg + biaya tambahan.</small>
+        <div class="summary-divider"></div>
+        <div class="summary-money-row"><span>Sudah Dibayar</span><b id="paidAmountPreview">Rp 0</b></div>
+        <div class="summary-money-row"><span>Sisa Piutang</span><b id="outstandingPreview">Rp 0</b></div>
+        <small id="paymentSummaryHint">Nilai diperbarui otomatis dari transaksi.</small>
       </div>
-      <div class="side-card-pro">
-        <h3>Ringkasan Perubahan</h3>
-        <div class="side-list-pro">
-          <div><i class="fa-solid fa-user"></i><p><b>Pelanggan</b><small>Ubah pelanggan dan nomor HP berdasarkan master pelanggan.</small></p></div>
-          <div><i class="fa-solid fa-weight-scale"></i><p><b>Size, berat, dan harga</b><small>Subtotal udang otomatis dihitung dari berat × harga.</small></p></div>
-          <div><i class="fa-solid fa-truck-fast"></i><p><b>Biaya opsional</b><small>Ongkos kirim, pengepakan, dan biaya lainnya ikut masuk ke total.</small></p></div>
-          <div><i class="fa-solid fa-money-check"></i><p><b>Pembayaran</b><small>Ubah metode bayar, status pembayaran, dan catatan nota.</small></p></div>
-        </div>
-      </div>
+
       {% if mode == 'edit' %}
-      <div class="side-actions-pro">
-        <a class="btn btn-outline-primary w-100" href="{% url 'sales:invoice' sale.id %}"><i class="fa-solid fa-receipt"></i> Lihat Nota Thermal</a>
-        <a class="btn btn-light w-100" href="{% url 'sales:invoices' %}"><i class="fa-solid fa-arrow-left"></i> Kembali ke Daftar Nota</a>
+      <div class="side-card-pro transaction-card-pro">
+        <div class="side-card-title"><i class="fa-solid fa-user"></i><h3>Pelanggan</h3></div>
+        <strong>{{ sale.customer.name|default:'Tanpa pelanggan' }}</strong>
+        {% if sale.customer.phone %}<span><i class="fa-solid fa-phone"></i>{{ sale.customer.phone }}</span>{% endif %}
+        {% if sale.customer.address %}<span><i class="fa-solid fa-location-dot"></i>{{ sale.customer.address|truncatechars:80 }}</span>{% endif %}
+      </div>
+
+      <div class="side-card-pro transaction-card-pro">
+        <div class="side-card-title"><i class="fa-solid fa-water"></i><h3>Sumber Panen</h3></div>
+        {% if item and item.harvest %}
+          <strong>{{ item.harvest.pond.name }}</strong>
+          <div class="mini-info-grid">
+            <div><small>Tanggal</small><b>{{ item.harvest.date|date:'d M Y' }}</b></div>
+            <div><small>Berat</small><b>{{ item.harvest.total_kg|angka:2 }} kg</b></div>
+            <div><small>Size</small><b>{{ item.size_text|default:'-' }} /kg</b></div>
+            <div><small>Harga</small><b>Rp {{ item.price_per_kg|angka:0 }}</b></div>
+          </div>
+        {% else %}
+          <span class="empty-side-info">Transaksi tidak terhubung dengan data panen.</span>
+        {% endif %}
+      </div>
+
+      <div class="side-actions-pro sticky-side-actions">
+        <a class="btn btn-outline-primary w-100" href="{% url 'sales:invoice' sale.id %}"><i class="fa-solid fa-receipt"></i> Lihat Nota</a>
+        <a class="btn btn-light w-100" href="{% url 'sales:invoices' %}"><i class="fa-solid fa-arrow-left"></i> Daftar Nota</a>
       </div>
       {% endif %}
     </aside>
@@ -190,9 +216,23 @@
     const pack = Number(digits(document.querySelector('[name="packing_cost"]')?.value));
     const other = Number(digits(document.querySelector('[name="other_cost"]')?.value));
     const total = weight * price + ship + pack + other;
-    const out = document.getElementById('grandTotalPreview'); if(out) out.textContent = money(total);
+    const method = document.getElementById('paymentMethodPro')?.value || '';
+    const status = document.getElementById('paymentStatusPro')?.value || '';
+    let paid = 0;
+    if(method === 'Campuran'){
+      paid = ['cash_amount','transfer_amount','qris_amount','other_payment_amount'].reduce((sum,name)=>sum + Number(digits(document.querySelector(`[name="${name}"]`)?.value)),0);
+    }else if(status === 'Lunas'){
+      paid = total;
+    }
+    paid = Math.min(paid,total);
+    const outstanding = Math.max(total-paid,0);
+    const totalOut = document.getElementById('grandTotalPreview'); if(totalOut) totalOut.textContent = money(total);
+    const paidOut = document.getElementById('paidAmountPreview'); if(paidOut) paidOut.textContent = money(paid);
+    const outstandingOut = document.getElementById('outstandingPreview'); if(outstandingOut) outstandingOut.textContent = money(outstanding);
+    const hint = document.getElementById('paymentSummaryHint');
+    if(hint) hint.textContent = outstanding > 0 ? 'Masih terdapat saldo yang perlu dibayar pelanggan.' : 'Pembayaran transaksi telah lunas.';
   }
-  document.querySelectorAll('#saleFormPro input, #saleFormPro select').forEach(el => el.addEventListener('input', recalc));
+  document.querySelectorAll('#saleFormPro input, #saleFormPro select').forEach(el => { el.addEventListener('input', recalc); el.addEventListener('change', recalc); });
 
   document.querySelectorAll('#saleFormPro .numeric-decimal').forEach(function(input){
     input.addEventListener('input', function(){
