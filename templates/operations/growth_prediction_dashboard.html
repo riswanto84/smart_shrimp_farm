@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
-{% load currency %}
+{% load static currency %}
 {% block title %}Prediksi Pertumbuhan | Smart Shrimp Farm{% endblock %}
 {% block content %}
 <style>
-.growth-page{--navy:#0b2f62;--blue:#2377ee;--muted:#65758b;--border:#dfe8f3;max-width:1600px;margin:0 auto}.growth-page *{box-sizing:border-box}.growth-page .growth-head{display:flex;justify-content:space-between;gap:20px;align-items:center;margin:0 0 18px}.growth-page h1{font-size:28px;line-height:1.15;margin:0;color:#102849;font-weight:800;letter-spacing:-.025em}.growth-page .subtitle{color:var(--muted);margin:7px 0 0;font-size:14px}.growth-page .growth-card{background:#fff;border:1px solid var(--border);border-radius:18px;box-shadow:0 10px 28px rgba(15,42,79,.055);padding:20px;margin-bottom:16px}.growth-page .filter-card{padding:18px 20px}.growth-page .filter-row{display:grid;grid-template-columns:minmax(360px,1fr) minmax(280px,340px) 160px;gap:16px;align-items:start}.growth-page .filter-row>.field-block,.growth-page .filter-action{display:flex;flex-direction:column;min-width:0}.growth-page .filter-action-label{display:block;font-size:12px;font-weight:800;color:transparent;margin-bottom:7px;user-select:none}.growth-page .filter-action-help{height:23px;margin-top:7px}.growth-page .field-block{min-width:0}.growth-page label{display:block;font-size:12px;font-weight:800;color:#40536d;margin-bottom:7px}.growth-page .form-select,.growth-page .form-control,.growth-page .input-group-text{min-height:50px;border-color:#d7e2ef}.growth-page .form-select,.growth-page .form-control{font-size:15px;color:#162b49}.growth-page .form-select:focus,.growth-page .form-control:focus{border-color:#6ca5f6;box-shadow:0 0 0 .2rem rgba(45,127,249,.13)}.growth-page .input-group-text{background:#f6f9fd;color:#40536d;font-weight:800}.growth-page .doc-help{display:flex;justify-content:space-between;gap:10px;margin-top:7px;color:#748399;font-size:11px}.growth-page .filter-submit{height:50px;min-height:50px;width:100%;border-radius:11px;font-weight:800;box-shadow:0 8px 18px rgba(11,47,98,.16);display:flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}.growth-page .kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(155px,1fr)) minmax(210px,1.2fr);gap:12px;margin-bottom:16px}.growth-page .kpi{position:relative;overflow:hidden;background:#fff;border:1px solid var(--border);border-radius:17px;padding:17px 17px 15px;min-height:142px;box-shadow:0 8px 24px rgba(15,42,79,.045)}.growth-page .kpi:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:#dbeafe}.growth-page .kpi-icon{width:36px;height:36px;display:grid;place-items:center;border-radius:11px;background:#edf5ff;color:var(--blue);font-size:17px}.growth-page .kpi span{display:block;font-size:10.5px;font-weight:900;color:#687990;margin-top:11px;text-transform:uppercase;letter-spacing:.075em}.growth-page .kpi strong{display:block;font-size:23px;line-height:1.25;color:#102849;margin:5px 0 4px;font-weight:800;letter-spacing:-.025em}.growth-page .kpi small{display:block;color:var(--muted);font-size:12px;line-height:1.45}.growth-page .kpi.status-card:before{background:#67c996}.growth-page .kpi.status-card{background:linear-gradient(145deg,#fff 0%,#f5fff9 100%)}.growth-page .status-good{color:#118650!important}.growth-page .status-normal{color:#2563eb!important}.growth-page .status-warn{color:#d97706!important}.growth-page .chart-title{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}.growth-page .chart-title h2{font-size:18px;margin:0;color:#102849;font-weight:800}.growth-page .chart-title small{font-size:12px;color:#6d7d92;text-align:right}.growth-page .chart-box{height:410px;position:relative;border:1px solid #edf2f8;border-radius:14px;padding:10px;background:linear-gradient(180deg,#fff,#fbfdff)}.growth-page .svg-chart{width:100%;height:100%;min-height:280px}.growth-page .svg-chart svg{display:block;width:100%;height:100%;overflow:visible}.growth-page .chart-empty{height:100%;display:grid;place-items:center;text-align:center;color:#718096;font-size:13px;padding:24px}.growth-page .grid-2{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(360px,1fr);gap:16px}.growth-page .legend-note{font-size:12px;color:#536a87;background:#eef6ff;border:1px solid #d4e6ff;border-radius:10px;padding:10px 12px;margin-top:12px}.growth-page .milestone-table{margin-bottom:0}.growth-page .milestone-table th{font-size:10.5px;text-transform:uppercase;color:#62738b;letter-spacing:.065em}.growth-page .milestone-table td{vertical-align:middle;color:#233750}.growth-page .badge-predict,.growth-page .badge-done{border-radius:999px;padding:6px 10px;font-size:10.5px;font-weight:900}.growth-page .badge-predict{background:#eaf2ff;color:#1766cc}.growth-page .badge-done{background:#e5f8ef;color:#118650}.growth-page .pond-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.growth-page .summary-row{border:1px solid #e4ebf4;background:#f8fafc;border-radius:12px;padding:12px;min-width:0}.growth-page .summary-row span{display:block;color:#687a91;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;font-weight:800}.growth-page .summary-row b{display:block;color:#102849;font-size:16px;margin-top:5px;overflow-wrap:anywhere}.growth-page .empty{padding:50px;text-align:center;color:#718096}.growth-page .formula{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.growth-page .formula div{background:#f8fafc;border:1px solid #e8eef6;border-radius:12px;padding:12px;color:#52647e;font-size:11.5px;line-height:1.5}.growth-page .formula b{display:block;color:#102849;margin-bottom:4px;font-size:12px}
+.growth-page{--navy:#0b2f62;--blue:#2377ee;--muted:#65758b;--border:#dfe8f3;max-width:1600px;margin:0 auto}.growth-page *{box-sizing:border-box}.growth-page .growth-head{display:flex;justify-content:space-between;gap:20px;align-items:center;margin:0 0 18px}.growth-page h1{font-size:28px;line-height:1.15;margin:0;color:#102849;font-weight:800;letter-spacing:-.025em}.growth-page .subtitle{color:var(--muted);margin:7px 0 0;font-size:14px}.growth-page .growth-card{background:#fff;border:1px solid var(--border);border-radius:18px;box-shadow:0 10px 28px rgba(15,42,79,.055);padding:20px;margin-bottom:16px}.growth-page .filter-card{padding:18px 20px}.growth-page .filter-row{display:grid;grid-template-columns:minmax(360px,1fr) minmax(280px,340px) 160px;gap:16px;align-items:start}.growth-page .filter-row>.field-block,.growth-page .filter-action{display:flex;flex-direction:column;min-width:0}.growth-page .filter-action-label{display:block;font-size:12px;font-weight:800;color:transparent;margin-bottom:7px;user-select:none}.growth-page .filter-action-help{height:23px;margin-top:7px}.growth-page .field-block{min-width:0}.growth-page label{display:block;font-size:12px;font-weight:800;color:#40536d;margin-bottom:7px}.growth-page .form-select,.growth-page .form-control,.growth-page .input-group-text{min-height:50px;border-color:#d7e2ef}.growth-page .form-select,.growth-page .form-control{font-size:15px;color:#162b49}.growth-page .form-select:focus,.growth-page .form-control:focus{border-color:#6ca5f6;box-shadow:0 0 0 .2rem rgba(45,127,249,.13)}.growth-page .input-group-text{background:#f6f9fd;color:#40536d;font-weight:800}.growth-page .doc-help{display:flex;justify-content:space-between;gap:10px;margin-top:7px;color:#748399;font-size:11px}.growth-page .filter-submit{height:50px;min-height:50px;width:100%;border-radius:11px;font-weight:800;box-shadow:0 8px 18px rgba(11,47,98,.16);display:flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}.growth-page .kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(155px,1fr)) minmax(210px,1.2fr);gap:12px;margin-bottom:16px}.growth-page .kpi{position:relative;overflow:hidden;background:#fff;border:1px solid var(--border);border-radius:17px;padding:17px 17px 15px;min-height:142px;box-shadow:0 8px 24px rgba(15,42,79,.045)}.growth-page .kpi:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:#dbeafe}.growth-page .kpi-icon{width:36px;height:36px;display:grid;place-items:center;border-radius:11px;background:#edf5ff;color:var(--blue);font-size:17px}.growth-page .kpi span{display:block;font-size:10.5px;font-weight:900;color:#687990;margin-top:11px;text-transform:uppercase;letter-spacing:.075em}.growth-page .kpi strong{display:block;font-size:23px;line-height:1.25;color:#102849;margin:5px 0 4px;font-weight:800;letter-spacing:-.025em}.growth-page .kpi small{display:block;color:var(--muted);font-size:12px;line-height:1.45}.growth-page .kpi.status-card:before{background:#67c996}.growth-page .kpi.status-card{background:linear-gradient(145deg,#fff 0%,#f5fff9 100%)}.growth-page .status-good{color:#118650!important}.growth-page .status-normal{color:#2563eb!important}.growth-page .status-warn{color:#d97706!important}.growth-page .chart-title{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px}.growth-page .chart-title h2{font-size:18px;margin:0;color:#102849;font-weight:800}.growth-page .chart-title small{font-size:12px;color:#6d7d92;text-align:right}.growth-page .chart-box{height:410px;position:relative;border:1px solid #edf2f8;border-radius:14px;padding:10px;background:linear-gradient(180deg,#fff,#fbfdff)}.growth-page .grid-2{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(360px,1fr);gap:16px}.growth-page .legend-note{font-size:12px;color:#536a87;background:#eef6ff;border:1px solid #d4e6ff;border-radius:10px;padding:10px 12px;margin-top:12px}.growth-page .milestone-table{margin-bottom:0}.growth-page .milestone-table th{font-size:10.5px;text-transform:uppercase;color:#62738b;letter-spacing:.065em}.growth-page .milestone-table td{vertical-align:middle;color:#233750}.growth-page .badge-predict,.growth-page .badge-done{border-radius:999px;padding:6px 10px;font-size:10.5px;font-weight:900}.growth-page .badge-predict{background:#eaf2ff;color:#1766cc}.growth-page .badge-done{background:#e5f8ef;color:#118650}.growth-page .pond-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.growth-page .summary-row{border:1px solid #e4ebf4;background:#f8fafc;border-radius:12px;padding:12px;min-width:0}.growth-page .summary-row span{display:block;color:#687a91;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;font-weight:800}.growth-page .summary-row b{display:block;color:#102849;font-size:16px;margin-top:5px;overflow-wrap:anywhere}.growth-page .empty{padding:50px;text-align:center;color:#718096}.growth-page .formula{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.growth-page .formula div{background:#f8fafc;border:1px solid #e8eef6;border-radius:12px;padding:12px;color:#52647e;font-size:11.5px;line-height:1.5}.growth-page .formula b{display:block;color:#102849;margin-bottom:4px;font-size:12px}
 @media(max-width:1380px){.growth-page .kpi-grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:1050px){.growth-page .grid-2{grid-template-columns:1fr}.growth-page .filter-row{grid-template-columns:minmax(300px,1fr) minmax(240px,300px) 150px}}
 @media(max-width:760px){.growth-page .filter-row{grid-template-columns:1fr}.growth-page .filter-action-label,.growth-page .filter-action-help{display:none}.growth-page .kpi-grid{grid-template-columns:repeat(2,1fr)}.growth-page .formula{grid-template-columns:1fr}.growth-page .pond-summary{grid-template-columns:repeat(2,1fr)}.growth-page .chart-box{height:330px}.growth-page .chart-title{display:block}.growth-page .chart-title small{display:block;text-align:left;margin-top:5px}}
@@ -50,18 +50,18 @@
 
   <section class="growth-card">
     <div class="chart-title"><h2>Perbandingan Prediksi Size Semua Kolam</h2><small>Semakin kecil nilai size (/kg), semakin besar ukuran udang.</small></div>
-    <div class="chart-box"><div id="allPondSizeChart" class="svg-chart" role="img" aria-label="Grafik perbandingan prediksi size semua kolam"></div></div>
+    <div class="chart-box" id="allPondSizeChart"></div>
     <div class="legend-note"><i class="fa-solid fa-circle-info"></i> Setiap garis memakai data sampling aktual kolam masing-masing dan dilanjutkan dengan proyeksi berbasis tren ABW terbaru.</div>
   </section>
 
   <div class="grid-2">
     <section class="growth-card">
       <div class="chart-title"><h2>Size Aktual vs Prediksi — {{ selected_payload.pond.name }}</h2><small>Unit: ekor/kg</small></div>
-      <div class="chart-box"><div id="sizePredictionChart" class="svg-chart" role="img" aria-label="Grafik size aktual dan prediksi"></div></div>
+      <div class="chart-box" id="sizePredictionChart"></div>
     </section>
     <section class="growth-card">
       <div class="chart-title"><h2>ABW dan Biomassa Prediksi</h2><small>Sampai DOC {{ horizon_doc }}</small></div>
-      <div class="chart-box"><div id="abwBiomassChart" class="svg-chart" role="img" aria-label="Grafik ABW dan biomassa prediksi"></div></div>
+      <div class="chart-box" id="abwBiomassChart"></div>
     </section>
   </div>
 
@@ -98,90 +98,48 @@
 {{ selected_payload.projection|json_script:"growth-projection" }}
 {{ all_chart|json_script:"growth-all-chart" }}
 {{ all_series|json_script:"growth-all-series" }}
+<style>
+.growth-page .native-chart{width:100%;height:100%;display:block}.growth-page .chart-empty{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;color:#64748b;padding:24px}.growth-page .chart-legend{display:flex;flex-wrap:wrap;justify-content:center;gap:14px;margin-top:8px;font-size:11px;color:#52647e}.growth-page .chart-legend span{display:inline-flex;align-items:center;gap:6px}.growth-page .chart-legend i{display:inline-block;width:18px;height:3px;border-radius:4px}
+</style>
 <script>
-(function(){
+document.addEventListener('DOMContentLoaded', function(){
   'use strict';
-  const byId=id=>document.getElementById(id);
-  const readJson=id=>{try{const el=byId(id);return el?JSON.parse(el.textContent||'[]'):[]}catch(err){console.error('Gagal membaca data grafik',id,err);return[]}};
-  const actual=readJson('growth-actual');
-  const projection=readJson('growth-projection');
-  const allRows=readJson('growth-all-chart');
-  const allSeries=readJson('growth-all-series');
-  const palette=['#2563eb','#16a34a','#f59e0b','#dc2626','#7c3aed','#0891b2','#db2777','#4f46e5','#65a30d','#ea580c'];
-  const num=v=>{const n=Number(v);return Number.isFinite(n)?n:null};
-  const fmt=(v,d=1)=>new Intl.NumberFormat('id-ID',{maximumFractionDigits:d}).format(v);
-  const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-
-  function sizeOf(el){const r=el.getBoundingClientRect();return {w:Math.max(640,Math.round(r.width||900)),h:Math.max(300,Math.round(r.height||390))}}
-  function empty(el,msg){el.innerHTML='<div class="chart-empty"><div><i class="fa-solid fa-chart-line fa-2x mb-2"></i><br>'+esc(msg)+'</div></div>'}
-  function svgEl(w,h,body){return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">${body}</svg>`}
-  function path(points){return points.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}
-
-  function renderLineChart(el, labels, series, opts={}){
-    if(!el) return;
-    const valid=series.flatMap(s=>s.data.map(num).filter(v=>v!==null));
-    if(!labels.length||!valid.length){empty(el,'Data grafik belum tersedia.');return}
-    const {w,h}=sizeOf(el), m={l:64,r:24,t:22,b:62};
-    let ymin=Math.min(...valid), ymax=Math.max(...valid);
-    if(opts.zero){ymin=0}
-    if(ymin===ymax){ymin=Math.max(0,ymin-1);ymax+=1}
-    const pad=(ymax-ymin)*.08; ymin=Math.max(0,ymin-pad); ymax+=pad;
-    const x=i=>m.l+(labels.length===1?0:(i/(labels.length-1))*(w-m.l-m.r));
-    const y=v=>opts.reverse?m.t+((v-ymin)/(ymax-ymin))*(h-m.t-m.b):m.t+((ymax-v)/(ymax-ymin))*(h-m.t-m.b);
-    let body='';
-    for(let i=0;i<=5;i++){const val=ymin+(ymax-ymin)*i/5, yy=y(val);body+=`<line x1="${m.l}" y1="${yy}" x2="${w-m.r}" y2="${yy}" stroke="#e7edf5"/><text x="${m.l-10}" y="${yy+4}" text-anchor="end" font-size="11" fill="#64748b">${esc(fmt(val,1))}${opts.unit||''}</text>`}
-    const step=Math.max(1,Math.ceil(labels.length/8));
-    labels.forEach((lab,i)=>{if(i%step===0||i===labels.length-1)body+=`<text x="${x(i)}" y="${h-24}" text-anchor="middle" font-size="11" fill="#64748b">${esc(lab)}</text>`});
-    body+=`<line x1="${m.l}" y1="${m.t}" x2="${m.l}" y2="${h-m.b}" stroke="#cbd5e1"/><line x1="${m.l}" y1="${h-m.b}" x2="${w-m.r}" y2="${h-m.b}" stroke="#cbd5e1"/>`;
-    series.forEach((s,si)=>{const color=s.color||palette[si%palette.length];let seg=[];const flush=()=>{if(seg.length){body+=`<path d="${path(seg)}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" ${s.dash?'stroke-dasharray="8 6"':''}/>`;seg=[]}};s.data.forEach((raw,i)=>{const v=num(raw);if(v===null){flush();return}seg.push([x(i),y(v)]);body+=`<circle cx="${x(i)}" cy="${y(v)}" r="3.5" fill="#fff" stroke="${color}" stroke-width="2"/>`});flush()});
-    let lx=m.l, ly=h-5;series.forEach((s,si)=>{const color=s.color||palette[si%palette.length];body+=`<line x1="${lx}" y1="${ly-4}" x2="${lx+22}" y2="${ly-4}" stroke="${color}" stroke-width="3" ${s.dash?'stroke-dasharray="7 5"':''}/><text x="${lx+28}" y="${ly}" font-size="11" fill="#334155">${esc(s.label)}</text>`;lx+=Math.max(130,28+String(s.label).length*7);if(lx>w-180){lx=m.l;ly-=18}});
-    el.innerHTML=svgEl(w,h,body);
+  const NS='http://www.w3.org/2000/svg';
+  const COLORS=['#2377ee','#16a34a','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#0f766e','#db2777','#64748b'];
+  function parse(id){ const el=document.getElementById(id); if(!el) return []; try{return JSON.parse(el.textContent||'[]')}catch(e){console.error(e);return []} }
+  const actual=parse('growth-actual');
+  const projection=parse('growth-projection');
+  const allRows=parse('growth-all-chart');
+  const allSeries=parse('growth-all-series');
+  function svgEl(name,attrs,text){ const el=document.createElementNS(NS,name); Object.entries(attrs||{}).forEach(([k,v])=>el.setAttribute(k,String(v))); if(text!==undefined) el.textContent=text; return el; }
+  function empty(target,msg){ target.innerHTML='<div class="chart-empty"><div><i class="fa-solid fa-chart-line" style="font-size:30px;margin-bottom:10px"></i><br>'+msg+'</div></div>'; }
+  function dims(target){ return {w:Math.max(720,target.clientWidth||900),h:Math.max(300,target.clientHeight||400),m:{l:62,r:24,t:22,b:52}}; }
+  function lineChart(targetId, labels, series, opts){
+    const target=document.getElementById(targetId); if(!target)return;
+    if(!labels.length || !series.some(s=>s.data.some(v=>v!==null && v!==undefined && isFinite(Number(v))))){empty(target,'Data grafik belum tersedia.');return;}
+    target.innerHTML=''; const d=dims(target), iw=d.w-d.m.l-d.m.r, ih=d.h-d.m.t-d.m.b;
+    const vals=series.flatMap(s=>s.data.filter(v=>v!==null&&v!==undefined&&isFinite(Number(v))).map(Number));
+    let min=Math.min(...vals), max=Math.max(...vals); if(min===max){min-=1;max+=1} const pad=(max-min)*.08; min-=pad;max+=pad;
+    const x=i=>d.m.l+(labels.length===1?iw/2:i*iw/(labels.length-1));
+    const y=v=>d.m.t+(opts&&opts.reverse?(Number(v)-min)/(max-min):(max-Number(v))/(max-min))*ih;
+    const svg=svgEl('svg',{viewBox:`0 0 ${d.w} ${d.h}`,class:'native-chart',role:'img','aria-label':opts.title||'Grafik'});
+    for(let i=0;i<=5;i++){const yy=d.m.t+i*ih/5; const val=opts&&opts.reverse?min+(max-min)*i/5:max-(max-min)*i/5; svg.appendChild(svgEl('line',{x1:d.m.l,y1:yy,x2:d.w-d.m.r,y2:yy,stroke:'#e6edf5','stroke-width':1})); svg.appendChild(svgEl('text',{x:d.m.l-10,y:yy+4,'text-anchor':'end',fill:'#64748b','font-size':11},(opts.formatY||((v)=>v.toFixed(0)))(val)));}
+    const step=Math.max(1,Math.ceil(labels.length/8)); labels.forEach((lab,i)=>{if(i%step===0||i===labels.length-1) svg.appendChild(svgEl('text',{x:x(i),y:d.h-19,'text-anchor':'middle',fill:'#64748b','font-size':10},lab));});
+    series.forEach((ser,si)=>{let path='',started=false; ser.data.forEach((v,i)=>{if(v===null||v===undefined||!isFinite(Number(v))){started=false;return} const cmd=started?'L':'M'; path+=`${cmd}${x(i)},${y(v)} `;started=true;}); const color=ser.color||COLORS[si%COLORS.length]; svg.appendChild(svgEl('path',{d:path.trim(),fill:'none',stroke:color,'stroke-width':ser.width||3,'stroke-linecap':'round','stroke-linejoin':'round','stroke-dasharray':ser.dash||''})); ser.data.forEach((v,i)=>{if(v!==null&&v!==undefined&&isFinite(Number(v))) svg.appendChild(svgEl('circle',{cx:x(i),cy:y(v),r:3.3,fill:'#fff',stroke:color,'stroke-width':2}));});});
+    target.appendChild(svg); const legend=document.createElement('div');legend.className='chart-legend';series.forEach((ser,si)=>{const sp=document.createElement('span');sp.innerHTML=`<i style="background:${ser.color||COLORS[si%COLORS.length]}"></i>${ser.label}`;legend.appendChild(sp)});target.appendChild(legend);
   }
-
-  function renderCombo(el, rows){
-    if(!el||!rows.length){if(el)empty(el,'Data proyeksi ABW dan biomassa belum tersedia.');return}
-    const {w,h}=sizeOf(el),m={l:60,r:62,t:24,b:62};
-    const abw=rows.map(r=>num(r.abw)||0), bio=rows.map(r=>num(r.biomass_ton)||0), labels=rows.map(r=>'DOC '+r.doc);
-    const maxA=Math.max(1,...abw)*1.1,maxB=Math.max(1,...bio)*1.1;
-    const x=i=>m.l+(i+.5)*(w-m.l-m.r)/labels.length, bw=Math.max(6,(w-m.l-m.r)/labels.length*.42);
-    const ya=v=>m.t+(maxA-v)/maxA*(h-m.t-m.b), yb=v=>m.t+(maxB-v)/maxB*(h-m.t-m.b);
-    let body='';
-    for(let i=0;i<=5;i++){const va=maxA*i/5,vb=maxB*i/5,yy=ya(va);body+=`<line x1="${m.l}" y1="${yy}" x2="${w-m.r}" y2="${yy}" stroke="#e7edf5"/><text x="${m.l-8}" y="${yy+4}" text-anchor="end" font-size="11" fill="#2563eb">${fmt(va,1)}</text><text x="${w-m.r+8}" y="${yy+4}" font-size="11" fill="#0b2f62">${fmt(vb,2)}</text>`}
-    bio.forEach((v,i)=>body+=`<rect x="${x(i)-bw/2}" y="${yb(v)}" width="${bw}" height="${h-m.b-yb(v)}" rx="4" fill="rgba(11,47,98,.24)" stroke="#0b2f62"/>`);
-    body+=`<path d="${path(abw.map((v,i)=>[x(i),ya(v)]))}" fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
-    abw.forEach((v,i)=>body+=`<circle cx="${x(i)}" cy="${ya(v)}" r="4" fill="#fff" stroke="#2563eb" stroke-width="2"/>`);
-    const step=Math.max(1,Math.ceil(labels.length/7));labels.forEach((lab,i)=>{if(i%step===0||i===labels.length-1)body+=`<text x="${x(i)}" y="${h-25}" text-anchor="middle" font-size="11" fill="#64748b">${esc(lab)}</text>`});
-    body+=`<text x="${m.l}" y="${h-5}" font-size="11" fill="#2563eb">— ABW (g)</text><text x="${m.l+100}" y="${h-5}" font-size="11" fill="#0b2f62">■ Biomassa (ton)</text>`;
-    el.innerHTML=svgEl(w,h,body);
+  function dualChart(targetId, rows){
+    const target=document.getElementById(targetId); if(!target)return; if(!rows.length){empty(target,'Data proyeksi ABW dan biomassa belum tersedia.');return;}
+    target.innerHTML=''; const d=dims(target),iw=d.w-d.m.l-54,ih=d.h-d.m.t-d.m.b; const abw=rows.map(r=>Number(r.abw)||0), bio=rows.map(r=>Number(r.biomass_ton)||0); const maxA=Math.max(1,...abw)*1.1,maxB=Math.max(1,...bio)*1.1; const x=i=>d.m.l+(rows.length===1?iw/2:i*iw/(rows.length-1)); const yA=v=>d.m.t+(maxA-v)/maxA*ih,yB=v=>d.m.t+(maxB-v)/maxB*ih; const svg=svgEl('svg',{viewBox:`0 0 ${d.w} ${d.h}`,class:'native-chart'});
+    for(let i=0;i<=5;i++){const yy=d.m.t+i*ih/5;svg.appendChild(svgEl('line',{x1:d.m.l,y1:yy,x2:d.m.l+iw,y2:yy,stroke:'#e6edf5'}));svg.appendChild(svgEl('text',{x:d.m.l-8,y:yy+4,'text-anchor':'end',fill:'#2377ee','font-size':10},(maxA*(5-i)/5).toFixed(1)));svg.appendChild(svgEl('text',{x:d.m.l+iw+8,y:yy+4,'text-anchor':'start',fill:'#0f766e','font-size':10},(maxB*(5-i)/5).toFixed(1)));}
+    const bw=Math.max(4,Math.min(18,iw/rows.length*.45)); rows.forEach((r,i)=>{svg.appendChild(svgEl('rect',{x:x(i)-bw/2,y:yB(bio[i]),width:bw,height:d.m.t+ih-yB(bio[i]),rx:3,fill:'rgba(15,118,110,.23)',stroke:'#0f766e'}));}); let path='';abw.forEach((v,i)=>path+=(i?'L':'M')+x(i)+','+yA(v)+' ');svg.appendChild(svgEl('path',{d:path,fill:'none',stroke:'#2377ee','stroke-width':3,'stroke-linecap':'round','stroke-linejoin':'round'}));abw.forEach((v,i)=>svg.appendChild(svgEl('circle',{cx:x(i),cy:yA(v),r:3.5,fill:'#fff',stroke:'#2377ee','stroke-width':2}))); const step=Math.max(1,Math.ceil(rows.length/7));rows.forEach((r,i)=>{if(i%step===0||i===rows.length-1)svg.appendChild(svgEl('text',{x:x(i),y:d.h-18,'text-anchor':'middle',fill:'#64748b','font-size':10},'DOC '+r.doc));});target.appendChild(svg);const legend=document.createElement('div');legend.className='chart-legend';legend.innerHTML='<span><i style="background:#2377ee"></i>ABW (g)</span><span><i style="background:#0f766e"></i>Biomassa (ton)</span>';target.appendChild(legend);
   }
-
-  function draw(){
-    const labels=allRows.map(x=>'DOC '+x.doc);
-    renderLineChart(byId('allPondSizeChart'),labels,allSeries.map((s,i)=>({label:s.label,color:palette[i%palette.length],data:allRows.map(x=>x[s.key]??null)})),{reverse:true,unit:'/kg'});
-    const docs=[...new Set([...actual.map(x=>x.doc),...projection.map(x=>x.doc)])].sort((a,b)=>a-b), amap=new Map(actual.map(x=>[x.doc,x])),pmap=new Map(projection.map(x=>[x.doc,x]));
-    renderLineChart(byId('sizePredictionChart'),docs.map(x=>'DOC '+x),[{label:'Size aktual',color:'#16a34a',data:docs.map(d=>amap.get(d)?.size??null)},{label:'Size prediksi',color:'#2563eb',dash:true,data:docs.map(d=>pmap.get(d)?.size??null)}],{reverse:true,unit:'/kg'});
-    renderCombo(byId('abwBiomassChart'),projection);
-  }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',draw);else draw();
-  let timer;window.addEventListener('resize',()=>{clearTimeout(timer);timer=setTimeout(draw,180)});
-})();
-</script>
-<script>
-(function(){
-  const actual=JSON.parse(document.getElementById('growth-actual').textContent||'[]');
-  const projection=JSON.parse(document.getElementById('growth-projection').textContent||'[]');
-  const allRows=JSON.parse(document.getElementById('growth-all-chart').textContent||'[]');
-  const allSeries=JSON.parse(document.getElementById('growth-all-series').textContent||'[]');
-  const idFmt=v=>Number(v).toLocaleString('id-ID',{maximumFractionDigits:2});
-
-  new Chart(document.getElementById('allPondSizeChart'),{type:'line',data:{labels:allRows.map(x=>'DOC '+x.doc),datasets:allSeries.map(s=>({label:s.label,data:allRows.map(x=>x[s.key]??null),tension:.32,borderWidth:2.5,pointRadius:2,spanGaps:true}))},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${idFmt(c.raw)}/kg`}}},scales:{x:{grid:{display:false}},y:{reverse:true,title:{display:true,text:'Size (ekor/kg)'},ticks:{callback:v=>v+'/kg'}}}});
-
-  const docSet=[...new Set([...actual.map(x=>x.doc),...projection.map(x=>x.doc)])].sort((a,b)=>a-b);
-  const actualMap=new Map(actual.map(x=>[x.doc,x])); const predMap=new Map(projection.map(x=>[x.doc,x]));
-  new Chart(document.getElementById('sizePredictionChart'),{type:'line',data:{labels:docSet.map(x=>'DOC '+x),datasets:[{label:'Size aktual',data:docSet.map(d=>actualMap.get(d)?.size??null),borderColor:'#16a34a',backgroundColor:'rgba(22,163,74,.10)',pointRadius:5,borderWidth:3,tension:.3,spanGaps:false},{label:'Size prediksi',data:docSet.map(d=>predMap.get(d)?.size??null),borderColor:'#2d7ff9',borderDash:[7,5],pointRadius:4,borderWidth:3,tension:.3,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.raw==null?'':`${c.dataset.label}: ${idFmt(c.raw)}/kg`}}},scales:{x:{grid:{display:false}},y:{reverse:true,title:{display:true,text:'Size (ekor/kg)'},ticks:{callback:v=>v+'/kg'}}}});
-
-  new Chart(document.getElementById('abwBiomassChart'),{data:{labels:projection.map(x=>'DOC '+x.doc),datasets:[{type:'line',label:'ABW (g)',data:projection.map(x=>x.abw),borderColor:'#2d7ff9',pointRadius:4,tension:.3,borderWidth:3,yAxisID:'abw'},{type:'bar',label:'Biomassa (ton)',data:projection.map(x=>x.biomass_ton),backgroundColor:'rgba(11,47,98,.20)',borderColor:'#0b2f62',borderWidth:1,borderRadius:5,yAxisID:'bio'}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'bottom'}},scales:{x:{grid:{display:false}},abw:{beginAtZero:true,position:'left',title:{display:true,text:'ABW (gram)'}},bio:{beginAtZero:true,position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'Biomassa (ton)'}}}});
-})();
+  const allLabels=allRows.map(x=>'DOC '+x.doc);
+  lineChart('allPondSizeChart',allLabels,allSeries.map((s,i)=>({label:s.label,data:allRows.map(x=>x[s.key]??null),color:COLORS[i%COLORS.length]})),{reverse:true,formatY:v=>Math.round(v)+'/kg'});
+  const docs=[...new Set(actual.concat(projection).map(x=>Number(x.doc)))].sort((a,b)=>a-b),am=new Map(actual.map(x=>[Number(x.doc),x])),pm=new Map(projection.map(x=>[Number(x.doc),x]));
+  lineChart('sizePredictionChart',docs.map(d=>'DOC '+d),[{label:'Size aktual',data:docs.map(d=>am.get(d)?.size??null),color:'#16a34a'},{label:'Size prediksi',data:docs.map(d=>pm.get(d)?.size??null),color:'#2377ee',dash:'7 5'}],{reverse:true,formatY:v=>Math.round(v)+'/kg'});
+  dualChart('abwBiomassChart',projection);
+});
 </script>
 {% endif %}
 {% endblock %}
