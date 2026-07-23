@@ -12,6 +12,8 @@ class OperationalExpense(models.Model):
     receipt=models.ImageField(upload_to='receipts/', blank=True, null=True); notes=models.TextField(blank=True); created_at=models.DateTimeField(auto_now_add=True)
     is_fiscal_deductible=models.BooleanField(default=True, verbose_name='Dapat dikurangkan secara fiskal')
     document_number=models.CharField(max_length=80, blank=True, verbose_name='Nomor bukti')
+    is_capital_expenditure=models.BooleanField(default=False, verbose_name='Pembelian aset/kapitalisasi')
+    fixed_asset=models.ForeignKey('FixedAsset', on_delete=models.SET_NULL, null=True, blank=True, related_name='source_expenses', verbose_name='Aset terkait')
 
     class Meta:
         ordering = ['-date', '-id']

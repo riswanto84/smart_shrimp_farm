@@ -19,7 +19,7 @@ import json
 import mimetypes
 from ponds.models import Pond
 from sales.models import Sale, Customer
-from .models import OperationalExpense, ExpenseDocument, TradeAccount, TradePayment, TradeDocument
+from .models import OperationalExpense, ExpenseDocument, TradeAccount, TradePayment, TradeDocument, BalanceEntry, FixedAsset, OtherRevenue
 from core.reporting import get_date_range, filter_by_date_range, format_date_range, export_excel, export_pdf, rupiah
 from core.utils import parse_rupiah
 from core.pagination import paginate_queryset
@@ -169,11 +169,13 @@ def add_expense(request):
             amount=parse_rupiah(request.POST.get('amount')),
             payment_method=request.POST.get('payment_method', 'Cash'),
             receipt=request.FILES.get('receipt'),
-            notes=request.POST.get('notes', '')
+            notes=request.POST.get('notes', ''),
+            is_capital_expenditure=request.POST.get('is_capital_expenditure') == '1',
+            fixed_asset_id=request.POST.get('fixed_asset') or None,
         )
         _save_expense_documents(request, expense)
         return redirect('finance:expenses')
-    return render(request, 'finance/expense_form.html', {'ponds': ponds, 'categories': OperationalExpense.CATEGORIES})
+    return render(request, 'finance/expense_form.html', {'ponds': ponds, 'categories': OperationalExpense.CATEGORIES, 'fixed_assets': FixedAsset.objects.order_by('code')})
 
 
 def _profit_loss_data(request):
@@ -806,10 +808,12 @@ def edit_expense(request, pk):
         if request.FILES.get('receipt'):
             obj.receipt = request.FILES.get('receipt')
         obj.notes = request.POST.get('notes', '')
+        obj.is_capital_expenditure = request.POST.get('is_capital_expenditure') == '1'
+        obj.fixed_asset_id = request.POST.get('fixed_asset') or None
         obj.save()
         _save_expense_documents(request, obj)
         return redirect('finance:expenses')
-    return render(request, 'finance/expense_form.html', {'ponds': ponds, 'categories': OperationalExpense.CATEGORIES, 'obj': obj, 'mode': 'edit'})
+    return render(request, 'finance/expense_form.html', {'ponds': ponds, 'categories': OperationalExpense.CATEGORIES, 'fixed_assets': FixedAsset.objects.order_by('code'), 'obj': obj, 'mode': 'edit'})
 
 
 
@@ -1022,9 +1026,19 @@ def export_gross_turnover_pdf(request):
 def _profit_loss_tax_data(request):
     date_from,date_to=_date_period(request)
     _,_,_,revenue,_=_gross_turnover_data(request)
-    expenses=OperationalExpense.objects.filter(date__range=(date_from,date_to))
+    expenses=OperationalExpense.objects.filter(date__range=(date_from,date_to), is_capital_expenditure=False).exclude(category='Penyusutan')
     grouped=list(expenses.values('category').annotate(total=Sum('amount')).order_by('category'))
     expense_total=sum((x['total'] for x in grouped),Decimal('0'))
+    # Penyusutan dihitung otomatis dari register aset agar tidak terjadi beban ganda.
+    depreciation_total=Decimal('0')
+    for asset in FixedAsset.objects.filter(use_date__lte=date_to).exclude(status='disposed'):
+        dep_to=_asset_depreciation(asset,date_to)['accumulated']
+        day_before=date_from-timedelta(days=1)
+        dep_before=_asset_depreciation(asset,day_before)['accumulated'] if day_before >= asset.use_date else Decimal('0')
+        depreciation_total += max(dep_to-dep_before, Decimal('0'))
+    if depreciation_total:
+        grouped.append({'category':'Penyusutan Aset (otomatis)','total':depreciation_total})
+        expense_total += depreciation_total
     non_deductible=expenses.filter(is_fiscal_deductible=False).aggregate(s=Sum('amount'))['s'] or Decimal('0')
     return date_from,date_to,revenue,grouped,expense_total,revenue-expense_total,non_deductible
 
@@ -1063,39 +1077,92 @@ def add_balance_entry(request):
 
 
 def _balance_sheet_data(request):
-    as_of=_as_date(request)
-    latest={}
-    for e in BalanceEntry.objects.filter(as_of_date__lte=as_of).order_by('account_name','-as_of_date','-id'):
-        latest.setdefault((e.account_type,e.account_name),e)
-    entries=list(latest.values())
-    # Piutang dan utang usaha berasal otomatis dari modul kartu utang/piutang.
-    # Pos manual dengan kelompok yang sama dikeluarkan agar tidak terjadi hitung ganda.
-    assets=[e for e in entries if e.account_type=='asset' and e.group not in ('Aset Tetap','Piutang Usaha')]
-    liabilities=[e for e in entries if e.account_type=='liability' and e.group!='Utang Usaha']
-    equities=[e for e in entries if e.account_type=='equity']
+    """Susun neraca dengan sumber data operasional yang transparan.
+
+    Pos manual tetap dipakai sebagai saldo posisi. Piutang, utang, aset tetap,
+    penyusutan, dan laba berjalan dihitung otomatis. Apabila data historis
+    belum lengkap, selisih ditempatkan pada akun rekonsiliasi sementara agar
+    laporan tetap seimbang tanpa menyembunyikan bahwa saldo awal/modal perlu
+    dilengkapi.
+    """
+    from .receivable_sync import sync_all_sales
+
+    as_of = _as_date(request)
+    sync_all_sales()
+
+    latest = {}
+    for e in BalanceEntry.objects.filter(as_of_date__lte=as_of).order_by('account_name', '-as_of_date', '-id'):
+        latest.setdefault((e.account_type, e.account_name), e)
+    entries = list(latest.values())
+
+    assets = [e for e in entries if e.account_type == 'asset' and e.group not in ('Aset Tetap', 'Piutang Usaha')]
+    liabilities = [e for e in entries if e.account_type == 'liability' and e.group != 'Utang Usaha']
+    equities = [e for e in entries if e.account_type == 'equity']
+
     def outstanding_as_of(account):
         paid = account.payments.filter(payment_date__lte=as_of).aggregate(s=Sum('amount'))['s'] or Decimal('0')
-        return max(account.original_amount - paid, Decimal('0'))
-    receivable_total=sum((outstanding_as_of(x) for x in TradeAccount.objects.filter(account_type=TradeAccount.RECEIVABLE, transaction_date__lte=as_of)),Decimal('0'))
-    payable_total=sum((outstanding_as_of(x) for x in TradeAccount.objects.filter(account_type=TradeAccount.PAYABLE, transaction_date__lte=as_of)),Decimal('0'))
-    fixed_assets=[]
+        return max((account.original_amount or Decimal('0')) - paid, Decimal('0'))
+
+    receivable_total = sum((outstanding_as_of(x) for x in TradeAccount.objects.filter(account_type=TradeAccount.RECEIVABLE, transaction_date__lte=as_of)), Decimal('0'))
+    payable_total = sum((outstanding_as_of(x) for x in TradeAccount.objects.filter(account_type=TradeAccount.PAYABLE, transaction_date__lte=as_of)), Decimal('0'))
+
+    fixed_assets = []
     for a in FixedAsset.objects.filter(use_date__lte=as_of).exclude(status='disposed'):
-        dep=_asset_depreciation(a,as_of)
-        fixed_assets.append({'asset':a,**dep})
-    fixed_cost=sum((x['asset'].total_cost for x in fixed_assets),Decimal('0'))
-    accumulated=sum((x['accumulated'] for x in fixed_assets),Decimal('0'))
-    total_assets=sum((e.amount for e in assets),Decimal('0'))+receivable_total+fixed_cost-accumulated
-    total_liabilities=sum((e.amount for e in liabilities),Decimal('0'))+payable_total
-    total_equity=sum((e.amount for e in equities),Decimal('0'))
-    start=timezone.datetime(as_of.year,1,1).date()
-    mock=type('R',(),{'GET':{'date_from':start.isoformat(),'date_to':as_of.isoformat()}})()
-    # laba berjalan dihitung langsung tanpa mengubah request asli
-    sales=Sale.objects.filter(date__date__range=(start,as_of)).exclude(status__in=['Gagal','Expired','Dibatalkan','Refund']).aggregate(s=Sum('total_amount'))['s'] or Decimal('0')
-    other=OtherRevenue.objects.filter(date__range=(start,as_of)).aggregate(s=Sum('gross_amount'))['s'] or Decimal('0')
-    costs=OperationalExpense.objects.filter(date__range=(start,as_of)).aggregate(s=Sum('amount'))['s'] or Decimal('0')
-    current_profit=sales+other-costs
-    total_equity_with_profit=total_equity+current_profit
-    return {'as_of':as_of,'assets':assets,'liabilities':liabilities,'equities':equities,'fixed_assets':fixed_assets,'receivable_total':receivable_total,'payable_total':payable_total,'fixed_cost':fixed_cost,'accumulated':accumulated,'total_assets':total_assets,'total_liabilities':total_liabilities,'total_equity':total_equity,'current_profit':current_profit,'total_equity_with_profit':total_equity_with_profit,'difference':total_assets-total_liabilities-total_equity_with_profit}
+        dep = _asset_depreciation(a, as_of)
+        fixed_assets.append({'asset': a, **dep})
+    fixed_cost = sum((x['asset'].total_cost for x in fixed_assets), Decimal('0'))
+    accumulated = sum((x['accumulated'] for x in fixed_assets), Decimal('0'))
+
+    start = timezone.datetime(as_of.year, 1, 1).date()
+    valid_sales = Sale.objects.filter(date__date__range=(start, as_of)).exclude(status__in=['Gagal', 'Expired', 'Dibatalkan', 'Refund'])
+    sales_revenue = valid_sales.aggregate(s=Sum('total_amount'))['s'] or Decimal('0')
+    other_revenue = OtherRevenue.objects.filter(date__range=(start, as_of)).aggregate(s=Sum('gross_amount'))['s'] or Decimal('0')
+
+    operating_expenses = OperationalExpense.objects.filter(date__range=(start, as_of), is_capital_expenditure=False).exclude(category='Penyusutan')
+    operating_cost = operating_expenses.aggregate(s=Sum('amount'))['s'] or Decimal('0')
+    previous_year_end = timezone.datetime(as_of.year - 1, 12, 31).date()
+    current_year_depreciation = Decimal('0')
+    for x in fixed_assets:
+        asset = x['asset']
+        before = _asset_depreciation(asset, previous_year_end)['accumulated'] if asset.use_date <= previous_year_end else Decimal('0')
+        current_year_depreciation += max(x['accumulated'] - before, Decimal('0'))
+    current_profit = sales_revenue + other_revenue - operating_cost - current_year_depreciation
+
+    manual_asset_total = sum((e.amount for e in assets), Decimal('0'))
+    total_assets_before = manual_asset_total + receivable_total + fixed_cost - accumulated
+    total_liabilities = sum((e.amount for e in liabilities), Decimal('0')) + payable_total
+    total_equity = sum((e.amount for e in equities), Decimal('0'))
+    total_equity_before = total_equity + current_profit
+    preliminary_difference = total_assets_before - total_liabilities - total_equity_before
+
+    # Akun rekonsiliasi sementara: bukan laba dan bukan transaksi baru.
+    # Nilainya menunjukkan saldo awal/modal/kas yang belum dicatat lengkap.
+    reconciliation_equity = preliminary_difference
+    total_equity_with_profit = total_equity_before + reconciliation_equity
+    total_assets = total_assets_before
+    difference = total_assets - total_liabilities - total_equity_with_profit
+
+    capital_expenses = OperationalExpense.objects.filter(date__lte=as_of, is_capital_expenditure=True).aggregate(s=Sum('amount'))['s'] or Decimal('0')
+    unlinked_capital_expenses = OperationalExpense.objects.filter(date__lte=as_of, is_capital_expenditure=True, fixed_asset__isnull=True).count()
+    warnings = []
+    if reconciliation_equity != 0:
+        warnings.append('Masih terdapat saldo awal/modal/kas yang belum direkonsiliasi. Periksa Pos Neraca dan lengkapi saldo Kas dan Bank serta Modal Pemilik.')
+    if unlinked_capital_expenses:
+        warnings.append(f'{unlinked_capital_expenses} pengeluaran kapital belum ditautkan ke Daftar Aset.')
+
+    return {
+        'as_of': as_of, 'assets': assets, 'liabilities': liabilities, 'equities': equities,
+        'fixed_assets': fixed_assets, 'receivable_total': receivable_total, 'payable_total': payable_total,
+        'fixed_cost': fixed_cost, 'accumulated': accumulated, 'total_assets': total_assets,
+        'total_liabilities': total_liabilities, 'total_equity': total_equity,
+        'current_profit': current_profit, 'total_equity_before': total_equity_before,
+        'reconciliation_equity': reconciliation_equity,
+        'total_equity_with_profit': total_equity_with_profit,
+        'preliminary_difference': preliminary_difference, 'difference': difference,
+        'sales_revenue': sales_revenue, 'other_revenue': other_revenue,
+        'operating_cost': operating_cost, 'current_year_depreciation': current_year_depreciation,
+        'capital_expenses': capital_expenses, 'warnings': warnings,
+    }
 
 
 @login_required
@@ -1116,7 +1183,7 @@ def export_balance_sheet_pdf(request):
     rows.append(['KEWAJIBAN - Utang Usaha',rupiah(d['payable_total'])])
     rows.append(['TOTAL KEWAJIBAN',rupiah(d['total_liabilities'])])
     for e in d['equities']: rows.append([f"EKUITAS - {e.account_name}",rupiah(e.amount)])
-    rows += [['Laba/Rugi Tahun Berjalan',rupiah(d['current_profit'])],['TOTAL EKUITAS',rupiah(d['total_equity_with_profit'])],['SELISIH NERACA',rupiah(d['difference'])]]
+    rows += [['Laba/Rugi Tahun Berjalan',rupiah(d['current_profit'])],['Saldo awal/modal belum direkonsiliasi',rupiah(d['reconciliation_equity'])],['TOTAL EKUITAS',rupiah(d['total_equity_with_profit'])],['SELISIH NERACA',rupiah(d['difference'])]]
     return export_pdf('neraca','Laporan Neraca',f"Posisi per {d['as_of'].strftime('%d/%m/%Y')}",['Uraian','Jumlah'],rows)
 
 
