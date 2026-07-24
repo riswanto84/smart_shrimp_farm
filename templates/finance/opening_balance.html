@@ -94,8 +94,4 @@
  document.getElementById('openingBalanceForm').addEventListener('submit',()=>fields.forEach(el=>el.value=String(parse(el.value))));update();
 })();
 </script>
-
-<div class="alert alert-info mt-3">
-    <strong>Catatan:</strong> Saldo Awal hanya mencatat posisi pembukaan. Laba/rugi tahun berjalan tidak digunakan dalam rekonsiliasi Modal Pemilik.
-</div>
 {% endblock %}

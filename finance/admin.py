@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import OperationalExpense, ExpenseDocument, OtherRevenue, BalanceEntry, FixedAsset, TradeAccount, TradePayment, TradeDocument, LedgerAccount, JournalEntry, JournalLine
+from .models import OperationalExpense, ExpenseDocument, OtherRevenue, BalanceEntry, FixedAsset, TradeAccount, TradePayment, TradeDocument
 
 @admin.register(OperationalExpense)
 class OperationalExpenseAdmin(admin.ModelAdmin):
@@ -51,25 +51,3 @@ class TradeDocumentAdmin(admin.ModelAdmin):
     list_display=('original_name','trade_account','payment','uploaded_by','uploaded_at')
     list_filter=('uploaded_at',)
     search_fields=('original_name','description','trade_account__partner_name','trade_account__document_number')
-
-
-@admin.register(LedgerAccount)
-class LedgerAccountAdmin(admin.ModelAdmin):
-    list_display = ('code','name','account_type','normal_balance','group','is_active')
-    list_filter = ('account_type','normal_balance','is_active')
-    search_fields = ('code','name','group')
-
-
-class JournalLineInline(admin.TabularInline):
-    model = JournalLine
-    extra = 0
-    readonly_fields = ('account','description','debit','credit')
-    can_delete = False
-
-
-@admin.register(JournalEntry)
-class JournalEntryAdmin(admin.ModelAdmin):
-    list_display = ('date','reference','description','status','source_type','is_system_generated')
-    list_filter = ('status','source_type','is_system_generated','date')
-    search_fields = ('reference','description')
-    inlines = (JournalLineInline,)
