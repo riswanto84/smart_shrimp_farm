@@ -1374,16 +1374,12 @@ def _balance_sheet_data(request):
 
     # Rekonsiliasi tidak boleh dipakai untuk menutupi laba/rugi berjalan.
     # Nilai ini hanya menunjukkan adanya saldo awal/aset/kewajiban yang belum lengkap.
-    reconciliation_equity = preliminary_difference
-    total_equity_with_profit = total_equity_before + reconciliation_equity
-    total_assets = total_assets_before
-    difference = total_assets - total_liabilities - total_equity_with_profit
 
     capital_expenses = OperationalExpense.objects.filter(date__lte=as_of, is_capital_expenditure=True).aggregate(s=Sum('amount'))['s'] or Decimal('0')
     unlinked_capital_expenses = OperationalExpense.objects.filter(date__lte=as_of, is_capital_expenditure=True, fixed_asset__isnull=True).count()
     warnings = []
-    if reconciliation_equity != 0:
-        warnings.append('Masih terdapat saldo awal/modal/kas yang belum direkonsiliasi. Periksa Pos Neraca dan lengkapi saldo Kas dan Bank serta Modal Pemilik.')
+    if abs(difference) > Decimal('1.00'):
+        warnings.append('Neraca belum seimbang. Periksa saldo awal, transaksi modal, utang, piutang, aset, dan laba/rugi berjalan.')
     if unlinked_capital_expenses:
         warnings.append(f'{unlinked_capital_expenses} pengeluaran kapital belum ditautkan ke Daftar Aset.')
 
@@ -1423,11 +1419,32 @@ def _balance_sheet_data(request):
     })
 
     validation_checks = [
-        {'label': 'Persamaan neraca seimbang', 'ok': difference == 0},
-        {'label': 'Saldo awal/modal telah direkonsiliasi', 'ok': reconciliation_equity == 0},
+        {'label': 'Persamaan neraca seimbang', 'ok': is_balanced},
+        {'label': 'Saldo awal/modal telah direkonsiliasi', 'ok': opening_balance_entries_exist},
         {'label': 'Tidak ada pengeluaran kapital tanpa aset', 'ok': unlinked_capital_expenses == 0},
         {'label': 'Piutang dan nota penjualan tersinkron', 'ok': True},
     ]
+
+
+    balance_tolerance = Decimal('1.00')
+    opening_balance_entries_exist = BalanceEntry.objects.filter(
+        as_of_date__lte=as_of
+    ).exists()
+
+    is_balanced = abs(difference) <= balance_tolerance
+
+    if is_balanced:
+        balance_status = 'balanced'
+        balance_status_label = 'Seimbang'
+        balance_status_note = 'Persamaan aset = kewajiban + ekuitas telah terpenuhi.'
+    elif not opening_balance_entries_exist:
+        balance_status = 'opening_unreconciled'
+        balance_status_label = 'Saldo Awal Belum Direkonsiliasi'
+        balance_status_note = 'Belum ada saldo awal yang memadai untuk membentuk neraca berjalan.'
+    else:
+        balance_status = 'unbalanced'
+        balance_status_label = 'Tidak Seimbang'
+        balance_status_note = 'Terdapat selisih antara aset dengan kewajiban dan ekuitas.'
 
     return {
         'as_of': as_of, 'assets': assets, 'liabilities': liabilities, 'equities': equities,
@@ -1437,7 +1454,7 @@ def _balance_sheet_data(request):
         'current_assets': current_assets, 'total_assets': total_assets,
         'total_liabilities': total_liabilities, 'opening_equity': opening_equity,
         'total_equity': total_equity_with_profit,
-        'current_profit': current_profit, 'total_equity_before': total_equity_before,
+        'current_profit': current_profit, 'total_equity_before': total_equity_with_profit,
         'reconciliation_equity': reconciliation_equity,
         'total_equity_with_profit': total_equity_with_profit,
         'preliminary_difference': preliminary_difference, 'difference': difference,
@@ -1447,7 +1464,11 @@ def _balance_sheet_data(request):
         'current_ratio': current_ratio, 'cash_ratio': cash_ratio,
         'debt_to_equity': debt_to_equity, 'debt_ratio': debt_ratio,
         'asset_composition': asset_composition, 'equity_breakdown': equity_breakdown, 'validation_checks': validation_checks,
-        'is_balanced': difference == 0,
+        'is_balanced': is_balanced,
+        'balance_status': balance_status,
+        'balance_status_label': balance_status_label,
+        'balance_status_note': balance_status_note,
+        'opening_balance_entries_exist': opening_balance_entries_exist,
         'is_reconciled': reconciliation_equity == 0,
         'balance_status': (
             'balanced' if difference == 0 and reconciliation_equity == 0
