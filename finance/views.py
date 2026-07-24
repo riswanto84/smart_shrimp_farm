@@ -1223,8 +1223,10 @@ def _automatic_opening_components(as_of):
 def opening_balance(request):
     """Wizard rekonsiliasi saldo awal berbasis akun neraca yang sebenarnya.
 
-    Piutang, utang usaha, aset tetap, penyusutan, serta laba tahun berjalan
-    tetap bersumber dari modul transaksi agar tidak terjadi pencatatan ganda.
+    Piutang, utang usaha, aset tetap, dan penyusutan tetap bersumber dari
+    modul transaksi agar tidak terjadi pencatatan ganda. Laba/rugi tahun
+    berjalan hanya ditampilkan sebagai informasi dan tidak digunakan untuk
+    menghitung Modal Pemilik pada saldo awal.
     """
     raw_as_of = request.POST.get('as_of_date') or request.GET.get('as_of')
     if isinstance(raw_as_of, timezone.datetime):
@@ -1255,7 +1257,9 @@ def opening_balance(request):
             other_equity = sum((parsed[field] for field, typ, *_ in OPENING_BALANCE_ACCOUNTS if typ == 'equity' and field != 'owner_capital'), Decimal('0'))
             total_assets = manual_assets + automatic['receivables'] + automatic['net_fixed_assets']
             total_liabilities = manual_liabilities + automatic['payables']
-            parsed['owner_capital'] = total_assets - total_liabilities - automatic['current_profit'] - other_equity
+            # Modal awal hanya berasal dari posisi pembukaan.
+            # Laba/rugi tahun berjalan tidak boleh menaikkan atau menurunkan Modal Pemilik.
+            parsed['owner_capital'] = total_assets - total_liabilities - other_equity
 
         if errors:
             for error in errors:
@@ -1273,7 +1277,11 @@ def opening_balance(request):
                     },
                 )
             if request.POST.get('action') == 'auto_reconcile':
-                messages.success(request, 'Saldo awal berhasil direkonsiliasi. Modal Pemilik dihitung otomatis agar persamaan neraca seimbang tanpa akun sementara.')
+                messages.success(
+                    request,
+                    'Saldo awal berhasil direkonsiliasi. Modal Pemilik dihitung dari aset awal '
+                    'dikurangi kewajiban awal dan komponen ekuitas awal lainnya, tanpa laba/rugi tahun berjalan.'
+                )
             else:
                 messages.success(request, 'Saldo awal berhasil disimpan dan langsung digunakan pada laporan neraca.')
             return redirect(f"{request.path}?as_of={as_of.isoformat()}")
@@ -1289,7 +1297,10 @@ def opening_balance(request):
 
     total_assets_preview = manual_asset_total + automatic['receivables'] + automatic['net_fixed_assets']
     total_liabilities_preview = manual_liability_total + automatic['payables']
-    total_equity_preview = equity_opening_total + automatic['current_profit']
+    # Pratinjau rekonsiliasi saldo awal hanya memakai ekuitas pembukaan.
+    # Laba/rugi berjalan ditampilkan sebagai informasi terpisah dan tidak
+    # digunakan sebagai komponen penyeimbang Modal Pemilik.
+    total_equity_preview = equity_opening_total
     reconciliation_difference = total_assets_preview - total_liabilities_preview - total_equity_preview
 
     context = {

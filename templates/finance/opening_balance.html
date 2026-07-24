@@ -47,7 +47,7 @@
     <div class="opening-section">
       <div class="opening-title"><div class="opening-icon"><i class="fa-solid fa-landmark"></i></div><div><h3>Ekuitas Awal</h3><p>Rekonsiliasi sumber modal dan hasil usaha sebelum periode berjalan.</p></div></div>
       <div class="row g-3">
-        <div class="col-md-6"><label class="form-label fw-semibold">Modal Pemilik</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="owner_capital" value="{{ values.owner_capital|floatformat:0 }}" class="form-control money-input rupiah-input equity-input" inputmode="text"></div><div class="field-help">Dapat dihitung otomatis melalui tombol rekonsiliasi.</div></div>
+        <div class="col-md-6"><label class="form-label fw-semibold">Modal Pemilik</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="owner_capital" value="{{ values.owner_capital|floatformat:0 }}" class="form-control money-input rupiah-input equity-input" inputmode="text"></div><div class="field-help">Dihitung dari aset awal dikurangi kewajiban awal dan ekuitas awal lainnya, tanpa laba/rugi berjalan.</div></div>
         <div class="col-md-6"><label class="form-label fw-semibold">Tambahan Modal</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="additional_capital" value="{{ values.additional_capital|floatformat:0 }}" class="form-control money-input rupiah-input equity-input" inputmode="text"></div></div>
         <div class="col-md-6"><label class="form-label fw-semibold">Prive</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="drawings" value="{{ values.drawings_display|floatformat:0 }}" class="form-control money-input rupiah-input drawings-input" inputmode="numeric"></div><div class="field-help">Masukkan positif; sistem menyimpannya sebagai pengurang ekuitas.</div></div>
         <div class="col-md-6"><label class="form-label fw-semibold">Laba Ditahan</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="retained_earnings" value="{{ values.retained_earnings|floatformat:0 }}" class="form-control money-input rupiah-input equity-input" inputmode="text"></div><div class="field-help">Boleh negatif apabila terdapat akumulasi rugi sebelumnya.</div></div>
@@ -64,7 +64,7 @@
     <div class="summary-blue"><div class="small opacity-75">Pratinjau posisi</div><h3 class="mt-1 mb-3">{{ as_of|date:'d M Y' }}</h3><div class="summary-row"><span>Total Aset</span><strong id="assetSummary">{{ total_assets_preview|rupiah }}</strong></div><div class="summary-row"><span>Total Kewajiban</span><strong id="liabilitySummary">{{ total_liabilities_preview|rupiah }}</strong></div><div class="summary-row"><span>Total Ekuitas</span><strong id="equitySummary">{{ total_equity_preview|rupiah }}</strong></div><div class="summary-row"><span>Selisih</span><strong id="differenceSummary">{{ reconciliation_difference|rupiah }}</strong></div></div>
     <div id="statusBox" class="status-box {% if is_reconciled_preview %}status-ok{% else %}status-note{% endif %}"><strong id="statusTitle">{% if is_reconciled_preview %}<i class="fa-solid fa-circle-check"></i> Sudah Direkonsiliasi{% else %}<i class="fa-solid fa-triangle-exclamation"></i> Belum Direkonsiliasi{% endif %}</strong><div class="small mt-1" id="statusText">{% if is_reconciled_preview %}Persamaan aset = kewajiban + ekuitas telah terpenuhi.{% else %}Gunakan Rekonsiliasi Otomatis atau koreksi saldo akun sampai selisih menjadi Rp0.{% endif %}</div></div>
     <div class="auto-card"><h5 class="mb-2"><i class="fa-solid fa-arrows-rotate text-primary"></i> Data Otomatis</h5><p class="small text-muted">Pos berikut berasal dari modul terkait dan tidak boleh diinput ulang.</p><div class="auto-line"><span>Piutang Usaha</span><strong id="autoReceivables" data-value="{{ auto_receivables }}">{{ auto_receivables|rupiah }}</strong></div><div class="auto-line"><span>Utang Usaha</span><strong id="autoPayables" data-value="{{ auto_payables }}">{{ auto_payables|rupiah }}</strong></div><div class="auto-line"><span>Aset Tetap Bruto</span><strong>{{ auto_fixed_assets|rupiah }}</strong></div><div class="auto-line"><span>Akumulasi Penyusutan</span><strong class="danger-text">({{ auto_accumulated_depreciation|rupiah }})</strong></div><div class="auto-line"><span>Aset Tetap Bersih</span><strong id="autoNetAssets" data-value="{{ auto_net_fixed_assets }}">{{ auto_net_fixed_assets|rupiah }}</strong></div><div class="auto-line"><span>Laba/Rugi Berjalan</span><strong id="autoProfit" data-value="{{ auto_current_profit }}">{{ auto_current_profit|rupiah }}</strong></div></div>
-    <div class="help-box"><strong>Perhatian:</strong> gunakan rekening koran, kas fisik, daftar persediaan, dokumen utang, dan bukti modal. Rekonsiliasi otomatis hanya menghitung angka Modal Pemilik agar neraca seimbang; kebenaran sumber dananya tetap harus diverifikasi.</div>
+    <div class="help-box"><strong>Perhatian:</strong> gunakan rekening koran, kas fisik, daftar persediaan, dokumen utang, dan bukti modal. Rekonsiliasi otomatis menghitung Modal Pemilik dari aset awal dikurangi kewajiban awal dan ekuitas awal lainnya. Laba/rugi tahun berjalan tidak digunakan.</div>
   </aside>
 </div>
 </form>
@@ -94,4 +94,10 @@
  document.getElementById('openingBalanceForm').addEventListener('submit',()=>fields.forEach(el=>el.value=String(parse(el.value))));update();
 })();
 </script>
+
+<div class="alert alert-info mt-3">
+    <strong>Rumus Modal Pemilik:</strong>
+    Total Aset Awal − Total Kewajiban Awal − Tambahan Modal − Laba Ditahan − Prive.
+    Laba/rugi tahun berjalan tidak digunakan untuk menghitung Modal Pemilik.
+</div>
 {% endblock %}
