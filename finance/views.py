@@ -1157,19 +1157,28 @@ def add_balance_entry(request):
 
 
 OPENING_BALANCE_ACCOUNTS = (
-    ('cash', 'asset', 'Kas dan Bank', 'Kas Tunai'),
-    ('bank_bca', 'asset', 'Kas dan Bank', 'Bank BCA'),
-    ('bank_mandiri', 'asset', 'Kas dan Bank', 'Bank Mandiri'),
-    ('bank_bri', 'asset', 'Kas dan Bank', 'Bank BRI'),
-    ('bank_other', 'asset', 'Kas dan Bank', 'Bank Lainnya'),
-    ('owner_capital', 'equity', 'Modal Pemilik', 'Modal Pemilik'),
-    ('retained_earnings', 'equity', 'Laba Ditahan', 'Laba Ditahan'),
+    # field, account type, group, account name, allow negative
+    ('cash', 'asset', 'Kas dan Bank', 'Kas Tunai', False),
+    ('bank_bca', 'asset', 'Kas dan Bank', 'Bank BCA', False),
+    ('bank_mandiri', 'asset', 'Kas dan Bank', 'Bank Mandiri', False),
+    ('bank_bri', 'asset', 'Kas dan Bank', 'Bank BRI', False),
+    ('bank_other', 'asset', 'Kas dan Bank', 'Bank Lainnya', False),
+    ('inventory', 'asset', 'Persediaan', 'Persediaan Awal', False),
+    ('advances', 'asset', 'Uang Muka', 'Uang Muka Awal', False),
+    ('other_current_assets', 'asset', 'Aset Lancar Lainnya', 'Aset Lancar Lainnya', False),
+    ('tax_payable', 'liability', 'Utang Pajak', 'Utang Pajak Awal', False),
+    ('owner_payable', 'liability', 'Utang Pemilik', 'Utang Pemilik Awal', False),
+    ('other_liabilities', 'liability', 'Utang Lainnya', 'Utang Lainnya', False),
+    ('owner_capital', 'equity', 'Modal Pemilik', 'Modal Pemilik', True),
+    ('additional_capital', 'equity', 'Tambahan Modal', 'Tambahan Modal', True),
+    ('drawings', 'equity', 'Prive', 'Prive', True),
+    ('retained_earnings', 'equity', 'Laba Ditahan', 'Laba Ditahan', True),
 )
 
 
 def _opening_balance_values(as_of):
     values = {}
-    for field, account_type, group, account_name in OPENING_BALANCE_ACCOUNTS:
+    for field, account_type, group, account_name, allow_negative in OPENING_BALANCE_ACCOUNTS:
         entry = (BalanceEntry.objects
                  .filter(as_of_date__lte=as_of, account_type=account_type,
                          group=group, account_name=account_name)
@@ -1178,33 +1187,81 @@ def _opening_balance_values(as_of):
     return values
 
 
+def _automatic_opening_components(as_of):
+    """Komponen neraca yang berasal dari modul transaksi, bukan input saldo awal."""
+    def outstanding_as_of(account):
+        paid = account.payments.filter(payment_date__lte=as_of).aggregate(s=Sum('amount'))['s'] or Decimal('0')
+        return max((account.original_amount or Decimal('0')) - paid, Decimal('0'))
+
+    receivables = sum((outstanding_as_of(x) for x in TradeAccount.objects.filter(
+        account_type=TradeAccount.RECEIVABLE, transaction_date__lte=as_of
+    )), Decimal('0'))
+    payables = sum((outstanding_as_of(x) for x in TradeAccount.objects.filter(
+        account_type=TradeAccount.PAYABLE, transaction_date__lte=as_of
+    )), Decimal('0'))
+
+    fixed_cost = Decimal('0')
+    accumulated = Decimal('0')
+    for asset in FixedAsset.objects.filter(use_date__lte=as_of).exclude(status='disposed'):
+        fixed_cost += asset.total_cost
+        accumulated += _asset_depreciation(asset, as_of)['accumulated']
+
+    start = timezone.datetime(as_of.year, 1, 1).date()
+    current_profit = _calculate_profit_loss_period(start, as_of)['profit']
+    return {
+        'receivables': receivables,
+        'payables': payables,
+        'fixed_cost': fixed_cost,
+        'accumulated': accumulated,
+        'net_fixed_assets': fixed_cost - accumulated,
+        'current_profit': current_profit,
+    }
+
+
 @login_required
 @permission_required('finance.tax_reports')
 def opening_balance(request):
-    """Input saldo pembukaan inti tanpa menduplikasi saldo otomatis.
+    """Wizard rekonsiliasi saldo awal berbasis akun neraca yang sebenarnya.
 
-    Piutang, utang, aset tetap, dan penyusutan tetap berasal dari modul
-    transaksinya masing-masing. Halaman ini hanya menyimpan Kas/Bank, Modal
-    Pemilik, dan Laba Ditahan sebagai BalanceEntry bertanggal posisi awal.
+    Piutang, utang usaha, aset tetap, penyusutan, serta laba tahun berjalan
+    tetap bersumber dari modul transaksi agar tidak terjadi pencatatan ganda.
     """
-    as_of = parse_date(request.POST.get('as_of_date') or request.GET.get('as_of')) or timezone.localdate()
+    raw_as_of = request.POST.get('as_of_date') or request.GET.get('as_of')
+    if isinstance(raw_as_of, timezone.datetime):
+        as_of = raw_as_of.date()
+    elif hasattr(raw_as_of, 'year') and hasattr(raw_as_of, 'month') and hasattr(raw_as_of, 'day'):
+        # Sudah berupa date; jangan dikirim lagi ke parse_date/fromisoformat.
+        as_of = raw_as_of
+    else:
+        as_of = parse_date(str(raw_as_of or '')) or timezone.localdate()
+    automatic = _automatic_opening_components(as_of)
 
     if request.method == 'POST':
         parsed = {}
         errors = []
-        for field, account_type, group, account_name in OPENING_BALANCE_ACCOUNTS:
+        for field, account_type, group, account_name, allow_negative in OPENING_BALANCE_ACCOUNTS:
             value = parse_rupiah(request.POST.get(field, '0'))
-            if account_type == 'asset' and value < 0:
+            if not allow_negative and value < 0:
                 errors.append(f'{account_name} tidak boleh bernilai negatif.')
             parsed[field] = value
+
+        # Prive merupakan pengurang ekuitas. Pengguna cukup memasukkan angka positif.
+        if parsed.get('drawings', Decimal('0')) > 0:
+            parsed['drawings'] = -parsed['drawings']
+
+        if request.POST.get('action') == 'auto_reconcile' and not errors:
+            manual_assets = sum((parsed[field] for field, typ, *_ in OPENING_BALANCE_ACCOUNTS if typ == 'asset'), Decimal('0'))
+            manual_liabilities = sum((parsed[field] for field, typ, *_ in OPENING_BALANCE_ACCOUNTS if typ == 'liability'), Decimal('0'))
+            other_equity = sum((parsed[field] for field, typ, *_ in OPENING_BALANCE_ACCOUNTS if typ == 'equity' and field != 'owner_capital'), Decimal('0'))
+            total_assets = manual_assets + automatic['receivables'] + automatic['net_fixed_assets']
+            total_liabilities = manual_liabilities + automatic['payables']
+            parsed['owner_capital'] = total_assets - total_liabilities - automatic['current_profit'] - other_equity
 
         if errors:
             for error in errors:
                 messages.error(request, error)
         else:
-            # Satu snapshot per akun dan tanggal. Riwayat tanggal sebelumnya
-            # dipertahankan agar neraca historis tetap dapat ditampilkan.
-            for field, account_type, group, account_name in OPENING_BALANCE_ACCOUNTS:
+            for field, account_type, group, account_name, allow_negative in OPENING_BALANCE_ACCOUNTS:
                 BalanceEntry.objects.update_or_create(
                     as_of_date=as_of,
                     account_type=account_type,
@@ -1212,34 +1269,50 @@ def opening_balance(request):
                     account_name=account_name,
                     defaults={
                         'amount': parsed[field],
-                        'notes': 'Saldo awal melalui menu Saldo Awal',
+                        'notes': 'Saldo awal melalui wizard rekonsiliasi',
                     },
                 )
-            messages.success(request, 'Saldo awal berhasil disimpan dan langsung digunakan pada laporan neraca.')
+            if request.POST.get('action') == 'auto_reconcile':
+                messages.success(request, 'Saldo awal berhasil direkonsiliasi. Modal Pemilik dihitung otomatis agar persamaan neraca seimbang tanpa akun sementara.')
+            else:
+                messages.success(request, 'Saldo awal berhasil disimpan dan langsung digunakan pada laporan neraca.')
             return redirect(f"{request.path}?as_of={as_of.isoformat()}")
 
     values = _opening_balance_values(as_of)
-    cash_bank_total = sum((values[k] for k in ('cash','bank_bca','bank_mandiri','bank_bri','bank_other')), Decimal('0'))
-    equity_opening_total = values['owner_capital'] + values['retained_earnings']
+    # Prive ditampilkan positif agar lebih mudah diinput pengguna.
+    values['drawings_display'] = abs(values.get('drawings', Decimal('0')))
 
-    # Informasi otomatis hanya untuk referensi; tidak dapat diedit di halaman ini.
-    def outstanding_as_of(account):
-        paid = account.payments.filter(payment_date__lte=as_of).aggregate(s=Sum('amount'))['s'] or Decimal('0')
-        return max((account.original_amount or Decimal('0')) - paid, Decimal('0'))
-    auto_receivables = sum((outstanding_as_of(x) for x in TradeAccount.objects.filter(account_type=TradeAccount.RECEIVABLE, transaction_date__lte=as_of)), Decimal('0'))
-    auto_payables = sum((outstanding_as_of(x) for x in TradeAccount.objects.filter(account_type=TradeAccount.PAYABLE, transaction_date__lte=as_of)), Decimal('0'))
-    auto_fixed_assets = sum((a.total_cost for a in FixedAsset.objects.filter(use_date__lte=as_of).exclude(status='disposed')), Decimal('0'))
+    cash_bank_total = sum((values[k] for k in ('cash','bank_bca','bank_mandiri','bank_bri','bank_other')), Decimal('0'))
+    manual_asset_total = sum((values[field] for field, typ, *_ in OPENING_BALANCE_ACCOUNTS if typ == 'asset'), Decimal('0'))
+    manual_liability_total = sum((values[field] for field, typ, *_ in OPENING_BALANCE_ACCOUNTS if typ == 'liability'), Decimal('0'))
+    equity_opening_total = sum((values[field] for field, typ, *_ in OPENING_BALANCE_ACCOUNTS if typ == 'equity'), Decimal('0'))
+
+    total_assets_preview = manual_asset_total + automatic['receivables'] + automatic['net_fixed_assets']
+    total_liabilities_preview = manual_liability_total + automatic['payables']
+    total_equity_preview = equity_opening_total + automatic['current_profit']
+    reconciliation_difference = total_assets_preview - total_liabilities_preview - total_equity_preview
 
     context = {
         'as_of': as_of,
         'values': values,
         'cash_bank_total': cash_bank_total,
+        'manual_asset_total': manual_asset_total,
+        'manual_liability_total': manual_liability_total,
         'equity_opening_total': equity_opening_total,
-        'auto_receivables': auto_receivables,
-        'auto_payables': auto_payables,
-        'auto_fixed_assets': auto_fixed_assets,
+        'auto_receivables': automatic['receivables'],
+        'auto_payables': automatic['payables'],
+        'auto_fixed_assets': automatic['fixed_cost'],
+        'auto_accumulated_depreciation': automatic['accumulated'],
+        'auto_net_fixed_assets': automatic['net_fixed_assets'],
+        'auto_current_profit': automatic['current_profit'],
+        'total_assets_preview': total_assets_preview,
+        'total_liabilities_preview': total_liabilities_preview,
+        'total_equity_preview': total_equity_preview,
+        'reconciliation_difference': reconciliation_difference,
+        'is_reconciled_preview': abs(reconciliation_difference) < Decimal('0.01'),
     }
     return render(request, 'finance/opening_balance.html', context)
+
 
 def _balance_sheet_data(request):
     """Susun neraca dengan sumber data operasional yang transparan.
