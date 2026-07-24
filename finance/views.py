@@ -898,9 +898,28 @@ def _as_date(request):
 
 
 def _date_period(request):
-    year = int(request.GET.get('year') or timezone.localdate().year)
-    date_from = parse_date(request.GET.get('date_from') or '') or timezone.datetime(year, 1, 1).date()
-    date_to = parse_date(request.GET.get('date_to') or '') or timezone.datetime(year, 12, 31).date()
+    """Return a safe reporting period.
+
+    For the current year the default end date is today, not 31 December.
+    This prevents future depreciation from being recognised in a report that
+    is opened during the year. An explicitly supplied future end date is also
+    capped at today for the current/future year.
+    """
+    today = timezone.localdate()
+    try:
+        year = int(request.GET.get('year') or today.year)
+    except (TypeError, ValueError):
+        year = today.year
+
+    default_from = timezone.datetime(year, 1, 1).date()
+    default_to = today if year >= today.year else timezone.datetime(year, 12, 31).date()
+
+    date_from = parse_date(request.GET.get('date_from') or '') or default_from
+    date_to = parse_date(request.GET.get('date_to') or '') or default_to
+
+    # Financial reports must not recognise future transactions/depreciation.
+    if date_to > today:
+        date_to = today
     if date_from > date_to:
         date_from, date_to = date_to, date_from
     return date_from, date_to
@@ -942,6 +961,61 @@ def _asset_depreciation(asset, as_of):
         'accumulated': accumulated,
         'book_value': max(cost - accumulated, Decimal('0')),
         'life': life,
+    }
+
+
+def _calculate_profit_loss_period(date_from, date_to):
+    """Single source of truth for profit/loss calculations.
+
+    Both the profit/loss report and the balance sheet call this helper so the
+    current-year result cannot drift because of different queries or
+    depreciation cut-off dates.
+    """
+    valid_statuses_excluded = ['Gagal', 'Expired', 'Dibatalkan', 'Refund']
+    sales_revenue = (
+        Sale.objects.filter(date__date__range=(date_from, date_to))
+        .exclude(status__in=valid_statuses_excluded)
+        .aggregate(s=Sum('total_amount'))['s']
+        or Decimal('0')
+    )
+    other_revenue = (
+        OtherRevenue.objects.filter(date__range=(date_from, date_to))
+        .aggregate(s=Sum('gross_amount'))['s']
+        or Decimal('0')
+    )
+
+    expenses = OperationalExpense.objects.filter(
+        date__range=(date_from, date_to),
+        is_capital_expenditure=False,
+    ).exclude(category='Penyusutan')
+    grouped = list(
+        expenses.values('category').annotate(total=Sum('amount')).order_by('category')
+    )
+    operating_cost = sum((row['total'] for row in grouped), Decimal('0'))
+
+    depreciation_total = Decimal('0')
+    day_before = date_from - timedelta(days=1)
+    for asset in FixedAsset.objects.filter(use_date__lte=date_to).exclude(status='disposed'):
+        dep_to = _asset_depreciation(asset, date_to)['accumulated']
+        dep_before = (
+            _asset_depreciation(asset, day_before)['accumulated']
+            if day_before >= asset.use_date
+            else Decimal('0')
+        )
+        depreciation_total += max(dep_to - dep_before, Decimal('0'))
+
+    total_revenue = sales_revenue + other_revenue
+    total_expense = operating_cost + depreciation_total
+    return {
+        'sales_revenue': sales_revenue,
+        'other_revenue': other_revenue,
+        'revenue': total_revenue,
+        'expenses': expenses,
+        'grouped': grouped,
+        'operating_cost': operating_cost,
+        'depreciation_total': depreciation_total,
+        'expense_total': total_expense,
+        'profit': total_revenue - total_expense,
     }
 
 
@@ -1024,23 +1098,28 @@ def export_gross_turnover_pdf(request):
 
 
 def _profit_loss_tax_data(request):
-    date_from,date_to=_date_period(request)
-    _,_,_,revenue,_=_gross_turnover_data(request)
-    expenses=OperationalExpense.objects.filter(date__range=(date_from,date_to), is_capital_expenditure=False).exclude(category='Penyusutan')
-    grouped=list(expenses.values('category').annotate(total=Sum('amount')).order_by('category'))
-    expense_total=sum((x['total'] for x in grouped),Decimal('0'))
-    # Penyusutan dihitung otomatis dari register aset agar tidak terjadi beban ganda.
-    depreciation_total=Decimal('0')
-    for asset in FixedAsset.objects.filter(use_date__lte=date_to).exclude(status='disposed'):
-        dep_to=_asset_depreciation(asset,date_to)['accumulated']
-        day_before=date_from-timedelta(days=1)
-        dep_before=_asset_depreciation(asset,day_before)['accumulated'] if day_before >= asset.use_date else Decimal('0')
-        depreciation_total += max(dep_to-dep_before, Decimal('0'))
-    if depreciation_total:
-        grouped.append({'category':'Penyusutan Aset (otomatis)','total':depreciation_total})
-        expense_total += depreciation_total
-    non_deductible=expenses.filter(is_fiscal_deductible=False).aggregate(s=Sum('amount'))['s'] or Decimal('0')
-    return date_from,date_to,revenue,grouped,expense_total,revenue-expense_total,non_deductible
+    date_from, date_to = _date_period(request)
+    result = _calculate_profit_loss_period(date_from, date_to)
+    grouped = list(result['grouped'])
+    if result['depreciation_total']:
+        grouped.append({
+            'category': 'Penyusutan Aset (otomatis)',
+            'total': result['depreciation_total'],
+        })
+    non_deductible = (
+        result['expenses'].filter(is_fiscal_deductible=False)
+        .aggregate(s=Sum('amount'))['s']
+        or Decimal('0')
+    )
+    return (
+        date_from,
+        date_to,
+        result['revenue'],
+        grouped,
+        result['expense_total'],
+        result['profit'],
+        non_deductible,
+    )
 
 
 @login_required
@@ -1078,19 +1157,28 @@ def add_balance_entry(request):
 
 
 OPENING_BALANCE_ACCOUNTS = (
-    ('cash', 'asset', 'Kas dan Bank', 'Kas Tunai'),
-    ('bank_bca', 'asset', 'Kas dan Bank', 'Bank BCA'),
-    ('bank_mandiri', 'asset', 'Kas dan Bank', 'Bank Mandiri'),
-    ('bank_bri', 'asset', 'Kas dan Bank', 'Bank BRI'),
-    ('bank_other', 'asset', 'Kas dan Bank', 'Bank Lainnya'),
-    ('owner_capital', 'equity', 'Modal Pemilik', 'Modal Pemilik'),
-    ('retained_earnings', 'equity', 'Laba Ditahan', 'Laba Ditahan'),
+    # field, account type, group, account name, allow negative
+    ('cash', 'asset', 'Kas dan Bank', 'Kas Tunai', False),
+    ('bank_bca', 'asset', 'Kas dan Bank', 'Bank BCA', False),
+    ('bank_mandiri', 'asset', 'Kas dan Bank', 'Bank Mandiri', False),
+    ('bank_bri', 'asset', 'Kas dan Bank', 'Bank BRI', False),
+    ('bank_other', 'asset', 'Kas dan Bank', 'Bank Lainnya', False),
+    ('inventory', 'asset', 'Persediaan', 'Persediaan Awal', False),
+    ('advances', 'asset', 'Uang Muka', 'Uang Muka Awal', False),
+    ('other_current_assets', 'asset', 'Aset Lancar Lainnya', 'Aset Lancar Lainnya', False),
+    ('tax_payable', 'liability', 'Utang Pajak', 'Utang Pajak Awal', False),
+    ('owner_payable', 'liability', 'Utang Pemilik', 'Utang Pemilik Awal', False),
+    ('other_liabilities', 'liability', 'Utang Lainnya', 'Utang Lainnya', False),
+    ('owner_capital', 'equity', 'Modal Pemilik', 'Modal Pemilik', True),
+    ('additional_capital', 'equity', 'Tambahan Modal', 'Tambahan Modal', True),
+    ('drawings', 'equity', 'Prive', 'Prive', True),
+    ('retained_earnings', 'equity', 'Laba Ditahan', 'Laba Ditahan', True),
 )
 
 
 def _opening_balance_values(as_of):
     values = {}
-    for field, account_type, group, account_name in OPENING_BALANCE_ACCOUNTS:
+    for field, account_type, group, account_name, allow_negative in OPENING_BALANCE_ACCOUNTS:
         entry = (BalanceEntry.objects
                  .filter(as_of_date__lte=as_of, account_type=account_type,
                          group=group, account_name=account_name)
@@ -1099,137 +1187,132 @@ def _opening_balance_values(as_of):
     return values
 
 
-def _opening_balance_auto_values(as_of):
-    """Nilai otomatis yang membentuk posisi awal.
-
-    Penting: fungsi ini tidak menghitung pendapatan, beban, atau laba/rugi
-    tahun berjalan. Rekonsiliasi modal awal hanya memakai posisi aset dan
-    kewajiban pada tanggal saldo awal.
-    """
+def _automatic_opening_components(as_of):
+    """Komponen neraca yang berasal dari modul transaksi, bukan input saldo awal."""
     def outstanding_as_of(account):
-        paid = account.payments.filter(
-            payment_date__lte=as_of
-        ).aggregate(s=Sum('amount'))['s'] or Decimal('0')
+        paid = account.payments.filter(payment_date__lte=as_of).aggregate(s=Sum('amount'))['s'] or Decimal('0')
         return max((account.original_amount or Decimal('0')) - paid, Decimal('0'))
 
-    receivables = sum((
-        outstanding_as_of(x) for x in TradeAccount.objects.filter(
-            account_type=TradeAccount.RECEIVABLE, transaction_date__lte=as_of
-        )
-    ), Decimal('0'))
-    payables = sum((
-        outstanding_as_of(x) for x in TradeAccount.objects.filter(
-            account_type=TradeAccount.PAYABLE, transaction_date__lte=as_of
-        )
-    ), Decimal('0'))
+    receivables = sum((outstanding_as_of(x) for x in TradeAccount.objects.filter(
+        account_type=TradeAccount.RECEIVABLE, transaction_date__lte=as_of
+    )), Decimal('0'))
+    payables = sum((outstanding_as_of(x) for x in TradeAccount.objects.filter(
+        account_type=TradeAccount.PAYABLE, transaction_date__lte=as_of
+    )), Decimal('0'))
 
     fixed_cost = Decimal('0')
-    accumulated_depreciation = Decimal('0')
+    accumulated = Decimal('0')
     for asset in FixedAsset.objects.filter(use_date__lte=as_of).exclude(status='disposed'):
         fixed_cost += asset.total_cost
-        accumulated_depreciation += _asset_depreciation(asset, as_of)['accumulated']
+        accumulated += _asset_depreciation(asset, as_of)['accumulated']
 
-    net_fixed_assets = fixed_cost - accumulated_depreciation
+    start = timezone.datetime(as_of.year, 1, 1).date()
+    current_profit = _calculate_profit_loss_period(start, as_of)['profit']
     return {
         'receivables': receivables,
         'payables': payables,
         'fixed_cost': fixed_cost,
-        'accumulated_depreciation': accumulated_depreciation,
-        'net_fixed_assets': net_fixed_assets,
+        'accumulated': accumulated,
+        'net_fixed_assets': fixed_cost - accumulated,
+        'current_profit': current_profit,
     }
 
 
 @login_required
 @permission_required('finance.tax_reports')
 def opening_balance(request):
-    """Kelola saldo awal dan rekonsiliasi Modal Pemilik.
+    """Wizard rekonsiliasi saldo awal berbasis akun neraca yang sebenarnya.
 
-    Modal hasil rekonsiliasi dihitung dari aset awal dikurangi kewajiban awal
-    dan laba ditahan. Laba/rugi tahun berjalan sengaja tidak dimasukkan karena
-    bukan bagian dari posisi pembukaan.
+    Piutang, utang usaha, aset tetap, penyusutan, serta laba tahun berjalan
+    tetap bersumber dari modul transaksi agar tidak terjadi pencatatan ganda.
     """
-    as_of = parse_date(request.POST.get('as_of_date') or request.GET.get('as_of')) or timezone.localdate()
-    auto = _opening_balance_auto_values(as_of)
+    raw_as_of = request.POST.get('as_of_date') or request.GET.get('as_of')
+    if isinstance(raw_as_of, timezone.datetime):
+        as_of = raw_as_of.date()
+    elif hasattr(raw_as_of, 'year') and hasattr(raw_as_of, 'month') and hasattr(raw_as_of, 'day'):
+        # Sudah berupa date; jangan dikirim lagi ke parse_date/fromisoformat.
+        as_of = raw_as_of
+    else:
+        as_of = parse_date(str(raw_as_of or '')) or timezone.localdate()
+    automatic = _automatic_opening_components(as_of)
 
     if request.method == 'POST':
         parsed = {}
         errors = []
-        for field, account_type, group, account_name in OPENING_BALANCE_ACCOUNTS:
+        for field, account_type, group, account_name, allow_negative in OPENING_BALANCE_ACCOUNTS:
             value = parse_rupiah(request.POST.get(field, '0'))
-            if account_type == 'asset' and value < 0:
+            if not allow_negative and value < 0:
                 errors.append(f'{account_name} tidak boleh bernilai negatif.')
             parsed[field] = value
 
-        action = request.POST.get('action', 'save')
-        if action == 'reconcile':
-            cash_bank = sum((
-                parsed[k] for k in ('cash', 'bank_bca', 'bank_mandiri', 'bank_bri', 'bank_other')
-            ), Decimal('0'))
-            total_opening_assets = cash_bank + auto['receivables'] + auto['net_fixed_assets']
-            total_opening_liabilities = auto['payables']
+        # Prive merupakan pengurang ekuitas. Pengguna cukup memasukkan angka positif.
+        if parsed.get('drawings', Decimal('0')) > 0:
+            parsed['drawings'] = -parsed['drawings']
 
-            # Rumus yang benar untuk saldo awal:
-            # Modal Pemilik = Aset Awal - Kewajiban Awal - Laba Ditahan.
-            # Jangan memasukkan laba/rugi tahun berjalan.
-            parsed['owner_capital'] = (
-                total_opening_assets
-                - total_opening_liabilities
-                - parsed['retained_earnings']
-            )
+        if request.POST.get('action') == 'auto_reconcile' and not errors:
+            manual_assets = sum((parsed[field] for field, typ, *_ in OPENING_BALANCE_ACCOUNTS if typ == 'asset'), Decimal('0'))
+            manual_liabilities = sum((parsed[field] for field, typ, *_ in OPENING_BALANCE_ACCOUNTS if typ == 'liability'), Decimal('0'))
+            other_equity = sum((parsed[field] for field, typ, *_ in OPENING_BALANCE_ACCOUNTS if typ == 'equity' and field != 'owner_capital'), Decimal('0'))
+            total_assets = manual_assets + automatic['receivables'] + automatic['net_fixed_assets']
+            total_liabilities = manual_liabilities + automatic['payables']
+            parsed['owner_capital'] = total_assets - total_liabilities - automatic['current_profit'] - other_equity
 
         if errors:
             for error in errors:
                 messages.error(request, error)
         else:
-            for field, account_type, group, account_name in OPENING_BALANCE_ACCOUNTS:
-                note = 'Saldo awal melalui menu Saldo Awal'
-                if field == 'owner_capital' and action == 'reconcile':
-                    note = 'Modal awal hasil rekonsiliasi aset awal dikurangi kewajiban awal; tanpa laba/rugi berjalan'
+            for field, account_type, group, account_name, allow_negative in OPENING_BALANCE_ACCOUNTS:
                 BalanceEntry.objects.update_or_create(
                     as_of_date=as_of,
                     account_type=account_type,
                     group=group,
                     account_name=account_name,
-                    defaults={'amount': parsed[field], 'notes': note},
+                    defaults={
+                        'amount': parsed[field],
+                        'notes': 'Saldo awal melalui wizard rekonsiliasi',
+                    },
                 )
-            if action == 'reconcile':
-                messages.success(
-                    request,
-                    'Modal Pemilik berhasil direkonsiliasi dari aset awal dikurangi kewajiban awal. '
-                    'Laba/rugi tahun berjalan tidak digunakan.'
-                )
+            if request.POST.get('action') == 'auto_reconcile':
+                messages.success(request, 'Saldo awal berhasil direkonsiliasi. Modal Pemilik dihitung otomatis agar persamaan neraca seimbang tanpa akun sementara.')
             else:
                 messages.success(request, 'Saldo awal berhasil disimpan dan langsung digunakan pada laporan neraca.')
             return redirect(f"{request.path}?as_of={as_of.isoformat()}")
 
     values = _opening_balance_values(as_of)
+    # Prive ditampilkan positif agar lebih mudah diinput pengguna.
+    values['drawings_display'] = abs(values.get('drawings', Decimal('0')))
+
     cash_bank_total = sum((values[k] for k in ('cash','bank_bca','bank_mandiri','bank_bri','bank_other')), Decimal('0'))
-    equity_opening_total = values['owner_capital'] + values['retained_earnings']
-    opening_assets_for_reconciliation = cash_bank_total + auto['receivables'] + auto['net_fixed_assets']
-    opening_liabilities_for_reconciliation = auto['payables']
-    recommended_owner_capital = (
-        opening_assets_for_reconciliation
-        - opening_liabilities_for_reconciliation
-        - values['retained_earnings']
-    )
-    reconciliation_difference = values['owner_capital'] - recommended_owner_capital
+    manual_asset_total = sum((values[field] for field, typ, *_ in OPENING_BALANCE_ACCOUNTS if typ == 'asset'), Decimal('0'))
+    manual_liability_total = sum((values[field] for field, typ, *_ in OPENING_BALANCE_ACCOUNTS if typ == 'liability'), Decimal('0'))
+    equity_opening_total = sum((values[field] for field, typ, *_ in OPENING_BALANCE_ACCOUNTS if typ == 'equity'), Decimal('0'))
+
+    total_assets_preview = manual_asset_total + automatic['receivables'] + automatic['net_fixed_assets']
+    total_liabilities_preview = manual_liability_total + automatic['payables']
+    total_equity_preview = equity_opening_total + automatic['current_profit']
+    reconciliation_difference = total_assets_preview - total_liabilities_preview - total_equity_preview
 
     context = {
         'as_of': as_of,
         'values': values,
         'cash_bank_total': cash_bank_total,
+        'manual_asset_total': manual_asset_total,
+        'manual_liability_total': manual_liability_total,
         'equity_opening_total': equity_opening_total,
-        'auto_receivables': auto['receivables'],
-        'auto_payables': auto['payables'],
-        'auto_fixed_assets': auto['fixed_cost'],
-        'auto_accumulated_depreciation': auto['accumulated_depreciation'],
-        'auto_net_fixed_assets': auto['net_fixed_assets'],
-        'opening_assets_for_reconciliation': opening_assets_for_reconciliation,
-        'opening_liabilities_for_reconciliation': opening_liabilities_for_reconciliation,
-        'recommended_owner_capital': recommended_owner_capital,
+        'auto_receivables': automatic['receivables'],
+        'auto_payables': automatic['payables'],
+        'auto_fixed_assets': automatic['fixed_cost'],
+        'auto_accumulated_depreciation': automatic['accumulated'],
+        'auto_net_fixed_assets': automatic['net_fixed_assets'],
+        'auto_current_profit': automatic['current_profit'],
+        'total_assets_preview': total_assets_preview,
+        'total_liabilities_preview': total_liabilities_preview,
+        'total_equity_preview': total_equity_preview,
         'reconciliation_difference': reconciliation_difference,
+        'is_reconciled_preview': abs(reconciliation_difference) < Decimal('0.01'),
     }
     return render(request, 'finance/opening_balance.html', context)
+
 
 def _balance_sheet_data(request):
     """Susun neraca dengan sumber data operasional yang transparan.
@@ -1269,19 +1352,12 @@ def _balance_sheet_data(request):
     accumulated = sum((x['accumulated'] for x in fixed_assets), Decimal('0'))
 
     start = timezone.datetime(as_of.year, 1, 1).date()
-    valid_sales = Sale.objects.filter(date__date__range=(start, as_of)).exclude(status__in=['Gagal', 'Expired', 'Dibatalkan', 'Refund'])
-    sales_revenue = valid_sales.aggregate(s=Sum('total_amount'))['s'] or Decimal('0')
-    other_revenue = OtherRevenue.objects.filter(date__range=(start, as_of)).aggregate(s=Sum('gross_amount'))['s'] or Decimal('0')
-
-    operating_expenses = OperationalExpense.objects.filter(date__range=(start, as_of), is_capital_expenditure=False).exclude(category='Penyusutan')
-    operating_cost = operating_expenses.aggregate(s=Sum('amount'))['s'] or Decimal('0')
-    previous_year_end = timezone.datetime(as_of.year - 1, 12, 31).date()
-    current_year_depreciation = Decimal('0')
-    for x in fixed_assets:
-        asset = x['asset']
-        before = _asset_depreciation(asset, previous_year_end)['accumulated'] if asset.use_date <= previous_year_end else Decimal('0')
-        current_year_depreciation += max(x['accumulated'] - before, Decimal('0'))
-    current_profit = sales_revenue + other_revenue - operating_cost - current_year_depreciation
+    profit_loss = _calculate_profit_loss_period(start, as_of)
+    sales_revenue = profit_loss['sales_revenue']
+    other_revenue = profit_loss['other_revenue']
+    operating_cost = profit_loss['operating_cost']
+    current_year_depreciation = profit_loss['depreciation_total']
+    current_profit = profit_loss['profit']
 
     manual_asset_total = sum((e.amount for e in assets), Decimal('0'))
     total_assets_before = manual_asset_total + receivable_total + fixed_cost - accumulated
@@ -1354,6 +1430,12 @@ def _balance_sheet_data(request):
         'debt_to_equity': debt_to_equity, 'debt_ratio': debt_ratio,
         'asset_composition': asset_composition, 'validation_checks': validation_checks,
         'is_balanced': difference == 0,
+        'is_reconciled': reconciliation_equity == 0,
+        'balance_status': (
+            'balanced' if difference == 0 and reconciliation_equity == 0
+            else 'balanced_with_note' if difference == 0
+            else 'unbalanced'
+        ),
     }
 
 

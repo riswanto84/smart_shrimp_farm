@@ -1,94 +1,55 @@
 {% extends 'base.html' %}
-{% load static %}
 {% block content %}
-<div class="page-head ai-page-head">
-  <div>
-    <h1><i class="fa-solid fa-robot"></i> Smart Shrimp AI</h1>
-    <p>Chat real-time berbasis Ollama dengan konteks data terbaru setiap kolam.</p>
-  </div>
-  <span class="ai-live-status" id="aiStatus">Siap</span>
-</div>
-
-<div class="ollama-status-card d-flex justify-content-between align-items-center flex-wrap gap-2">
-  <div>
-    <b>Status AI:</b>
-    {% if ollama_health.ok %}
-      <span class="ollama-ok"><i class="fa-solid fa-circle-check"></i> Tersambung</span>
-    {% else %}
-      <span class="ollama-off"><i class="fa-solid fa-triangle-exclamation"></i> Belum tersambung</span>
-    {% endif %}
-    <div class="small text-muted">URL: {{ ollama_health.url }} | Model: {{ ollama_health.model }}</div>
-  </div>
-  <div class="small text-muted">Jawaban akan tampil sedikit demi sedikit.</div>
-</div>
-
-<div class="row g-3 ai-layout">
-  <div class="col-lg-3">
-    <div class="panel ai-context-panel">
-      <h2>Data Konteks</h2>
-      <p class="text-muted">AI membaca parameter, pakan, anco, sampling, siphon, dan panen terbaru.</p>
-      <label class="form-label" for="pondSelect">Kolam</label>
-      <select class="form-select" id="pondSelect">
-        <option value="">Tanpa kolam khusus</option>
-        {% for p in ponds %}
-          <option value="{{ p.id }}" {% if session.pond_id == p.id %}selected{% endif %}>{{ p.name }}</option>
-        {% endfor %}
-      </select>
+<style>
+.ai-shell{display:grid;grid-template-columns:280px minmax(0,1fr);height:calc(100vh - 125px);min-height:650px;border:1px solid #e5e7eb;border-radius:18px;overflow:hidden;background:#fff}.ai-sidebar{background:#0f172a;color:#e2e8f0;padding:14px;display:flex;flex-direction:column;min-height:0}.ai-brand{display:flex;align-items:center;gap:10px;padding:8px 5px 15px}.ai-brand i{color:#f5b942}.ai-new{border:1px solid #475569;background:#1e293b;color:#fff;border-radius:10px;padding:11px 12px;text-align:left;width:100%}.ai-history{overflow:auto;margin-top:12px;flex:1}.history-item{display:flex;align-items:center;gap:7px;border-radius:9px;padding:8px;margin-bottom:3px}.history-item.active,.history-item:hover{background:#1e293b}.history-open{background:none;border:0;color:#e2e8f0;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}.history-delete{display:none;background:none;border:0;color:#94a3b8}.history-item:hover .history-delete{display:block}.ai-side-footer{border-top:1px solid #334155;padding-top:12px;font-size:12px}.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}.status-on{background:#22c55e}.status-off{background:#ef4444}.ai-main{position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;background:#f8fafc}.ai-toolbar{height:60px;background:#fff;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;padding:0 18px;gap:12px}.ai-title{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.toolbar-actions{display:flex;gap:6px}.icon-btn{border:1px solid #dbe2ea;background:#fff;border-radius:9px;padding:7px 10px}.chat-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding:24px 18px 165px;scroll-behavior:smooth;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}.welcome{text-align:center;max-width:660px;margin:9vh auto 0}.welcome-icon{width:62px;height:62px;border-radius:18px;background:#0f172a;color:#f5b942;display:grid;place-items:center;font-size:28px;margin:0 auto 16px}.suggestions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:25px}.suggestion{border:1px solid #dbe2ea;background:#fff;border-radius:13px;padding:13px;text-align:left}.message-row{max-width:850px;margin:0 auto 22px;display:flex;gap:12px}.avatar{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto}.user .avatar{background:#dbeafe;color:#1d4ed8}.assistant .avatar{background:#0f172a;color:#f5b942}.message-content{min-width:0;flex:1;line-height:1.65;color:#172033}.message-content p{margin:0 0 9px}.message-content pre{background:#0f172a;color:#e2e8f0;padding:14px;border-radius:10px;overflow:auto}.message-content code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.attachments{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}.attachment-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid #dbe2ea;background:#fff;padding:7px 9px;border-radius:9px;font-size:12px}.composer-wrap{position:absolute;z-index:20;bottom:0;left:0;right:0;padding:12px 18px 18px;background:linear-gradient(transparent,#f8fafc 20%)}.composer{max-width:850px;margin:0 auto;background:#fff;border:1px solid #cbd5e1;border-radius:18px;box-shadow:0 8px 30px rgba(15,23,42,.12);padding:10px}.file-preview{display:flex;gap:7px;flex-wrap:wrap;padding:0 4px 8px}.preview-chip{background:#f1f5f9;border-radius:9px;padding:6px 8px;font-size:12px}.composer textarea{border:0!important;box-shadow:none!important;resize:none;min-height:52px;max-height:170px}.composer-actions{display:flex;align-items:center;justify-content:space-between}.composer-left{display:flex;align-items:center;gap:8px}.pond-select{max-width:190px;border:0;background:#f1f5f9;border-radius:9px;padding:7px}.send-btn,.stop-btn{width:38px;height:38px;border-radius:50%;border:0;display:grid;place-items:center}.send-btn{background:#0f172a;color:#fff}.stop-btn{background:#dc2626;color:#fff}.typing-cursor:after{content:'▋';animation:blink 1s infinite}@keyframes blink{50%{opacity:0}}.chat-scroll::-webkit-scrollbar{width:9px}.chat-scroll::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:999px;border:2px solid #f8fafc}.chat-scroll::-webkit-scrollbar-track{background:transparent}@media(max-width:850px){.ai-shell{grid-template-columns:1fr;height:calc(100dvh - 100px);min-height:520px;border-radius:0}.ai-sidebar{display:none}.composer-wrap{left:0}.suggestions{grid-template-columns:1fr}.chat-scroll{padding-left:10px;padding-right:10px}.pond-select{max-width:135px}.ai-toolbar{padding:0 10px}}
+</style>
+<div class="ai-shell" id="aiShell">
+  <aside class="ai-sidebar">
+    <div class="ai-brand"><i class="fa-solid fa-shrimp fa-xl"></i><div><b>Smart Shrimp AI</b><div style="font-size:11px;color:#94a3b8">Powered by Ollama</div></div></div>
+    <button class="ai-new" id="newChat"><i class="fa-solid fa-plus me-2"></i> Percakapan baru</button>
+    <div class="ai-history" id="historyList">
+      {% for item in sessions %}<div class="history-item {% if item.id == session.id %}active{% endif %}" data-id="{{ item.id }}"><button class="history-open" title="{{ item.title }}"><i class="fa-regular fa-message me-2"></i><span>{{ item.title }}</span></button><button class="history-delete" title="Hapus"><i class="fa-solid fa-trash"></i></button></div>{% endfor %}
     </div>
-
-    <div class="panel mt-3">
-      <h2>Retensi Percakapan</h2>
-      <p class="text-muted mb-2">Biasa 6 bulan, error 30 hari, dan penting disimpan permanen.</p>
-      <span class="badge-soft">{{ session.get_retention_type_display }}</span>
-      {% if session.is_important %}
-        <form method="post" class="mt-3" action="{% url 'chat_ai:unmark_important' session.id %}">{% csrf_token %}
-          <button class="btn btn-outline-secondary w-100" type="submit"><i class="fa-solid fa-bookmark"></i> Jadikan Biasa</button>
-        </form>
-      {% else %}
-        <form method="post" class="mt-3" action="{% url 'chat_ai:mark_important' session.id %}">{% csrf_token %}
-          <button class="btn btn-warning w-100 text-dark" type="submit"><i class="fa-solid fa-star"></i> Tandai Penting</button>
-        </form>
-      {% endif %}
+    <div class="ai-side-footer"><div><span class="status-dot {% if ollama_health.ok %}status-on{% else %}status-off{% endif %}"></span>{{ ollama_health.message }}</div><div class="mt-1 text-secondary">{{ ollama_health.model }}{% if ollama_health.latency_ms %} · {{ ollama_health.latency_ms }} ms{% endif %}</div></div>
+  </aside>
+  <main class="ai-main">
+    <div class="ai-toolbar"><div class="ai-title" id="sessionTitle">{{ session.title }}</div><div class="toolbar-actions"><button class="icon-btn" id="renameChat" title="Ubah judul"><i class="fa-solid fa-pen"></i></button><button class="icon-btn" id="importantChat" title="Tandai penting"><i class="{% if session.is_important %}fa-solid{% else %}fa-regular{% endif %} fa-star"></i></button></div></div>
+    <div class="chat-scroll" id="chatMessages">
+      {% if not session.messages.exists %}<div class="welcome" id="welcome"><div class="welcome-icon"><i class="fa-solid fa-shrimp"></i></div><h2>Apa yang dapat saya bantu?</h2><p class="text-muted">Analisis data tambak, unggah dokumen, baca spreadsheet, atau tanyakan rekomendasi operasional.</p><div class="suggestions"><button class="suggestion">Analisis kondisi kolam berdasarkan data terbaru</button><button class="suggestion">Buat rekomendasi pakan hari ini</button><button class="suggestion">Analisis file sampling yang saya unggah</button><button class="suggestion">Ringkas risiko budidaya minggu ini</button></div></div>{% endif %}
+      {% for m in session.messages.all %}<div class="message-row {{ m.role }}"><div class="avatar"><i class="fa-solid {% if m.role == 'user' %}fa-user{% else %}fa-robot{% endif %}"></i></div><div class="message-content">{% if m.attachments.exists %}<div class="attachments">{% for a in m.attachments.all %}<a class="attachment-chip" href="{{ a.file.url }}" target="_blank"><i class="fa-solid fa-paperclip"></i>{{ a.original_name }}</a>{% endfor %}</div>{% endif %}<div class="message-text">{{ m.message }}</div></div></div>{% endfor %}
     </div>
-  </div>
-
-  <div class="col-lg-9">
-    <div class="panel ai-chat-panel">
-      <div class="ai-chat-messages" id="chatMessages">
-        {% for m in session.messages.all %}
-          <div class="ai-message {% if m.role == 'user' %}is-user{% else %}is-assistant{% endif %}">
-            <div class="ai-avatar"><i class="fa-solid {% if m.role == 'user' %}fa-user{% else %}fa-robot{% endif %}"></i></div>
-            <div class="ai-message-body">
-              <b>{% if m.role == 'user' %}Anda{% else %}Smart Shrimp AI{% endif %}</b>
-              <div class="ai-message-text">{{ m.message }}</div>
-              <small>{{ m.created_at|date:'d M Y H:i' }}</small>
-            </div>
-          </div>
-        {% empty %}
-          <div class="ai-message is-assistant">
-            <div class="ai-avatar"><i class="fa-solid fa-robot"></i></div>
-            <div class="ai-message-body">
-              <b>Smart Shrimp AI</b>
-              <div class="ai-message-text">Selamat datang. Pilih kolam lalu tanyakan kondisi tambak, FCR, SR, pakan, pertumbuhan, atau prediksi panen.</div>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
-
-      <form id="chatForm" class="ai-composer" data-stream-url="{% url 'chat_ai:chat_stream' %}">
-        {% csrf_token %}
-        <textarea id="chatInput" rows="2" maxlength="5000" placeholder="Tanyakan kondisi tambak..." required></textarea>
-        <div class="ai-composer-actions">
-          <span class="small text-muted"><span id="charCount">0</span>/5000</span>
-          <div>
-            <button type="button" class="btn btn-outline-danger" id="stopButton" hidden><i class="fa-solid fa-stop"></i> Stop</button>
-            <button type="submit" class="btn btn-primary" id="sendButton"><i class="fa-solid fa-paper-plane"></i> Kirim</button>
-          </div>
-        </div>
-      </form>
-    </div>
-  </div>
+    <div class="composer-wrap"><form class="composer" id="chatForm" enctype="multipart/form-data">{% csrf_token %}<div class="file-preview" id="filePreview"></div><textarea class="form-control" id="chatInput" name="message" placeholder="Tulis pesan kepada Smart Shrimp AI..." rows="2"></textarea><div class="composer-actions"><div class="composer-left"><button type="button" class="icon-btn" id="attachBtn" title="Unggah file"><i class="fa-solid fa-paperclip"></i></button><input type="file" id="fileInput" name="files" multiple hidden accept=".txt,.md,.csv,.json,.pdf,.docx,.xlsx,.xls,.png,.jpg,.jpeg,.webp"><select class="pond-select" id="pondSelect" name="pond"><option value="">Tanpa konteks kolam</option>{% for p in ponds %}<option value="{{ p.id }}" {% if session.pond_id == p.id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}</select></div><button class="send-btn" id="sendButton" type="submit"><i class="fa-solid fa-arrow-up"></i></button><button class="stop-btn d-none" id="stopButton" type="button"><i class="fa-solid fa-stop"></i></button></div></form><div class="text-center text-muted mt-1" style="font-size:11px">Maksimal 5 file, masing-masing {{ max_upload_mb }} MB. AI dapat membuat kesalahan; periksa rekomendasi penting.</div></div>
+  </main>
 </div>
-<link rel="stylesheet" href="{% static 'chat_ai/chat_stream.css' %}">
-<script src="{% static 'chat_ai/chat_stream.js' %}" defer></script>
+<script>
+(() => {
+  let sessionId = {{ session.id }};
+  let controller = null;
+  const form = document.getElementById('chatForm'), input = document.getElementById('chatInput'), messages = document.getElementById('chatMessages');
+  const sendButton = document.getElementById('sendButton'), stopButton = document.getElementById('stopButton'), fileInput = document.getElementById('fileInput'), preview = document.getElementById('filePreview');
+  const csrf = form.querySelector('[name=csrfmiddlewaretoken]').value;
+  const escapeHtml = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  function renderText(text){ let s=escapeHtml(text); s=s.replace(/```([\s\S]*?)```/g,'<pre><code>$1</code></pre>').replace(/`([^`]+)`/g,'<code>$1</code>').replace(/^### (.+)$/gm,'<h5>$1</h5>').replace(/^## (.+)$/gm,'<h4>$1</h4>').replace(/^# (.+)$/gm,'<h3>$1</h3>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/^[-*] (.+)$/gm,'• $1').replace(/\n/g,'<br>'); return s; }
+  function scrollBottom(){ messages.scrollTop=messages.scrollHeight; }
+  function addMessage(role, text='', attachments=[]){ document.getElementById('welcome')?.remove(); const row=document.createElement('div'); row.className=`message-row ${role}`; const chips=attachments.length?`<div class="attachments">${attachments.map(a=>`<a class="attachment-chip" href="${a.url||'#'}" target="_blank"><i class="fa-solid fa-paperclip"></i>${escapeHtml(a.name)}</a>`).join('')}</div>`:''; row.innerHTML=`<div class="avatar"><i class="fa-solid ${role==='user'?'fa-user':'fa-robot'}"></i></div><div class="message-content">${chips}<div class="message-text">${renderText(text)}</div></div>`; messages.appendChild(row); scrollBottom(); return row.querySelector('.message-text'); }
+  document.querySelectorAll('.message-text').forEach(el=>el.innerHTML=renderText(el.textContent));
+  input.addEventListener('input',()=>{input.style.height='auto';input.style.height=Math.min(input.scrollHeight,170)+'px'});
+  input.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();form.requestSubmit();}});
+  document.getElementById('attachBtn').onclick=()=>fileInput.click();
+  fileInput.onchange=()=>{preview.innerHTML=[...fileInput.files].map(f=>`<span class="preview-chip"><i class="fa-solid fa-file me-1"></i>${escapeHtml(f.name)}</span>`).join('')};
+  document.querySelectorAll('.suggestion').forEach(b=>b.onclick=()=>{input.value=b.textContent;input.focus()});
+  function setGenerating(on){sendButton.classList.toggle('d-none',on);stopButton.classList.toggle('d-none',!on);input.disabled=on;fileInput.disabled=on;}
+  stopButton.onclick=()=>controller?.abort();
+  form.onsubmit=async e=>{e.preventDefault(); if(controller)return; const fd=new FormData(form); fd.set('session_id',sessionId); if(!input.value.trim()&&!fileInput.files.length)return; controller=new AbortController(); setGenerating(true); let assistantEl=null, full=''; try{ const response=await fetch('{% url "chat_ai:stream_chat" %}',{method:'POST',headers:{'X-CSRFToken':csrf},body:fd,signal:controller.signal}); if(!response.ok){const p=await response.json();throw new Error(p.error||'Permintaan gagal');} const reader=response.body.getReader(), decoder=new TextDecoder(); let buffer=''; while(true){const {value,done}=await reader.read(); if(done)break; buffer+=decoder.decode(value,{stream:true}); const lines=buffer.split('\n'); buffer=lines.pop(); for(const line of lines){if(!line.trim())continue; const event=JSON.parse(line); if(event.type==='start'){addMessage('user',input.value||'Mohon analisis file terlampir.',event.user_message.attachments);assistantEl=addMessage('assistant','');assistantEl.classList.add('typing-cursor');document.getElementById('sessionTitle').textContent=event.session_title;updateHistoryTitle(event.session_title);input.value='';fileInput.value='';preview.innerHTML='';} else if(event.type==='token'){full+=event.content;assistantEl.innerHTML=renderText(full);scrollBottom();} else if(event.type==='done'){assistantEl?.classList.remove('typing-cursor');} else if(event.type==='error'){throw new Error(event.error);}}}}catch(err){if(err.name!=='AbortError'){if(!assistantEl)assistantEl=addMessage('assistant','');assistantEl.innerHTML=renderText('⚠️ '+err.message);}assistantEl?.classList.remove('typing-cursor');}finally{controller=null;setGenerating(false);input.disabled=false;input.focus();}};
+  async function newChat(){const r=await fetch('{% url "chat_ai:new_session" %}',{method:'POST',headers:{'X-CSRFToken':csrf}}),p=await r.json();sessionId=p.id;messages.innerHTML='<div class="welcome" id="welcome"><div class="welcome-icon"><i class="fa-solid fa-shrimp"></i></div><h2>Apa yang dapat saya bantu?</h2><p class="text-muted">Mulai percakapan baru.</p></div>';document.getElementById('sessionTitle').textContent=p.title;document.querySelectorAll('.history-item').forEach(x=>x.classList.remove('active'));const div=document.createElement('div');div.className='history-item active';div.dataset.id=p.id;div.innerHTML=`<button class="history-open"><i class="fa-regular fa-message me-2"></i><span>${escapeHtml(p.title)}</span></button><button class="history-delete"><i class="fa-solid fa-trash"></i></button>`;document.getElementById('historyList').prepend(div);bindHistory(div);}
+  document.getElementById('newChat').onclick=newChat;
+  async function loadSession(id){const r=await fetch(`/chat-ai/api/sessions/${id}/messages/`),p=await r.json();sessionId=id;messages.innerHTML='';p.messages.forEach(m=>addMessage(m.role,m.message,m.attachments));if(!p.messages.length)messages.innerHTML='<div class="welcome" id="welcome"><div class="welcome-icon"><i class="fa-solid fa-shrimp"></i></div><h2>Apa yang dapat saya bantu?</h2></div>';document.getElementById('sessionTitle').textContent=p.session.title;document.getElementById('pondSelect').value=p.session.pond_id||'';document.querySelectorAll('.history-item').forEach(x=>x.classList.toggle('active',x.dataset.id==id));}
+  function bindHistory(item){item.querySelector('.history-open').onclick=()=>loadSession(item.dataset.id);item.querySelector('.history-delete').onclick=async e=>{e.stopPropagation();if(!confirm('Hapus percakapan ini?'))return;await fetch(`/chat-ai/api/sessions/${item.dataset.id}/delete/`,{method:'POST',headers:{'X-CSRFToken':csrf}});const active=item.classList.contains('active');item.remove();if(active)newChat();};}
+  document.querySelectorAll('.history-item').forEach(bindHistory);
+  function updateHistoryTitle(title){const active=document.querySelector(`.history-item[data-id="${sessionId}"] span`);if(active)active.textContent=title;}
+  document.getElementById('renameChat').onclick=async()=>{const current=document.getElementById('sessionTitle').textContent,title=prompt('Judul percakapan:',current);if(!title)return;const fd=new FormData();fd.set('title',title);const r=await fetch(`/chat-ai/api/sessions/${sessionId}/rename/`,{method:'POST',headers:{'X-CSRFToken':csrf},body:fd});if(r.ok){document.getElementById('sessionTitle').textContent=title;updateHistoryTitle(title);}};
+  document.getElementById('importantChat').onclick=async function(){const solid=this.querySelector('i').classList.contains('fa-solid'),url=`/chat-ai/session/${sessionId}/${solid?'normal':'important'}/`;const r=await fetch(url,{method:'POST',headers:{'X-CSRFToken':csrf}});if(r.ok){this.querySelector('i').classList.toggle('fa-solid',!solid);this.querySelector('i').classList.toggle('fa-regular',solid);}};
+  scrollBottom();
+})();
+</script>
 {% endblock %}
