@@ -207,3 +207,112 @@ class TradeDocument(models.Model):
     def file_extension(self):
         from pathlib import Path
         return Path(self.original_name or self.file.name).suffix.lower().lstrip('.')
+
+
+class LedgerAccount(models.Model):
+    ASSET = 'asset'
+    LIABILITY = 'liability'
+    EQUITY = 'equity'
+    REVENUE = 'revenue'
+    EXPENSE = 'expense'
+    ACCOUNT_TYPES = [
+        (ASSET, 'Aset'),
+        (LIABILITY, 'Kewajiban'),
+        (EQUITY, 'Ekuitas'),
+        (REVENUE, 'Pendapatan'),
+        (EXPENSE, 'Beban'),
+    ]
+    NORMAL_DEBIT = 'debit'
+    NORMAL_CREDIT = 'credit'
+    NORMAL_BALANCES = [
+        (NORMAL_DEBIT, 'Debit'),
+        (NORMAL_CREDIT, 'Kredit'),
+    ]
+
+    code = models.CharField(max_length=20, unique=True)
+    name = models.CharField(max_length=150)
+    account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPES)
+    normal_balance = models.CharField(max_length=10, choices=NORMAL_BALANCES)
+    group = models.CharField(max_length=100, blank=True)
+    is_active = models.BooleanField(default=True)
+    is_system = models.BooleanField(default=False)
+    description = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['code']
+
+    def __str__(self):
+        return f'{self.code} - {self.name}'
+
+
+class JournalEntry(models.Model):
+    STATUS_DRAFT = 'draft'
+    STATUS_POSTED = 'posted'
+    STATUS_VOID = 'void'
+    STATUSES = [
+        (STATUS_DRAFT, 'Draft'),
+        (STATUS_POSTED, 'Diposting'),
+        (STATUS_VOID, 'Dibatalkan'),
+    ]
+
+    date = models.DateField(db_index=True)
+    reference = models.CharField(max_length=100, blank=True, db_index=True)
+    description = models.CharField(max_length=255)
+    status = models.CharField(max_length=10, choices=STATUSES, default=STATUS_POSTED)
+    source_type = models.CharField(max_length=50, blank=True, db_index=True)
+    source_id = models.PositiveBigIntegerField(null=True, blank=True, db_index=True)
+    is_system_generated = models.BooleanField(default=False)
+    created_by = models.ForeignKey(
+        'auth.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='finance_journal_entries'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    posted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-date', '-id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['source_type', 'source_id'],
+                condition=models.Q(is_system_generated=True),
+                name='uniq_system_journal_source'
+            )
+        ]
+
+    def __str__(self):
+        return self.reference or f'Jurnal #{self.pk}'
+
+    @property
+    def total_debit(self):
+        return self.lines.aggregate(total=models.Sum('debit'))['total'] or Decimal('0')
+
+    @property
+    def total_credit(self):
+        return self.lines.aggregate(total=models.Sum('credit'))['total'] or Decimal('0')
+
+    @property
+    def is_balanced(self):
+        return self.total_debit == self.total_credit
+
+
+class JournalLine(models.Model):
+    entry = models.ForeignKey(JournalEntry, on_delete=models.CASCADE, related_name='lines')
+    account = models.ForeignKey(LedgerAccount, on_delete=models.PROTECT, related_name='journal_lines')
+    description = models.CharField(max_length=255, blank=True)
+    debit = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    credit = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ['entry_id', 'id']
+
+    def __str__(self):
+        return f'{self.entry} - {self.account}'
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        debit = self.debit or Decimal('0')
+        credit = self.credit or Decimal('0')
+        if debit < 0 or credit < 0:
+            raise ValidationError('Debit dan kredit tidak boleh negatif.')
+        if bool(debit) == bool(credit):
+            raise ValidationError('Satu baris harus berisi debit atau kredit, bukan keduanya.')

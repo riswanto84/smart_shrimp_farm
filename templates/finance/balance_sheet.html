@@ -26,6 +26,8 @@
   <div class="balance-head">
     <div class="balance-title"><h1>Laporan Neraca</h1><p>Posisi keuangan per {{ as_of|date:'d F Y' }}</p></div>
     <div class="balance-actions">
+      <a class="btn btn-outline-primary" href="{% url 'finance:trial_balance' %}?as_of={{ as_of|date:'Y-m-d' }}"><i class="fa-solid fa-scale-balanced"></i> Neraca Saldo</a>
+      <a class="btn btn-outline-primary" href="{% url 'finance:general_ledger' %}?as_of={{ as_of|date:'Y-m-d' }}"><i class="fa-solid fa-book"></i> Buku Besar</a>
       <a class="btn btn-outline-primary" href="{% url 'finance:opening_balance' %}?as_of={{ as_of|date:'Y-m-d' }}"><i class="fa-solid fa-vault"></i> Saldo Awal</a>
       <a class="btn btn-outline-secondary" href="{% url 'finance:balance_entries' %}"><i class="fa-solid fa-list"></i> Kelola Pos</a>
       <a class="btn btn-danger" href="{% url 'finance:export_balance_sheet_pdf' %}?as_of={{ as_of|date:'Y-m-d' }}"><i class="fa-solid fa-file-pdf"></i> PDF</a>
