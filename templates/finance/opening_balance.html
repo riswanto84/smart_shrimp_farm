@@ -2,13 +2,12 @@
 {% load currency %}
 {% block content %}
 <style>
-.opening-grid{display:grid;grid-template-columns:minmax(0,1fr) 365px;gap:18px;align-items:start}.opening-section{border:1px solid #dce6f3;border-radius:18px;padding:20px;background:#fff}.opening-section+.opening-section{margin-top:16px}.opening-title{display:flex;align-items:center;gap:12px;margin-bottom:18px}.opening-icon{width:42px;height:42px;border-radius:12px;background:#eef5ff;color:#0d6efd;display:grid;place-items:center}.opening-title h3{font-size:18px;margin:0;color:#0a2855}.opening-title p{margin:2px 0 0;color:#64748b;font-size:13px}.money-wrap{position:relative}.money-prefix{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-weight:700;color:#64748b}.money-input{padding-left:45px!important;text-align:right;font-weight:700}.summary-blue{background:linear-gradient(135deg,#083b82,#0d6efd);color:#fff;border-radius:18px;padding:22px;box-shadow:0 15px 30px rgba(13,110,253,.2)}.summary-row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.18)}.summary-row:last-child{border-bottom:0}.auto-card{background:#fff;border:1px solid #dce6f3;border-radius:16px;padding:17px;margin-top:14px}.auto-line{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #edf2f7}.auto-line:last-child{border:0}.sticky-side{position:sticky;top:20px}.help-box{background:#fff8df;border:1px solid #f5d878;color:#6b5200;border-radius:14px;padding:14px;margin-top:14px;font-size:13px}.status-ok{background:#eaf8ef;border:1px solid #a7dfb9;color:#18733a}.status-note{background:#fff7e1;border:1px solid #f1cf72;color:#815d00}.status-box{border-radius:14px;padding:15px;margin-top:14px}.action-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:18px}.field-help{font-size:12px;color:#64748b;margin-top:5px}.section-label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#64748b;font-weight:800;margin:4px 0 12px}.wizard-steps{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}.wizard-step{padding:7px 11px;border-radius:999px;background:#edf4ff;color:#174e91;font-size:12px;font-weight:700}.danger-text{color:#c0392b}@media(max-width:900px){.opening-grid{grid-template-columns:1fr}.sticky-side{position:static}}
+.opening-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}.opening-section{border:1px solid #dce6f3;border-radius:18px;padding:20px;background:#fff}.opening-section+.opening-section{margin-top:16px}.opening-title{display:flex;align-items:center;gap:12px;margin-bottom:18px}.opening-icon{width:42px;height:42px;border-radius:12px;background:#eef5ff;color:#0d6efd;display:grid;place-items:center}.opening-title h3{font-size:18px;margin:0;color:#0a2855}.opening-title p{margin:2px 0 0;color:#64748b;font-size:13px}.money-wrap{position:relative}.money-prefix{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-weight:700;color:#64748b}.money-input{padding-left:45px!important;text-align:right;font-weight:700}.summary-blue{background:linear-gradient(135deg,#083b82,#0d6efd);color:#fff;border-radius:18px;padding:22px;box-shadow:0 15px 30px rgba(13,110,253,.2)}.summary-row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.18)}.summary-row:last-child{border-bottom:0}.auto-card{background:#fff;border:1px solid #dce6f3;border-radius:16px;padding:17px;margin-top:14px}.auto-line{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #edf2f7}.auto-line:last-child{border:0}.sticky-side{position:sticky;top:20px}.help-box{background:#fff8df;border:1px solid #f5d878;color:#6b5200;border-radius:14px;padding:14px;margin-top:14px;font-size:13px}.action-bar{display:flex;gap:10px;align-items:center;margin-top:18px}.field-help{font-size:12px;color:#64748b;margin-top:5px}@media(max-width:900px){.opening-grid{grid-template-columns:1fr}.sticky-side{position:static}}
 </style>
 <div class="page-head">
-  <div><h1>Rekonsiliasi Saldo Awal</h1><p>Lengkapi akun pembukaan agar neraca seimbang tanpa akun sementara.</p></div>
+  <div><h1>Saldo Awal</h1><p>Masukkan posisi Kas/Bank, Modal Pemilik, dan Laba Ditahan saat pembukuan mulai digunakan.</p></div>
   <a class="btn btn-outline-primary" href="{% url 'finance:balance_sheet' %}?as_of={{ as_of|date:'Y-m-d' }}"><i class="fa-solid fa-scale-balanced"></i> Lihat Neraca</a>
 </div>
-<div class="wizard-steps"><span class="wizard-step">1. Tanggal posisi</span><span class="wizard-step">2. Aset awal</span><span class="wizard-step">3. Kewajiban awal</span><span class="wizard-step">4. Ekuitas</span><span class="wizard-step">5. Rekonsiliasi</span></div>
 <form method="post" id="openingBalanceForm">{% csrf_token %}
 <div class="opening-grid">
   <div>
@@ -18,53 +17,31 @@
     </div>
 
     <div class="opening-section">
-      <div class="opening-title"><div class="opening-icon"><i class="fa-solid fa-wallet"></i></div><div><h3>Aset Awal</h3><p>Masukkan saldo yang benar-benar dimiliki pada tanggal posisi awal.</p></div></div>
-      <div class="section-label">Kas dan Bank</div>
+      <div class="opening-title"><div class="opening-icon"><i class="fa-solid fa-wallet"></i></div><div><h3>Kas dan Bank</h3><p>Saldo uang yang benar-benar tersedia pada tanggal posisi awal.</p></div></div>
       <div class="row g-3">
-        <div class="col-md-6"><label class="form-label fw-semibold">Kas Tunai</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="cash" value="{{ values.cash|floatformat:0 }}" class="form-control money-input rupiah-input asset-input" inputmode="numeric"></div></div>
-        <div class="col-md-6"><label class="form-label fw-semibold">Bank BCA</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="bank_bca" value="{{ values.bank_bca|floatformat:0 }}" class="form-control money-input rupiah-input asset-input" inputmode="numeric"></div></div>
-        <div class="col-md-6"><label class="form-label fw-semibold">Bank Mandiri</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="bank_mandiri" value="{{ values.bank_mandiri|floatformat:0 }}" class="form-control money-input rupiah-input asset-input" inputmode="numeric"></div></div>
-        <div class="col-md-6"><label class="form-label fw-semibold">Bank BRI</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="bank_bri" value="{{ values.bank_bri|floatformat:0 }}" class="form-control money-input rupiah-input asset-input" inputmode="numeric"></div></div>
-        <div class="col-md-6"><label class="form-label fw-semibold">Bank/Rekening Lainnya</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="bank_other" value="{{ values.bank_other|floatformat:0 }}" class="form-control money-input rupiah-input asset-input" inputmode="numeric"></div></div>
-      </div>
-      <div class="section-label mt-4">Aset Lancar Lain</div>
-      <div class="row g-3">
-        <div class="col-md-6"><label class="form-label fw-semibold">Persediaan Awal</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="inventory" value="{{ values.inventory|floatformat:0 }}" class="form-control money-input rupiah-input asset-input" inputmode="numeric"></div><div class="field-help">Contoh: pakan, obat, bahan tambak yang masih tersedia.</div></div>
-        <div class="col-md-6"><label class="form-label fw-semibold">Uang Muka</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="advances" value="{{ values.advances|floatformat:0 }}" class="form-control money-input rupiah-input asset-input" inputmode="numeric"></div></div>
-        <div class="col-md-6"><label class="form-label fw-semibold">Aset Lancar Lainnya</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="other_current_assets" value="{{ values.other_current_assets|floatformat:0 }}" class="form-control money-input rupiah-input asset-input" inputmode="numeric"></div></div>
+        <div class="col-md-6"><label class="form-label fw-semibold">Kas Tunai</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="cash" value="{{ values.cash|floatformat:0 }}" class="form-control money-input rupiah-input" inputmode="numeric"></div></div>
+        <div class="col-md-6"><label class="form-label fw-semibold">Bank BCA</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="bank_bca" value="{{ values.bank_bca|floatformat:0 }}" class="form-control money-input rupiah-input" inputmode="numeric"></div></div>
+        <div class="col-md-6"><label class="form-label fw-semibold">Bank Mandiri</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="bank_mandiri" value="{{ values.bank_mandiri|floatformat:0 }}" class="form-control money-input rupiah-input" inputmode="numeric"></div></div>
+        <div class="col-md-6"><label class="form-label fw-semibold">Bank BRI</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="bank_bri" value="{{ values.bank_bri|floatformat:0 }}" class="form-control money-input rupiah-input" inputmode="numeric"></div></div>
+        <div class="col-md-6"><label class="form-label fw-semibold">Bank/Rekening Lainnya</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="bank_other" value="{{ values.bank_other|floatformat:0 }}" class="form-control money-input rupiah-input" inputmode="numeric"></div><div class="field-help">Gabungkan rekening lain yang belum dibuatkan akun khusus.</div></div>
       </div>
     </div>
 
     <div class="opening-section">
-      <div class="opening-title"><div class="opening-icon"><i class="fa-solid fa-file-invoice-dollar"></i></div><div><h3>Kewajiban Awal</h3><p>Jangan masukkan kembali utang usaha supplier yang sudah ada pada modul Utang Usaha.</p></div></div>
+      <div class="opening-title"><div class="opening-icon"><i class="fa-solid fa-landmark"></i></div><div><h3>Ekuitas Awal</h3><p>Masukkan sumber modal usaha sebelum transaksi periode berjalan.</p></div></div>
       <div class="row g-3">
-        <div class="col-md-6"><label class="form-label fw-semibold">Utang Pajak Awal</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="tax_payable" value="{{ values.tax_payable|floatformat:0 }}" class="form-control money-input rupiah-input liability-input" inputmode="numeric"></div></div>
-        <div class="col-md-6"><label class="form-label fw-semibold">Utang Pemilik</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="owner_payable" value="{{ values.owner_payable|floatformat:0 }}" class="form-control money-input rupiah-input liability-input" inputmode="numeric"></div></div>
-        <div class="col-md-6"><label class="form-label fw-semibold">Utang Lainnya</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="other_liabilities" value="{{ values.other_liabilities|floatformat:0 }}" class="form-control money-input rupiah-input liability-input" inputmode="numeric"></div></div>
+        <div class="col-md-6"><label class="form-label fw-semibold">Modal Pemilik</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="owner_capital" value="{{ values.owner_capital|floatformat:0 }}" class="form-control money-input rupiah-input" inputmode="numeric"></div><div class="field-help">Setoran modal bersih pemilik sampai tanggal posisi awal. Rekonsiliasi tidak memasukkan laba/rugi tahun berjalan.</div></div>
+        <div class="col-md-6"><label class="form-label fw-semibold">Laba Ditahan</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="retained_earnings" value="{{ values.retained_earnings|floatformat:0 }}" class="form-control money-input rupiah-input" inputmode="text"></div><div class="field-help">Boleh negatif apabila terdapat akumulasi rugi periode sebelumnya.</div></div>
       </div>
-    </div>
-
-    <div class="opening-section">
-      <div class="opening-title"><div class="opening-icon"><i class="fa-solid fa-landmark"></i></div><div><h3>Ekuitas Awal</h3><p>Rekonsiliasi sumber modal dan hasil usaha sebelum periode berjalan.</p></div></div>
-      <div class="row g-3">
-        <div class="col-md-6"><label class="form-label fw-semibold">Modal Pemilik</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="owner_capital" value="{{ values.owner_capital|floatformat:0 }}" class="form-control money-input rupiah-input equity-input" inputmode="text"></div><div class="field-help">Dapat dihitung otomatis melalui tombol rekonsiliasi.</div></div>
-        <div class="col-md-6"><label class="form-label fw-semibold">Tambahan Modal</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="additional_capital" value="{{ values.additional_capital|floatformat:0 }}" class="form-control money-input rupiah-input equity-input" inputmode="text"></div></div>
-        <div class="col-md-6"><label class="form-label fw-semibold">Prive</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="drawings" value="{{ values.drawings_display|floatformat:0 }}" class="form-control money-input rupiah-input drawings-input" inputmode="numeric"></div><div class="field-help">Masukkan positif; sistem menyimpannya sebagai pengurang ekuitas.</div></div>
-        <div class="col-md-6"><label class="form-label fw-semibold">Laba Ditahan</label><div class="money-wrap"><span class="money-prefix">Rp</span><input name="retained_earnings" value="{{ values.retained_earnings|floatformat:0 }}" class="form-control money-input rupiah-input equity-input" inputmode="text"></div><div class="field-help">Boleh negatif apabila terdapat akumulasi rugi sebelumnya.</div></div>
-      </div>
-      <div class="action-bar">
-        <button class="btn btn-primary btn-lg" type="submit" name="action" value="save"><i class="fa-solid fa-floppy-disk"></i> Simpan Saldo Awal</button>
-        <button class="btn btn-warning btn-lg" type="submit" name="action" value="auto_reconcile" onclick="return confirm('Modal Pemilik akan dihitung otomatis berdasarkan aset, kewajiban, dan laba berjalan. Lanjutkan?')"><i class="fa-solid fa-wand-magic-sparkles"></i> Rekonsiliasi Otomatis</button>
-        <a href="{% url 'finance:balance_sheet' %}?as_of={{ as_of|date:'Y-m-d' }}" class="btn btn-outline-secondary btn-lg">Batal</a>
-      </div>
+      <div class="action-bar flex-wrap"><button class="btn btn-primary btn-lg" type="submit" name="action" value="save"><i class="fa-solid fa-floppy-disk"></i> Simpan Saldo Awal</button><button class="btn btn-warning btn-lg" type="submit" name="action" value="reconcile" onclick="return confirm('Hitung ulang Modal Pemilik dari aset awal dikurangi kewajiban awal? Laba/rugi tahun berjalan tidak akan digunakan.');"><i class="fa-solid fa-scale-balanced"></i> Rekonsiliasi Modal Awal</button><a href="{% url 'finance:balance_sheet' %}?as_of={{ as_of|date:'Y-m-d' }}" class="btn btn-outline-secondary btn-lg">Batal</a></div>
     </div>
   </div>
 
   <aside class="sticky-side">
-    <div class="summary-blue"><div class="small opacity-75">Pratinjau posisi</div><h3 class="mt-1 mb-3">{{ as_of|date:'d M Y' }}</h3><div class="summary-row"><span>Total Aset</span><strong id="assetSummary">{{ total_assets_preview|rupiah }}</strong></div><div class="summary-row"><span>Total Kewajiban</span><strong id="liabilitySummary">{{ total_liabilities_preview|rupiah }}</strong></div><div class="summary-row"><span>Total Ekuitas</span><strong id="equitySummary">{{ total_equity_preview|rupiah }}</strong></div><div class="summary-row"><span>Selisih</span><strong id="differenceSummary">{{ reconciliation_difference|rupiah }}</strong></div></div>
-    <div id="statusBox" class="status-box {% if is_reconciled_preview %}status-ok{% else %}status-note{% endif %}"><strong id="statusTitle">{% if is_reconciled_preview %}<i class="fa-solid fa-circle-check"></i> Sudah Direkonsiliasi{% else %}<i class="fa-solid fa-triangle-exclamation"></i> Belum Direkonsiliasi{% endif %}</strong><div class="small mt-1" id="statusText">{% if is_reconciled_preview %}Persamaan aset = kewajiban + ekuitas telah terpenuhi.{% else %}Gunakan Rekonsiliasi Otomatis atau koreksi saldo akun sampai selisih menjadi Rp0.{% endif %}</div></div>
-    <div class="auto-card"><h5 class="mb-2"><i class="fa-solid fa-arrows-rotate text-primary"></i> Data Otomatis</h5><p class="small text-muted">Pos berikut berasal dari modul terkait dan tidak boleh diinput ulang.</p><div class="auto-line"><span>Piutang Usaha</span><strong id="autoReceivables" data-value="{{ auto_receivables }}">{{ auto_receivables|rupiah }}</strong></div><div class="auto-line"><span>Utang Usaha</span><strong id="autoPayables" data-value="{{ auto_payables }}">{{ auto_payables|rupiah }}</strong></div><div class="auto-line"><span>Aset Tetap Bruto</span><strong>{{ auto_fixed_assets|rupiah }}</strong></div><div class="auto-line"><span>Akumulasi Penyusutan</span><strong class="danger-text">({{ auto_accumulated_depreciation|rupiah }})</strong></div><div class="auto-line"><span>Aset Tetap Bersih</span><strong id="autoNetAssets" data-value="{{ auto_net_fixed_assets }}">{{ auto_net_fixed_assets|rupiah }}</strong></div><div class="auto-line"><span>Laba/Rugi Berjalan</span><strong id="autoProfit" data-value="{{ auto_current_profit }}">{{ auto_current_profit|rupiah }}</strong></div></div>
-    <div class="help-box"><strong>Perhatian:</strong> gunakan rekening koran, kas fisik, daftar persediaan, dokumen utang, dan bukti modal. Rekonsiliasi otomatis hanya menghitung angka Modal Pemilik agar neraca seimbang; kebenaran sumber dananya tetap harus diverifikasi.</div>
+    <div class="summary-blue"><div class="small opacity-75">Ringkasan input</div><h3 class="mt-1 mb-3">Posisi {{ as_of|date:'d M Y' }}</h3><div class="summary-row"><span>Total Kas & Bank</span><strong id="cashBankSummary">{{ cash_bank_total|rupiah }}</strong></div><div class="summary-row"><span>Modal + Laba Ditahan</span><strong id="equitySummary">{{ equity_opening_total|rupiah }}</strong></div></div>
+    <div class="auto-card"><h5 class="mb-2"><i class="fa-solid fa-arrows-rotate text-primary"></i> Data Otomatis</h5><p class="small text-muted">Pos berikut berasal dari modul terkait dan tidak perlu diinput ulang.</p><div class="auto-line"><span>Piutang Usaha</span><strong>{{ auto_receivables|rupiah }}</strong></div><div class="auto-line"><span>Utang Usaha</span><strong>{{ auto_payables|rupiah }}</strong></div><div class="auto-line"><span>Aset Tetap Bruto</span><strong>{{ auto_fixed_assets|rupiah }}</strong></div><div class="auto-line"><span>Akumulasi Penyusutan</span><strong class="text-danger">({{ auto_accumulated_depreciation|rupiah }})</strong></div><div class="auto-line"><span>Aset Tetap Bersih</span><strong>{{ auto_net_fixed_assets|rupiah }}</strong></div></div>
+    <div class="auto-card"><h5 class="mb-2"><i class="fa-solid fa-calculator text-warning"></i> Rekonsiliasi Modal Awal</h5><div class="auto-line"><span>Total Aset Awal</span><strong>{{ opening_assets_for_reconciliation|rupiah }}</strong></div><div class="auto-line"><span>Total Kewajiban Awal</span><strong>{{ opening_liabilities_for_reconciliation|rupiah }}</strong></div><div class="auto-line"><span>Laba Ditahan</span><strong>{{ values.retained_earnings|rupiah }}</strong></div><div class="auto-line"><span>Modal Pemilik yang disarankan</span><strong>{{ recommended_owner_capital|rupiah }}</strong></div><p class="small text-muted mt-2 mb-0">Rumus: aset awal − kewajiban awal − laba ditahan. Laba/rugi tahun berjalan tidak digunakan.</p></div>
+    <div class="help-box"><strong>Perhatian:</strong> masukkan saldo berdasarkan rekening koran, kas fisik, dan catatan modal yang dapat dipertanggungjawabkan. Jangan memasukkan kembali piutang, utang, atau aset yang sudah tercatat pada modulnya.</div>
   </aside>
 </div>
 </form>
@@ -72,25 +49,11 @@
 (function(){
  const fields=[...document.querySelectorAll('.rupiah-input')];
  const parse=v=>{v=String(v||'').trim();const neg=v.startsWith('-');v=v.replace(/[^0-9]/g,'');return (neg?-1:1)*(parseInt(v||'0',10));};
- const format=n=>(n<0?'-':'')+Math.abs(Math.round(n)).toLocaleString('id-ID');
- const money=n=>'Rp '+format(n);
- const num=id=>parseFloat(document.getElementById(id)?.dataset.value||'0');
- fields.forEach(el=>{el.value=format(parse(el.value));el.addEventListener('input',()=>{el.value=format(parse(el.value));update();});});
- function sum(selector){return [...document.querySelectorAll(selector)].reduce((a,e)=>a+parse(e.value),0)}
- function update(){
-   const assets=sum('.asset-input')+num('autoReceivables')+num('autoNetAssets');
-   const liabilities=sum('.liability-input')+num('autoPayables');
-   const equity=sum('.equity-input')-sum('.drawings-input')+num('autoProfit');
-   const diff=assets-liabilities-equity;
-   document.getElementById('assetSummary').textContent=money(assets);
-   document.getElementById('liabilitySummary').textContent=money(liabilities);
-   document.getElementById('equitySummary').textContent=money(equity);
-   document.getElementById('differenceSummary').textContent=money(diff);
-   const ok=Math.abs(diff)<1;
-   const box=document.getElementById('statusBox');box.className='status-box '+(ok?'status-ok':'status-note');
-   document.getElementById('statusTitle').innerHTML=ok?'<i class="fa-solid fa-circle-check"></i> Sudah Direkonsiliasi':'<i class="fa-solid fa-triangle-exclamation"></i> Belum Direkonsiliasi';
-   document.getElementById('statusText').textContent=ok?'Persamaan aset = kewajiban + ekuitas telah terpenuhi.':'Selisih '+money(diff)+'. Gunakan Rekonsiliasi Otomatis atau koreksi saldo akun.';
- }
+ const format=n=>(n<0?'-':'')+Math.abs(n).toLocaleString('id-ID');
+ fields.forEach(el=>{el.value=format(parse(el.value));el.addEventListener('input',()=>{const pos=el.selectionStart;el.value=format(parse(el.value));update();});});
+ function money(n){return 'Rp '+format(n)}
+ function value(name){const el=document.querySelector('[name="'+name+'"]');return parse(el&&el.value)}
+ function update(){document.getElementById('cashBankSummary').textContent=money(value('cash')+value('bank_bca')+value('bank_mandiri')+value('bank_bri')+value('bank_other'));document.getElementById('equitySummary').textContent=money(value('owner_capital')+value('retained_earnings'));}
  document.getElementById('openingBalanceForm').addEventListener('submit',()=>fields.forEach(el=>el.value=String(parse(el.value))));update();
 })();
 </script>
