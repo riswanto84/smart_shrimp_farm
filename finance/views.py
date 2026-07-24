@@ -1223,10 +1223,8 @@ def _automatic_opening_components(as_of):
 def opening_balance(request):
     """Wizard rekonsiliasi saldo awal berbasis akun neraca yang sebenarnya.
 
-    Piutang, utang usaha, aset tetap, dan penyusutan tetap bersumber dari
-    modul transaksi agar tidak terjadi pencatatan ganda. Laba/rugi tahun
-    berjalan hanya ditampilkan sebagai informasi dan tidak digunakan untuk
-    menghitung Modal Pemilik pada saldo awal.
+    Piutang, utang usaha, aset tetap, penyusutan, serta laba tahun berjalan
+    tetap bersumber dari modul transaksi agar tidak terjadi pencatatan ganda.
     """
     raw_as_of = request.POST.get('as_of_date') or request.GET.get('as_of')
     if isinstance(raw_as_of, timezone.datetime):
@@ -1257,8 +1255,7 @@ def opening_balance(request):
             other_equity = sum((parsed[field] for field, typ, *_ in OPENING_BALANCE_ACCOUNTS if typ == 'equity' and field != 'owner_capital'), Decimal('0'))
             total_assets = manual_assets + automatic['receivables'] + automatic['net_fixed_assets']
             total_liabilities = manual_liabilities + automatic['payables']
-            # Modal awal hanya berasal dari posisi pembukaan.
-            # Laba/rugi tahun berjalan tidak boleh menaikkan atau menurunkan Modal Pemilik.
+            # Saldo awal: laba/rugi tahun berjalan tidak digunakan.
             parsed['owner_capital'] = total_assets - total_liabilities - other_equity
 
         if errors:
@@ -1277,11 +1274,7 @@ def opening_balance(request):
                     },
                 )
             if request.POST.get('action') == 'auto_reconcile':
-                messages.success(
-                    request,
-                    'Saldo awal berhasil direkonsiliasi. Modal Pemilik dihitung dari aset awal '
-                    'dikurangi kewajiban awal dan komponen ekuitas awal lainnya, tanpa laba/rugi tahun berjalan.'
-                )
+                messages.success(request, 'Saldo awal berhasil direkonsiliasi. Modal Pemilik dihitung otomatis agar persamaan neraca seimbang tanpa akun sementara.')
             else:
                 messages.success(request, 'Saldo awal berhasil disimpan dan langsung digunakan pada laporan neraca.')
             return redirect(f"{request.path}?as_of={as_of.isoformat()}")
@@ -1297,9 +1290,7 @@ def opening_balance(request):
 
     total_assets_preview = manual_asset_total + automatic['receivables'] + automatic['net_fixed_assets']
     total_liabilities_preview = manual_liability_total + automatic['payables']
-    # Pratinjau rekonsiliasi saldo awal hanya memakai ekuitas pembukaan.
-    # Laba/rugi berjalan ditampilkan sebagai informasi terpisah dan tidak
-    # digunakan sebagai komponen penyeimbang Modal Pemilik.
+    # Preview saldo awal hanya memakai ekuitas pembukaan.
     total_equity_preview = equity_opening_total
     reconciliation_difference = total_assets_preview - total_liabilities_preview - total_equity_preview
 
@@ -1373,12 +1364,16 @@ def _balance_sheet_data(request):
     manual_asset_total = sum((e.amount for e in assets), Decimal('0'))
     total_assets_before = manual_asset_total + receivable_total + fixed_cost - accumulated
     total_liabilities = sum((e.amount for e in liabilities), Decimal('0')) + payable_total
-    total_equity = sum((e.amount for e in equities), Decimal('0'))
-    total_equity_before = total_equity + current_profit
+    # Ekuitas pembukaan berasal dari Modal Pemilik, Tambahan Modal,
+    # Laba Ditahan, dan Prive yang tersimpan pada BalanceEntry.
+    opening_equity = sum((e.amount for e in equities), Decimal('0'))
+
+    # Neraca berjalan wajib memasukkan laba/rugi tahun berjalan.
+    total_equity_before = opening_equity + current_profit
     preliminary_difference = total_assets_before - total_liabilities - total_equity_before
 
-    # Akun rekonsiliasi sementara: bukan laba dan bukan transaksi baru.
-    # Nilainya menunjukkan saldo awal/modal/kas yang belum dicatat lengkap.
+    # Rekonsiliasi tidak boleh dipakai untuk menutupi laba/rugi berjalan.
+    # Nilai ini hanya menunjukkan adanya saldo awal/aset/kewajiban yang belum lengkap.
     reconciliation_equity = preliminary_difference
     total_equity_with_profit = total_equity_before + reconciliation_equity
     total_assets = total_assets_before
@@ -1416,6 +1411,17 @@ def _balance_sheet_data(request):
         {'label': 'Aset Tetap Bersih', 'amount': net_fixed_assets, 'percent': percentage(net_fixed_assets, total_assets)},
     ]
 
+    equity_breakdown = []
+    for e in equities:
+        equity_breakdown.append({
+            'label': e.account_name,
+            'amount': e.amount,
+        })
+    equity_breakdown.append({
+        'label': 'Laba/Rugi Tahun Berjalan',
+        'amount': current_profit,
+    })
+
     validation_checks = [
         {'label': 'Persamaan neraca seimbang', 'ok': difference == 0},
         {'label': 'Saldo awal/modal telah direkonsiliasi', 'ok': reconciliation_equity == 0},
@@ -1429,7 +1435,8 @@ def _balance_sheet_data(request):
         'fixed_cost': fixed_cost, 'accumulated': accumulated, 'net_fixed_assets': net_fixed_assets,
         'cash_bank_total': cash_bank_total, 'other_current_assets': other_current_assets,
         'current_assets': current_assets, 'total_assets': total_assets,
-        'total_liabilities': total_liabilities, 'total_equity': total_equity,
+        'total_liabilities': total_liabilities, 'opening_equity': opening_equity,
+        'total_equity': total_equity_with_profit,
         'current_profit': current_profit, 'total_equity_before': total_equity_before,
         'reconciliation_equity': reconciliation_equity,
         'total_equity_with_profit': total_equity_with_profit,
@@ -1439,7 +1446,7 @@ def _balance_sheet_data(request):
         'capital_expenses': capital_expenses, 'warnings': warnings,
         'current_ratio': current_ratio, 'cash_ratio': cash_ratio,
         'debt_to_equity': debt_to_equity, 'debt_ratio': debt_ratio,
-        'asset_composition': asset_composition, 'validation_checks': validation_checks,
+        'asset_composition': asset_composition, 'equity_breakdown': equity_breakdown, 'validation_checks': validation_checks,
         'is_balanced': difference == 0,
         'is_reconciled': reconciliation_equity == 0,
         'balance_status': (

@@ -40,7 +40,7 @@
   <div class="neraca-kpi-grid">
     <div class="neraca-kpi-card"><div class="neraca-kpi-label">TOTAL ASET</div><div class="neraca-kpi-value">{{ total_assets|rupiah }}</div><div class="neraca-kpi-sub">Aset lancar dan aset tetap bersih</div></div>
     <div class="neraca-kpi-card"><div class="neraca-kpi-label">TOTAL KEWAJIBAN</div><div class="neraca-kpi-value">{{ total_liabilities|rupiah }}</div><div class="neraca-kpi-sub">Termasuk utang usaha</div></div>
-    <div class="neraca-kpi-card"><div class="neraca-kpi-label">TOTAL EKUITAS</div><div class="neraca-kpi-value {% if total_equity_with_profit < 0 %}negative{% endif %}">{{ total_equity_with_profit|rupiah }}</div><div class="neraca-kpi-sub">Modal, laba ditahan, dan laba berjalan</div></div>
+    <div class="neraca-kpi-card"><div class="neraca-kpi-label">TOTAL EKUITAS</div><div class="neraca-kpi-value {% if total_equity_with_profit < 0 %}negative{% endif %}">{{ total_equity|rupiah }}</div><div class="neraca-kpi-sub">Modal awal, ekuitas awal lainnya, dan laba/rugi tahun berjalan</div></div>
     <div class="neraca-kpi-card"><div class="neraca-kpi-label">STATUS NERACA</div><div class="neraca-kpi-value {% if balance_status == 'balanced' %}status-ok{% elif balance_status == 'balanced_with_note' %}status-note{% else %}status-bad{% endif %}">{% if balance_status == 'balanced' %}<i class="fa-solid fa-circle-check"></i> Seimbang{% elif balance_status == 'balanced_with_note' %}<i class="fa-solid fa-circle-exclamation"></i> Seimbang dengan Catatan{% else %}<i class="fa-solid fa-triangle-exclamation"></i> Belum Seimbang{% endif %}</div><div class="neraca-kpi-sub">Selisih {{ difference|rupiah }}{% if not is_reconciled %} · saldo awal belum direkonsiliasi{% endif %}</div></div>
   </div>
 
@@ -83,9 +83,16 @@
           <tr class="subtotal"><th>Total Kewajiban</th><th>{{ total_liabilities|rupiah }}</th></tr>
           <tr><td colspan="2" class="section-title">Ekuitas</td></tr>
           {% for e in equities %}<tr><td>{{ e.account_name }}</td><td>{{ e.amount|rupiah }}</td></tr>{% endfor %}
+            <div class="balance-row">
+                <span>Laba/Rugi Tahun Berjalan</span>
+                <strong class="{% if current_profit < 0 %}text-danger{% endif %}">
+                    {{ current_profit|rupiah }}
+                </strong>
+            </div>
+
           <tr><td>Laba/Rugi Tahun Berjalan</td><td class="{% if current_profit < 0 %}negative{% endif %}">{{ current_profit|rupiah }}</td></tr>
           {% if reconciliation_equity != 0 %}<tr class="warning-row"><td><strong>Saldo awal/modal belum direkonsiliasi</strong><div class="small">Akun sementara sampai saldo pembukaan lengkap.</div></td><td><strong>{{ reconciliation_equity|rupiah }}</strong></td></tr>{% endif %}
-          <tr class="grand"><th>Total Ekuitas</th><th>{{ total_equity_with_profit|rupiah }}</th></tr>
+          <tr class="grand"><th>Total Ekuitas Berjalan</th><th>{{ total_equity|rupiah }}</th></tr>
         </table>
       </div>
     </div>
