@@ -1,5 +1,4 @@
 import math
-import re
 from decimal import Decimal, InvalidOperation
 from datetime import timedelta
 
@@ -52,23 +51,6 @@ def _float(value):
         return float(value or 0)
     except Exception:
         return 0.0
-
-
-def _harvest_size_number(value):
-    """Ambil angka size dari teks panen seperti '118', 'size 50', atau '50/55'."""
-    match = re.search(r'\d+(?:[.,]\d+)?', str(value or ''))
-    if not match:
-        return 0.0
-    try:
-        return float(match.group(0).replace(',', '.'))
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def _is_total_harvest(value):
-    """Kenali panen total/final/selesai tanpa mengubah struktur database."""
-    text = str(value or '').strip().lower().replace('_', ' ').replace('-', ' ')
-    return text in {'total', 'final', 'panen total', 'panen final', 'selesai'}
 
 
 def _post_decimal(value, default='0'):
@@ -354,25 +336,11 @@ def growth_prediction_dashboard(request):
     ADG kumulatif, lalu target ADG siklus sebagai fallback.
     """
     selected_cycle = get_selected_cycle(request)
-
-    # Panen pada siklus terpilih menjadi dasar status kolam.
-    # Kolam dengan panen Total/Final/Selesai tidak boleh masuk prediksi,
-    # sedangkan panen Parsial tetap diproyeksikan dari populasi tersisa.
-    harvest_qs = filter_selected_cycle(
-        request,
-        Harvest.objects.select_related('pond').order_by('date', 'id'),
-    )
-    completed_pond_ids = {
-        row.pond_id
-        for row in harvest_qs
-        if _is_total_harvest(row.harvest_type)
-    }
-    ponds = Pond.objects.exclude(id__in=completed_pond_ids).order_by('name')
-
+    ponds = Pond.objects.all().order_by('name')
     samples_qs = filter_selected_cycle(
         request,
         SamplingRecord.objects.select_related('pond').all(),
-    ).exclude(pond_id__in=completed_pond_ids)
+    )
 
     pond_id = request.GET.get('pond') or ''
     try:
@@ -451,27 +419,6 @@ def growth_prediction_dashboard(request):
             stocking = int(latest.stocking_count or getattr(pond, 'capacity_seed', 0) or 0)
             sr = _float(latest.estimated_sr) or _float(latest.sr_index_percent) or _float(getattr(selected_cycle, 'target_sr_percent', 85) or 85)
             population = round(stocking * sr / 100.0) if stocking and sr else 0
-
-        # Kurangi populasi hanya dari panen parsial yang terjadi setelah
-        # sampling terbaru. Panen sebelum/di tanggal sampling diasumsikan sudah
-        # tercermin pada populasi sampling tersebut.
-        partial_harvest_kg = 0.0
-        partial_harvest_population = 0
-        pond_partial_harvests = [
-            row for row in harvest_qs
-            if row.pond_id == pond.id
-            and not _is_total_harvest(row.harvest_type)
-            and row.date > latest.date
-        ]
-        for harvest in pond_partial_harvests:
-            harvest_kg = _float(harvest.total_kg)
-            harvest_size = _harvest_size_number(harvest.size_text) or latest_size
-            partial_harvest_kg += harvest_kg
-            if harvest_kg > 0 and harvest_size > 0:
-                partial_harvest_population += round(harvest_kg * harvest_size)
-
-        population_before_partial = population
-        population = max(0, population - partial_harvest_population)
         latest_fcr = _float(latest.fcr)
 
         actual = []
@@ -557,9 +504,6 @@ def growth_prediction_dashboard(request):
             'adg': round(adg, 3),
             'fcr': round(latest_fcr, 3),
             'population': population,
-            'population_before_partial': population_before_partial,
-            'partial_harvest_kg_after_sampling': round(partial_harvest_kg, 2),
-            'partial_harvest_population_after_sampling': partial_harvest_population,
             'projected_size': target_projection['size'],
             'projected_abw': target_projection['abw'],
             'projected_biomass_ton': target_projection['biomass_ton'],
@@ -590,7 +534,6 @@ def growth_prediction_dashboard(request):
         'target_adg': target_adg,
         'all_chart': all_chart,
         'all_series': all_series,
-        'completed_pond_count': len(completed_pond_ids),
     }
     return render(request, 'operations/growth_prediction_dashboard.html', context)
 

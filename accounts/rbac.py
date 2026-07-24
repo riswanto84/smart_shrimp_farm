@@ -63,7 +63,7 @@ MENU_DEFINITIONS = [
     {'type': 'item', 'label': 'AI Early Warning', 'url': '/chat-ai/siphon-warning/', 'icon': 'fa-solid fa-triangle-exclamation', 'perm': 'chat.view'},
     {'type': 'item', 'label': 'AI Prediksi Panen', 'url': '/chat-ai/harvest-prediction/', 'icon': 'fa-solid fa-calendar-check', 'perm': 'chat.view'},
     {'type': 'item', 'label': 'AI Ringkasan Harian', 'url': '/chat-ai/daily-summary/', 'icon': 'fa-solid fa-file-lines', 'perm': 'chat.view'},
-    {'type': 'item', 'label': 'Chat AI (Ollama)', 'url': '/chat-ai/', 'icon': 'fa-solid fa-robot', 'perm': 'chat.view'},
+    {'type': 'item', 'label': 'Smart Shrimp AI', 'url': '/chat-ai/', 'icon': 'fa-solid fa-robot', 'perm': 'chat.view'},
     {'type': 'group', 'label': 'PENGATURAN'},
     {'type': 'item', 'label': 'Pengguna & Hak Akses', 'url': '/accounts/users/', 'icon': 'fa-solid fa-user-shield', 'perm': 'accounts.users'},
     {'type': 'item', 'label': 'Role & Permission', 'url': '/accounts/roles/', 'icon': 'fa-solid fa-key', 'perm': 'accounts.roles'},
