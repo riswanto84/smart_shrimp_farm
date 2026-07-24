@@ -898,9 +898,28 @@ def _as_date(request):
 
 
 def _date_period(request):
-    year = int(request.GET.get('year') or timezone.localdate().year)
-    date_from = parse_date(request.GET.get('date_from') or '') or timezone.datetime(year, 1, 1).date()
-    date_to = parse_date(request.GET.get('date_to') or '') or timezone.datetime(year, 12, 31).date()
+    """Return a safe reporting period.
+
+    For the current year the default end date is today, not 31 December.
+    This prevents future depreciation from being recognised in a report that
+    is opened during the year. An explicitly supplied future end date is also
+    capped at today for the current/future year.
+    """
+    today = timezone.localdate()
+    try:
+        year = int(request.GET.get('year') or today.year)
+    except (TypeError, ValueError):
+        year = today.year
+
+    default_from = timezone.datetime(year, 1, 1).date()
+    default_to = today if year >= today.year else timezone.datetime(year, 12, 31).date()
+
+    date_from = parse_date(request.GET.get('date_from') or '') or default_from
+    date_to = parse_date(request.GET.get('date_to') or '') or default_to
+
+    # Financial reports must not recognise future transactions/depreciation.
+    if date_to > today:
+        date_to = today
     if date_from > date_to:
         date_from, date_to = date_to, date_from
     return date_from, date_to
@@ -942,6 +961,61 @@ def _asset_depreciation(asset, as_of):
         'accumulated': accumulated,
         'book_value': max(cost - accumulated, Decimal('0')),
         'life': life,
+    }
+
+
+def _calculate_profit_loss_period(date_from, date_to):
+    """Single source of truth for profit/loss calculations.
+
+    Both the profit/loss report and the balance sheet call this helper so the
+    current-year result cannot drift because of different queries or
+    depreciation cut-off dates.
+    """
+    valid_statuses_excluded = ['Gagal', 'Expired', 'Dibatalkan', 'Refund']
+    sales_revenue = (
+        Sale.objects.filter(date__date__range=(date_from, date_to))
+        .exclude(status__in=valid_statuses_excluded)
+        .aggregate(s=Sum('total_amount'))['s']
+        or Decimal('0')
+    )
+    other_revenue = (
+        OtherRevenue.objects.filter(date__range=(date_from, date_to))
+        .aggregate(s=Sum('gross_amount'))['s']
+        or Decimal('0')
+    )
+
+    expenses = OperationalExpense.objects.filter(
+        date__range=(date_from, date_to),
+        is_capital_expenditure=False,
+    ).exclude(category='Penyusutan')
+    grouped = list(
+        expenses.values('category').annotate(total=Sum('amount')).order_by('category')
+    )
+    operating_cost = sum((row['total'] for row in grouped), Decimal('0'))
+
+    depreciation_total = Decimal('0')
+    day_before = date_from - timedelta(days=1)
+    for asset in FixedAsset.objects.filter(use_date__lte=date_to).exclude(status='disposed'):
+        dep_to = _asset_depreciation(asset, date_to)['accumulated']
+        dep_before = (
+            _asset_depreciation(asset, day_before)['accumulated']
+            if day_before >= asset.use_date
+            else Decimal('0')
+        )
+        depreciation_total += max(dep_to - dep_before, Decimal('0'))
+
+    total_revenue = sales_revenue + other_revenue
+    total_expense = operating_cost + depreciation_total
+    return {
+        'sales_revenue': sales_revenue,
+        'other_revenue': other_revenue,
+        'revenue': total_revenue,
+        'expenses': expenses,
+        'grouped': grouped,
+        'operating_cost': operating_cost,
+        'depreciation_total': depreciation_total,
+        'expense_total': total_expense,
+        'profit': total_revenue - total_expense,
     }
 
 
@@ -1024,23 +1098,28 @@ def export_gross_turnover_pdf(request):
 
 
 def _profit_loss_tax_data(request):
-    date_from,date_to=_date_period(request)
-    _,_,_,revenue,_=_gross_turnover_data(request)
-    expenses=OperationalExpense.objects.filter(date__range=(date_from,date_to), is_capital_expenditure=False).exclude(category='Penyusutan')
-    grouped=list(expenses.values('category').annotate(total=Sum('amount')).order_by('category'))
-    expense_total=sum((x['total'] for x in grouped),Decimal('0'))
-    # Penyusutan dihitung otomatis dari register aset agar tidak terjadi beban ganda.
-    depreciation_total=Decimal('0')
-    for asset in FixedAsset.objects.filter(use_date__lte=date_to).exclude(status='disposed'):
-        dep_to=_asset_depreciation(asset,date_to)['accumulated']
-        day_before=date_from-timedelta(days=1)
-        dep_before=_asset_depreciation(asset,day_before)['accumulated'] if day_before >= asset.use_date else Decimal('0')
-        depreciation_total += max(dep_to-dep_before, Decimal('0'))
-    if depreciation_total:
-        grouped.append({'category':'Penyusutan Aset (otomatis)','total':depreciation_total})
-        expense_total += depreciation_total
-    non_deductible=expenses.filter(is_fiscal_deductible=False).aggregate(s=Sum('amount'))['s'] or Decimal('0')
-    return date_from,date_to,revenue,grouped,expense_total,revenue-expense_total,non_deductible
+    date_from, date_to = _date_period(request)
+    result = _calculate_profit_loss_period(date_from, date_to)
+    grouped = list(result['grouped'])
+    if result['depreciation_total']:
+        grouped.append({
+            'category': 'Penyusutan Aset (otomatis)',
+            'total': result['depreciation_total'],
+        })
+    non_deductible = (
+        result['expenses'].filter(is_fiscal_deductible=False)
+        .aggregate(s=Sum('amount'))['s']
+        or Decimal('0')
+    )
+    return (
+        date_from,
+        date_to,
+        result['revenue'],
+        grouped,
+        result['expense_total'],
+        result['profit'],
+        non_deductible,
+    )
 
 
 @login_required
@@ -1200,19 +1279,12 @@ def _balance_sheet_data(request):
     accumulated = sum((x['accumulated'] for x in fixed_assets), Decimal('0'))
 
     start = timezone.datetime(as_of.year, 1, 1).date()
-    valid_sales = Sale.objects.filter(date__date__range=(start, as_of)).exclude(status__in=['Gagal', 'Expired', 'Dibatalkan', 'Refund'])
-    sales_revenue = valid_sales.aggregate(s=Sum('total_amount'))['s'] or Decimal('0')
-    other_revenue = OtherRevenue.objects.filter(date__range=(start, as_of)).aggregate(s=Sum('gross_amount'))['s'] or Decimal('0')
-
-    operating_expenses = OperationalExpense.objects.filter(date__range=(start, as_of), is_capital_expenditure=False).exclude(category='Penyusutan')
-    operating_cost = operating_expenses.aggregate(s=Sum('amount'))['s'] or Decimal('0')
-    previous_year_end = timezone.datetime(as_of.year - 1, 12, 31).date()
-    current_year_depreciation = Decimal('0')
-    for x in fixed_assets:
-        asset = x['asset']
-        before = _asset_depreciation(asset, previous_year_end)['accumulated'] if asset.use_date <= previous_year_end else Decimal('0')
-        current_year_depreciation += max(x['accumulated'] - before, Decimal('0'))
-    current_profit = sales_revenue + other_revenue - operating_cost - current_year_depreciation
+    profit_loss = _calculate_profit_loss_period(start, as_of)
+    sales_revenue = profit_loss['sales_revenue']
+    other_revenue = profit_loss['other_revenue']
+    operating_cost = profit_loss['operating_cost']
+    current_year_depreciation = profit_loss['depreciation_total']
+    current_profit = profit_loss['profit']
 
     manual_asset_total = sum((e.amount for e in assets), Decimal('0'))
     total_assets_before = manual_asset_total + receivable_total + fixed_cost - accumulated
@@ -1285,6 +1357,12 @@ def _balance_sheet_data(request):
         'debt_to_equity': debt_to_equity, 'debt_ratio': debt_ratio,
         'asset_composition': asset_composition, 'validation_checks': validation_checks,
         'is_balanced': difference == 0,
+        'is_reconciled': reconciliation_equity == 0,
+        'balance_status': (
+            'balanced' if difference == 0 and reconciliation_equity == 0
+            else 'balanced_with_note' if difference == 0
+            else 'unbalanced'
+        ),
     }
 
 
