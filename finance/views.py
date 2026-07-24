@@ -1316,167 +1316,406 @@ def opening_balance(request):
     return render(request, 'finance/opening_balance.html', context)
 
 
-def _balance_sheet_data(request):
-    """Susun neraca dengan sumber data operasional yang transparan.
 
-    Pos manual tetap dipakai sebagai saldo posisi. Piutang, utang, aset tetap,
-    penyusutan, dan laba berjalan dihitung otomatis. Apabila data historis
-    belum lengkap, selisih ditempatkan pada akun rekonsiliasi sementara agar
-    laporan tetap seimbang tanpa menyembunyikan bahwa saldo awal/modal perlu
-    dilengkapi.
+def _balance_sheet_data(request):
+    """Susun neraca berjalan tanpa akun penyeimbang otomatis.
+
+    Prinsip:
+    - Saldo awal berasal dari BalanceEntry.
+    - Piutang, utang, aset tetap, penyusutan, dan laba/rugi berjalan dihitung
+      dari transaksi sampai tanggal laporan.
+    - Selisih neraca ditampilkan apa adanya dan tidak ditutup otomatis.
     """
     from .receivable_sync import sync_all_sales
 
     as_of = _as_date(request)
     sync_all_sales()
 
+    # Ambil posisi terakhir setiap akun manual sampai tanggal laporan.
     latest = {}
-    for e in BalanceEntry.objects.filter(as_of_date__lte=as_of).order_by('account_name', '-as_of_date', '-id'):
-        latest.setdefault((e.account_type, e.account_name), e)
+    manual_qs = BalanceEntry.objects.filter(
+        as_of_date__lte=as_of
+    ).order_by("account_name", "-as_of_date", "-id")
+
+    for entry in manual_qs:
+        latest.setdefault(
+            (entry.account_type, entry.account_name),
+            entry,
+        )
+
     entries = list(latest.values())
 
-    assets = [e for e in entries if e.account_type == 'asset' and e.group not in ('Aset Tetap', 'Piutang Usaha')]
-    liabilities = [e for e in entries if e.account_type == 'liability' and e.group != 'Utang Usaha']
-    equities = [e for e in entries if e.account_type == 'equity']
+    assets = [
+        e for e in entries
+        if e.account_type == "asset"
+        and e.group not in ("Aset Tetap", "Piutang Usaha")
+    ]
+    liabilities = [
+        e for e in entries
+        if e.account_type == "liability"
+        and e.group != "Utang Usaha"
+    ]
+    equities = [
+        e for e in entries
+        if e.account_type == "equity"
+    ]
 
     def outstanding_as_of(account):
-        paid = account.payments.filter(payment_date__lte=as_of).aggregate(s=Sum('amount'))['s'] or Decimal('0')
-        return max((account.original_amount or Decimal('0')) - paid, Decimal('0'))
+        paid = account.payments.filter(
+            payment_date__lte=as_of
+        ).aggregate(
+            total=Sum("amount")
+        )["total"] or Decimal("0")
 
-    receivable_total = sum((outstanding_as_of(x) for x in TradeAccount.objects.filter(account_type=TradeAccount.RECEIVABLE, transaction_date__lte=as_of)), Decimal('0'))
-    payable_total = sum((outstanding_as_of(x) for x in TradeAccount.objects.filter(account_type=TradeAccount.PAYABLE, transaction_date__lte=as_of)), Decimal('0'))
+        return max(
+            (account.original_amount or Decimal("0")) - paid,
+            Decimal("0"),
+        )
 
+    receivable_accounts = TradeAccount.objects.filter(
+        account_type=TradeAccount.RECEIVABLE,
+        transaction_date__lte=as_of,
+    )
+    payable_accounts = TradeAccount.objects.filter(
+        account_type=TradeAccount.PAYABLE,
+        transaction_date__lte=as_of,
+    )
+
+    receivable_total = sum(
+        (outstanding_as_of(item) for item in receivable_accounts),
+        Decimal("0"),
+    )
+    payable_total = sum(
+        (outstanding_as_of(item) for item in payable_accounts),
+        Decimal("0"),
+    )
+
+    # Aset tetap.
     fixed_assets = []
-    for a in FixedAsset.objects.filter(use_date__lte=as_of).exclude(status='disposed'):
-        dep = _asset_depreciation(a, as_of)
-        fixed_assets.append({'asset': a, **dep})
-    fixed_cost = sum((x['asset'].total_cost for x in fixed_assets), Decimal('0'))
-    accumulated = sum((x['accumulated'] for x in fixed_assets), Decimal('0'))
+    for asset in FixedAsset.objects.filter(
+        use_date__lte=as_of
+    ).exclude(status="disposed"):
+        depreciation = _asset_depreciation(asset, as_of)
+        fixed_assets.append({
+            "asset": asset,
+            **depreciation,
+        })
 
-    start = timezone.datetime(as_of.year, 1, 1).date()
-    profit_loss = _calculate_profit_loss_period(start, as_of)
-    sales_revenue = profit_loss['sales_revenue']
-    other_revenue = profit_loss['other_revenue']
-    operating_cost = profit_loss['operating_cost']
-    current_year_depreciation = profit_loss['depreciation_total']
-    current_profit = profit_loss['profit']
-
-    manual_asset_total = sum((e.amount for e in assets), Decimal('0'))
-    total_assets_before = manual_asset_total + receivable_total + fixed_cost - accumulated
-    total_liabilities = sum((e.amount for e in liabilities), Decimal('0')) + payable_total
-    # Ekuitas pembukaan berasal dari Modal Pemilik, Tambahan Modal,
-    # Laba Ditahan, dan Prive yang tersimpan pada BalanceEntry.
-    opening_equity = sum((e.amount for e in equities), Decimal('0'))
-
-    # Neraca berjalan wajib memasukkan laba/rugi tahun berjalan.
-    total_equity_before = opening_equity + current_profit
-    preliminary_difference = total_assets_before - total_liabilities - total_equity_before
-
-    # Rekonsiliasi tidak boleh dipakai untuk menutupi laba/rugi berjalan.
-    # Nilai ini hanya menunjukkan adanya saldo awal/aset/kewajiban yang belum lengkap.
-
-    capital_expenses = OperationalExpense.objects.filter(date__lte=as_of, is_capital_expenditure=True).aggregate(s=Sum('amount'))['s'] or Decimal('0')
-    unlinked_capital_expenses = OperationalExpense.objects.filter(date__lte=as_of, is_capital_expenditure=True, fixed_asset__isnull=True).count()
-    warnings = []
-    if abs(difference) > Decimal('1.00'):
-        warnings.append('Neraca belum seimbang. Periksa saldo awal, transaksi modal, utang, piutang, aset, dan laba/rugi berjalan.')
-    if unlinked_capital_expenses:
-        warnings.append(f'{unlinked_capital_expenses} pengeluaran kapital belum ditautkan ke Daftar Aset.')
-
-    # Ringkasan analitis untuk dashboard neraca.
-    cash_bank_total = sum((e.amount for e in assets if e.group == 'Kas dan Bank'), Decimal('0'))
-    other_current_assets = sum((e.amount for e in assets if e.group != 'Kas dan Bank'), Decimal('0'))
-    current_assets = cash_bank_total + other_current_assets + receivable_total
+    fixed_cost = sum(
+        (row["asset"].total_cost for row in fixed_assets),
+        Decimal("0"),
+    )
+    accumulated = sum(
+        (row["accumulated"] for row in fixed_assets),
+        Decimal("0"),
+    )
     net_fixed_assets = fixed_cost - accumulated
 
-    def safe_ratio(numerator, denominator):
-        return (numerator / denominator) if denominator else None
+    # Laba/rugi tahun berjalan.
+    start_of_year = timezone.datetime(
+        as_of.year,
+        1,
+        1,
+    ).date()
 
-    current_ratio = safe_ratio(current_assets, total_liabilities)
-    cash_ratio = safe_ratio(cash_bank_total, total_liabilities)
-    debt_to_equity = safe_ratio(total_liabilities, total_equity_with_profit) if total_equity_with_profit > 0 else None
-    debt_ratio = safe_ratio(total_liabilities, total_assets)
+    valid_sales = Sale.objects.filter(
+        date__date__range=(start_of_year, as_of)
+    ).exclude(
+        status__in=[
+            "Gagal",
+            "Expired",
+            "Dibatalkan",
+            "Refund",
+        ]
+    )
 
-    def percentage(part, whole):
-        return (part / whole * Decimal('100')) if whole else Decimal('0')
+    sales_revenue = valid_sales.aggregate(
+        total=Sum("total_amount")
+    )["total"] or Decimal("0")
 
-    asset_composition = [
-        {'label': 'Kas & Bank', 'amount': cash_bank_total, 'percent': percentage(cash_bank_total, total_assets)},
-        {'label': 'Piutang Usaha', 'amount': receivable_total, 'percent': percentage(receivable_total, total_assets)},
-        {'label': 'Aset Lancar Lain', 'amount': other_current_assets, 'percent': percentage(other_current_assets, total_assets)},
-        {'label': 'Aset Tetap Bersih', 'amount': net_fixed_assets, 'percent': percentage(net_fixed_assets, total_assets)},
-    ]
+    other_revenue = OtherRevenue.objects.filter(
+        date__range=(start_of_year, as_of)
+    ).aggregate(
+        total=Sum("gross_amount")
+    )["total"] or Decimal("0")
 
-    equity_breakdown = []
-    for e in equities:
-        equity_breakdown.append({
-            'label': e.account_name,
-            'amount': e.amount,
-        })
-    equity_breakdown.append({
-        'label': 'Laba/Rugi Tahun Berjalan',
-        'amount': current_profit,
-    })
+    operating_expenses = OperationalExpense.objects.filter(
+        date__range=(start_of_year, as_of),
+        is_capital_expenditure=False,
+    ).exclude(category="Penyusutan")
 
-    validation_checks = [
-        {'label': 'Persamaan neraca seimbang', 'ok': is_balanced},
-        {'label': 'Saldo awal/modal telah direkonsiliasi', 'ok': opening_balance_entries_exist},
-        {'label': 'Tidak ada pengeluaran kapital tanpa aset', 'ok': unlinked_capital_expenses == 0},
-        {'label': 'Piutang dan nota penjualan tersinkron', 'ok': True},
-    ]
+    operating_cost = operating_expenses.aggregate(
+        total=Sum("amount")
+    )["total"] or Decimal("0")
 
+    previous_year_end = timezone.datetime(
+        as_of.year - 1,
+        12,
+        31,
+    ).date()
 
-    balance_tolerance = Decimal('1.00')
+    current_year_depreciation = Decimal("0")
+
+    for row in fixed_assets:
+        asset = row["asset"]
+
+        accumulated_before = Decimal("0")
+        if asset.use_date <= previous_year_end:
+            accumulated_before = _asset_depreciation(
+                asset,
+                previous_year_end,
+            )["accumulated"]
+
+        current_year_depreciation += max(
+            row["accumulated"] - accumulated_before,
+            Decimal("0"),
+        )
+
+    current_profit = (
+        sales_revenue
+        + other_revenue
+        - operating_cost
+        - current_year_depreciation
+    )
+
+    # Aset.
+    manual_asset_total = sum(
+        (entry.amount for entry in assets),
+        Decimal("0"),
+    )
+    total_assets = (
+        manual_asset_total
+        + receivable_total
+        + net_fixed_assets
+    )
+
+    # Kewajiban.
+    manual_liability_total = sum(
+        (entry.amount for entry in liabilities),
+        Decimal("0"),
+    )
+    total_liabilities = (
+        manual_liability_total
+        + payable_total
+    )
+
+    # Ekuitas berjalan.
+    opening_equity = sum(
+        (entry.amount for entry in equities),
+        Decimal("0"),
+    )
+    total_equity = opening_equity + current_profit
+
+    # Selisih asli neraca; tidak ditutup otomatis.
+    difference = (
+        total_assets
+        - total_liabilities
+        - total_equity
+    )
+
+    tolerance = Decimal("1.00")
+    is_balanced = abs(difference) <= tolerance
+
     opening_balance_entries_exist = BalanceEntry.objects.filter(
         as_of_date__lte=as_of
     ).exists()
 
-    is_balanced = abs(difference) <= balance_tolerance
-
     if is_balanced:
-        balance_status = 'balanced'
-        balance_status_label = 'Seimbang'
-        balance_status_note = 'Persamaan aset = kewajiban + ekuitas telah terpenuhi.'
+        balance_status = "balanced"
+        balance_status_label = "Seimbang"
+        balance_status_note = (
+            "Persamaan aset = kewajiban + ekuitas telah terpenuhi."
+        )
     elif not opening_balance_entries_exist:
-        balance_status = 'opening_unreconciled'
-        balance_status_label = 'Saldo Awal Belum Direkonsiliasi'
-        balance_status_note = 'Belum ada saldo awal yang memadai untuk membentuk neraca berjalan.'
+        balance_status = "opening_unreconciled"
+        balance_status_label = "Saldo Awal Belum Direkonsiliasi"
+        balance_status_note = (
+            "Belum ada saldo awal yang memadai untuk membentuk neraca berjalan."
+        )
     else:
-        balance_status = 'unbalanced'
-        balance_status_label = 'Tidak Seimbang'
-        balance_status_note = 'Terdapat selisih antara aset dengan kewajiban dan ekuitas.'
+        balance_status = "unbalanced"
+        balance_status_label = "Tidak Seimbang"
+        balance_status_note = (
+            "Terdapat selisih antara aset dengan kewajiban dan ekuitas."
+        )
+
+    capital_expenses = OperationalExpense.objects.filter(
+        date__lte=as_of,
+        is_capital_expenditure=True,
+    ).aggregate(
+        total=Sum("amount")
+    )["total"] or Decimal("0")
+
+    unlinked_capital_expenses = OperationalExpense.objects.filter(
+        date__lte=as_of,
+        is_capital_expenditure=True,
+        fixed_asset__isnull=True,
+    ).count()
+
+    warnings = []
+
+    if not is_balanced:
+        warnings.append(
+            "Neraca belum seimbang. Periksa saldo awal, transaksi modal, "
+            "utang, piutang, aset tetap, penyusutan, dan laba/rugi berjalan."
+        )
+
+    if unlinked_capital_expenses:
+        warnings.append(
+            f"{unlinked_capital_expenses} pengeluaran kapital belum "
+            "ditautkan ke Daftar Aset."
+        )
+
+    # Analisis likuiditas dan komposisi aset.
+    cash_bank_total = sum(
+        (
+            entry.amount
+            for entry in assets
+            if entry.group == "Kas dan Bank"
+        ),
+        Decimal("0"),
+    )
+
+    other_current_assets = sum(
+        (
+            entry.amount
+            for entry in assets
+            if entry.group != "Kas dan Bank"
+        ),
+        Decimal("0"),
+    )
+
+    current_assets = (
+        cash_bank_total
+        + other_current_assets
+        + receivable_total
+    )
+
+    def safe_ratio(numerator, denominator):
+        if not denominator:
+            return None
+        return numerator / denominator
+
+    current_ratio = safe_ratio(
+        current_assets,
+        total_liabilities,
+    )
+    cash_ratio = safe_ratio(
+        cash_bank_total,
+        total_liabilities,
+    )
+    debt_to_equity = (
+        safe_ratio(total_liabilities, total_equity)
+        if total_equity > 0
+        else None
+    )
+    debt_ratio = safe_ratio(
+        total_liabilities,
+        total_assets,
+    )
+
+    def percentage(part, whole):
+        if not whole:
+            return Decimal("0")
+        return part / whole * Decimal("100")
+
+    asset_composition = [
+        {
+            "label": "Kas & Bank",
+            "amount": cash_bank_total,
+            "percent": percentage(cash_bank_total, total_assets),
+        },
+        {
+            "label": "Piutang Usaha",
+            "amount": receivable_total,
+            "percent": percentage(receivable_total, total_assets),
+        },
+        {
+            "label": "Aset Lancar Lain",
+            "amount": other_current_assets,
+            "percent": percentage(other_current_assets, total_assets),
+        },
+        {
+            "label": "Aset Tetap Bersih",
+            "amount": net_fixed_assets,
+            "percent": percentage(net_fixed_assets, total_assets),
+        },
+    ]
+
+    equity_breakdown = [
+        {
+            "label": entry.account_name,
+            "amount": entry.amount,
+        }
+        for entry in equities
+    ]
+    equity_breakdown.append({
+        "label": "Laba/Rugi Tahun Berjalan",
+        "amount": current_profit,
+    })
+
+    validation_checks = [
+        {
+            "label": "Persamaan neraca seimbang",
+            "ok": is_balanced,
+        },
+        {
+            "label": "Saldo awal sudah tersedia",
+            "ok": opening_balance_entries_exist,
+        },
+        {
+            "label": "Tidak ada pengeluaran kapital tanpa aset",
+            "ok": unlinked_capital_expenses == 0,
+        },
+        {
+            "label": "Piutang dan nota penjualan tersinkron",
+            "ok": True,
+        },
+    ]
 
     return {
-        'as_of': as_of, 'assets': assets, 'liabilities': liabilities, 'equities': equities,
-        'fixed_assets': fixed_assets, 'receivable_total': receivable_total, 'payable_total': payable_total,
-        'fixed_cost': fixed_cost, 'accumulated': accumulated, 'net_fixed_assets': net_fixed_assets,
-        'cash_bank_total': cash_bank_total, 'other_current_assets': other_current_assets,
-        'current_assets': current_assets, 'total_assets': total_assets,
-        'total_liabilities': total_liabilities, 'opening_equity': opening_equity,
-        'total_equity': total_equity_with_profit,
-        'current_profit': current_profit, 'total_equity_before': total_equity_with_profit,
-        'reconciliation_equity': reconciliation_equity,
-        'total_equity_with_profit': total_equity_with_profit,
-        'preliminary_difference': preliminary_difference, 'difference': difference,
-        'sales_revenue': sales_revenue, 'other_revenue': other_revenue,
-        'operating_cost': operating_cost, 'current_year_depreciation': current_year_depreciation,
-        'capital_expenses': capital_expenses, 'warnings': warnings,
-        'current_ratio': current_ratio, 'cash_ratio': cash_ratio,
-        'debt_to_equity': debt_to_equity, 'debt_ratio': debt_ratio,
-        'asset_composition': asset_composition, 'equity_breakdown': equity_breakdown, 'validation_checks': validation_checks,
-        'is_balanced': is_balanced,
-        'balance_status': balance_status,
-        'balance_status_label': balance_status_label,
-        'balance_status_note': balance_status_note,
-        'opening_balance_entries_exist': opening_balance_entries_exist,
-        'is_reconciled': reconciliation_equity == 0,
-        'balance_status': (
-            'balanced' if difference == 0 and reconciliation_equity == 0
-            else 'balanced_with_note' if difference == 0
-            else 'unbalanced'
-        ),
+        "as_of": as_of,
+        "assets": assets,
+        "liabilities": liabilities,
+        "equities": equities,
+        "equity_breakdown": equity_breakdown,
+        "fixed_assets": fixed_assets,
+        "receivable_total": receivable_total,
+        "payable_total": payable_total,
+        "fixed_cost": fixed_cost,
+        "accumulated": accumulated,
+        "net_fixed_assets": net_fixed_assets,
+        "cash_bank_total": cash_bank_total,
+        "other_current_assets": other_current_assets,
+        "current_assets": current_assets,
+        "total_assets": total_assets,
+        "total_liabilities": total_liabilities,
+        "opening_equity": opening_equity,
+        "current_profit": current_profit,
+        "total_equity": total_equity,
+        "total_equity_before": total_equity,
+        "total_equity_with_profit": total_equity,
+        "reconciliation_equity": Decimal("0"),
+        "preliminary_difference": difference,
+        "difference": difference,
+        "sales_revenue": sales_revenue,
+        "other_revenue": other_revenue,
+        "operating_cost": operating_cost,
+        "current_year_depreciation": current_year_depreciation,
+        "capital_expenses": capital_expenses,
+        "warnings": warnings,
+        "current_ratio": current_ratio,
+        "cash_ratio": cash_ratio,
+        "debt_to_equity": debt_to_equity,
+        "debt_ratio": debt_ratio,
+        "asset_composition": asset_composition,
+        "validation_checks": validation_checks,
+        "is_balanced": is_balanced,
+        "balance_status": balance_status,
+        "balance_status_label": balance_status_label,
+        "balance_status_note": balance_status_note,
+        "opening_balance_entries_exist": opening_balance_entries_exist,
     }
-
 
 @login_required
 @permission_required('finance.tax_reports')
