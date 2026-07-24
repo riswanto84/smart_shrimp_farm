@@ -11,8 +11,7 @@ from accounts.rbac import permission_required
 from django.db.models import Sum, Count, Min, Max
 from django.db.models.functions import TruncDate, TruncWeek, TruncMonth
 from django.utils import timezone
-from django.utils.dateparse import parse_date
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 import json
@@ -27,6 +26,25 @@ from cultivation.utils import get_selected_cycle, filter_selected_cycle
 
 
 EXPENSE_DOCUMENT_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.webp', '.doc', '.docx', '.xls', '.xlsx'}
+
+def _safe_parse_date(value, default=None):
+    """Mengubah nilai menjadi date tanpa melempar TypeError."""
+    if value is None or value == "":
+        return default
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return default
+        try:
+            return date.fromisoformat(value)
+        except (TypeError, ValueError):
+            return default
+    return default
+
 EXPENSE_DOCUMENT_MAX_SIZE = 10 * 1024 * 1024
 
 
@@ -262,8 +280,8 @@ def _period_defaults(period_type):
 
 def _selected_range(request, period_type):
     default_from, default_to = _period_defaults(period_type)
-    date_from = parse_date(request.GET.get('date_from') or '') or default_from
-    date_to = parse_date(request.GET.get('date_to') or '') or default_to
+    date_from = _safe_parse_date(request.GET.get('date_from'), default_from)
+    date_to = _safe_parse_date(request.GET.get('date_to'), default_to)
     if date_from > date_to:
         date_from, date_to = date_to, date_from
     return date_from, date_to
@@ -894,13 +912,13 @@ from .models import OtherRevenue, BalanceEntry, FixedAsset, TradeAccount, TradeP
 
 
 def _as_date(request):
-    return parse_date(request.GET.get('as_of') or '') or timezone.localdate()
+    return _safe_parse_date(request.GET.get('as_of'), timezone.localdate())
 
 
 def _date_period(request):
     year = int(request.GET.get('year') or timezone.localdate().year)
-    date_from = parse_date(request.GET.get('date_from') or '') or timezone.datetime(year, 1, 1).date()
-    date_to = parse_date(request.GET.get('date_to') or '') or timezone.datetime(year, 12, 31).date()
+    date_from = _safe_parse_date(request.GET.get('date_from'), date(year, 1, 1))
+    date_to = _safe_parse_date(request.GET.get('date_to'), date(year, 12, 31))
     if date_from > date_to:
         date_from, date_to = date_to, date_from
     return date_from, date_to
@@ -1148,7 +1166,8 @@ def opening_balance(request):
     dan laba ditahan. Laba/rugi tahun berjalan sengaja tidak dimasukkan karena
     bukan bagian dari posisi pembukaan.
     """
-    as_of = parse_date(request.POST.get('as_of_date') or request.GET.get('as_of')) or timezone.localdate()
+    raw_as_of = request.POST.get('as_of_date') or request.GET.get('as_of')
+    as_of = _safe_parse_date(raw_as_of, timezone.localdate())
     auto = _opening_balance_auto_values(as_of)
 
     if request.method == 'POST':
@@ -1563,8 +1582,8 @@ def add_trade_account(request, account_type):
         return redirect('finance:tax_dashboard')
     if request.method == 'POST':
         amount = parse_rupiah(request.POST.get('original_amount'))
-        transaction_date = parse_date(request.POST.get('transaction_date') or '')
-        due_date = parse_date(request.POST.get('due_date') or '')
+        transaction_date = _safe_parse_date(request.POST.get('transaction_date'))
+        due_date = _safe_parse_date(request.POST.get('due_date'))
         customer = None
         if account_type == TradeAccount.RECEIVABLE:
             customer = Customer.objects.filter(pk=request.POST.get('customer_id')).first()
@@ -1601,8 +1620,8 @@ def edit_trade_account(request, pk):
     obj = get_object_or_404(TradeAccount, pk=pk)
     if request.method == 'POST':
         amount = parse_rupiah(request.POST.get('original_amount'))
-        transaction_date = parse_date(request.POST.get('transaction_date') or '')
-        due_date = parse_date(request.POST.get('due_date') or '')
+        transaction_date = _safe_parse_date(request.POST.get('transaction_date'))
+        due_date = _safe_parse_date(request.POST.get('due_date'))
         customer = obj.customer
         if obj.account_type == TradeAccount.RECEIVABLE:
             customer = Customer.objects.filter(pk=request.POST.get('customer_id')).first()
@@ -1648,7 +1667,7 @@ def trade_detail(request, pk):
 def add_trade_payment(request, pk):
     obj = get_object_or_404(TradeAccount.objects.select_for_update(), pk=pk)
     amount = parse_rupiah(request.POST.get('amount'))
-    payment_date = parse_date(request.POST.get('payment_date') or '')
+    payment_date = _safe_parse_date(request.POST.get('payment_date'))
     if not payment_date or amount <= 0:
         messages.error(request, 'Tanggal dan jumlah pembayaran wajib diisi.')
     elif amount > obj.outstanding_amount:
