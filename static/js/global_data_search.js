@@ -17,16 +17,15 @@
     var tbody = table.tBodies && table.tBodies[0];
     if (!tbody) return false;
 
-    var rows = Array.from(tbody.rows).filter(function (row) {
+    return Array.from(tbody.rows).some(function (row) {
       return !row.querySelector("td[colspan]");
     });
-
-    return rows.length > 0;
   }
 
   function createToolbar(table, index) {
-    var toolbar = document.createElement("div");
+    var toolbar = document.createElement("form");
     toolbar.className = "global-data-search";
+    toolbar.setAttribute("role", "search");
     toolbar.dataset.searchFor = "global-table-" + index;
 
     var inputId = "global-data-search-input-" + index;
@@ -36,11 +35,14 @@
         '<label class="visually-hidden" for="' + inputId + '">Cari data</label>' +
         '<i class="fa-solid fa-magnifying-glass global-data-search__icon" aria-hidden="true"></i>' +
         '<input type="search" id="' + inputId + '" class="form-control global-data-search__input" ' +
-          'placeholder="Cari data pada tabel ini..." autocomplete="off">' +
-        '<button type="button" class="global-data-search__clear" aria-label="Hapus pencarian" title="Hapus pencarian">' +
-          '<i class="fa-solid fa-xmark" aria-hidden="true"></i>' +
-        '</button>' +
+          'placeholder="Masukkan kata pencarian..." autocomplete="off">' +
       '</div>' +
+      '<button type="submit" class="btn btn-primary global-data-search__submit">' +
+        '<i class="fa-solid fa-magnifying-glass"></i> Cari' +
+      '</button>' +
+      '<button type="button" class="btn btn-outline-secondary global-data-search__reset">' +
+        '<i class="fa-solid fa-rotate-left"></i> Reset' +
+      '</button>' +
       '<div class="global-data-search__meta" aria-live="polite"></div>';
 
     var wrapper = table.closest(".table-responsive");
@@ -58,7 +60,7 @@
 
     var toolbar = createToolbar(table, index);
     var input = toolbar.querySelector(".global-data-search__input");
-    var clearButton = toolbar.querySelector(".global-data-search__clear");
+    var resetButton = toolbar.querySelector(".global-data-search__reset");
     var meta = toolbar.querySelector(".global-data-search__meta");
     var tbody = table.tBodies[0];
 
@@ -85,7 +87,7 @@
     noResultRow.appendChild(emptyCell);
     tbody.appendChild(noResultRow);
 
-    function update() {
+    function applySearch() {
       var keyword = normalizeText(input.value);
       var visible = 0;
 
@@ -100,36 +102,33 @@
       });
 
       noResultRow.hidden = !keyword || visible > 0;
-      clearButton.classList.toggle("is-visible", !!keyword);
 
       if (keyword) {
-        meta.textContent = visible + " dari " + searchableRows.length + " data pada halaman ini";
+        meta.textContent = visible + " dari " + searchableRows.length + " data ditemukan";
       } else {
         meta.textContent = searchableRows.length + " data pada halaman ini";
       }
     }
 
-    var timer = null;
-    input.addEventListener("input", function () {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(update, 180);
+    toolbar.addEventListener("submit", function (event) {
+      event.preventDefault();
+      applySearch();
+    });
+
+    resetButton.addEventListener("click", function () {
+      input.value = "";
+      applySearch();
+      input.focus();
     });
 
     input.addEventListener("keydown", function (event) {
       if (event.key === "Escape") {
         input.value = "";
-        update();
-        input.blur();
+        applySearch();
       }
     });
 
-    clearButton.addEventListener("click", function () {
-      input.value = "";
-      update();
-      input.focus();
-    });
-
-    update();
+    meta.textContent = searchableRows.length + " data pada halaman ini";
   }
 
   function installAll() {
