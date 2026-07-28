@@ -49,6 +49,64 @@ def _payment_data(request, total_amount):
     status = 'Lunas' if paid >= total_amount else 'Belum Lunas'
     return method, cash, transfer, qris, other, other_name, paid, status
 
+
+def _apply_manual_payment_status(
+    requested_status,
+    payment_method,
+    total_amount,
+    cash,
+    transfer,
+    qris,
+    other,
+    other_name,
+):
+    """Selaraskan rincian pembayaran dengan status yang dipilih saat edit.
+
+    - Belum Lunas: jika sebelumnya pembayaran penuh, pembayaran dikosongkan
+      agar saldo piutang kembali sebesar total nota.
+    - Lunas: pastikan jumlah pembayaran sama dengan total nota.
+    """
+    paid = cash + transfer + qris + other
+
+    if requested_status == 'Belum Lunas':
+        if paid >= total_amount:
+            cash = Decimal('0')
+            transfer = Decimal('0')
+            qris = Decimal('0')
+            other = Decimal('0')
+            paid = Decimal('0')
+        return cash, transfer, qris, other, other_name, paid
+
+    if requested_status == 'Lunas' and paid < total_amount:
+        cash = Decimal('0')
+        transfer = Decimal('0')
+        qris = Decimal('0')
+        other = Decimal('0')
+
+        if payment_method == 'Cash':
+            cash = total_amount
+        elif payment_method == 'Transfer':
+            transfer = total_amount
+        elif payment_method == 'QRIS':
+            qris = total_amount
+        elif payment_method == 'Lainnya':
+            other = total_amount
+            if not other_name:
+                other_name = 'Pelunasan manual'
+        elif payment_method == 'Campuran':
+            # Kekurangan dialokasikan ke kas agar total pembayaran tepat.
+            cash = total_amount
+        else:
+            # Tempo/Midtrans atau metode lain yang ditandai lunas secara manual.
+            other = total_amount
+            if not other_name:
+                other_name = 'Pelunasan manual'
+
+        paid = total_amount
+
+    return cash, transfer, qris, other, other_name, paid
+
+
 def _save_sale_documents(request, sale):
     from pathlib import Path
     files = request.FILES.getlist('documents')
@@ -491,6 +549,24 @@ def edit_sale(request, pk):
                 if requested_status not in {'Lunas', 'Belum Lunas'}:
                     requested_status = auto_status
 
+                (
+                    cash,
+                    transfer,
+                    qris,
+                    other_pay,
+                    other_name,
+                    paid,
+                ) = _apply_manual_payment_status(
+                    requested_status=requested_status,
+                    payment_method=method,
+                    total_amount=total_amount,
+                    cash=cash,
+                    transfer=transfer,
+                    qris=qris,
+                    other=other_pay,
+                    other_name=other_name,
+                )
+
                 old_total_amount = sale.total_amount
                 sale.invoice_no = invoice_no
                 sale.customer_id = customer_id
@@ -528,7 +604,7 @@ def edit_sale(request, pk):
 
             messages.success(
                 request,
-                'Nota penjualan dan seluruh ukuran udang berhasil diperbarui.',
+                f'Nota berhasil diperbarui dengan status {sale.status}.',
             )
             return redirect('sales:invoice', pk=sale.pk)
         except ValueError as exc:

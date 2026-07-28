@@ -6,29 +6,21 @@ from finance.receivable_sync import sync_sale_receivable
 
 
 class Command(BaseCommand):
-    help = "Sinkronkan status nota penjualan berdasarkan pembayaran aktual."
+    help = "Segarkan kartu piutang berdasarkan status yang tersimpan pada nota."
 
     @transaction.atomic
     def handle(self, *args, **options):
         checked = 0
-        updated = 0
+        synced = 0
 
         for sale in Sale.objects.all().order_by("pk").iterator():
             checked += 1
-            old_status = sale.status
-
-            sync_sale_receivable(sale)
-            sale.refresh_from_db(fields=["status"])
-
-            if sale.status != old_status:
-                updated += 1
-                self.stdout.write(
-                    f"{sale.invoice_no}: {old_status} -> {sale.status}"
-                )
+            if sync_sale_receivable(sale) is not None:
+                synced += 1
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Selesai. {checked} nota diperiksa, "
-                f"{updated} status diperbarui."
+                f"Selesai. {checked} nota diperiksa dan "
+                f"{synced} kartu piutang disegarkan."
             )
         )
