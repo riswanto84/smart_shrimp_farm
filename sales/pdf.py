@@ -123,9 +123,7 @@ def build_invoice_pdf(sale):
         c.drawImage(ImageReader(str(logo)), (width - logo_w) / 2, y - logo_h, width=logo_w, height=logo_h, mask='auto', preserveAspectRatio=True)
         y -= logo_h + 3 * mm
 
-    c.setFont('Helvetica-Bold', 13)
-    c.drawCentredString(width / 2, y, BUSINESS_NAME)
-    y -= 5 * mm
+    # Nama perusahaan tidak dicetak ulang karena sudah menjadi bagian logo.
     c.setFont('Helvetica', 7.6)
     c.drawCentredString(width / 2, y, TAGLINE)
     y -= 5 * mm

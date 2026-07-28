@@ -141,8 +141,10 @@ def export_excel(filename, title, subtitle, headers, rows, total_rows=None):
 
 
 def _pdf_logo_path():
+    # Logo utama sudah memiliki background hitam dan identitas
+    # Udang Emas Nusantara, sehingga tidak perlu teks perusahaan tambahan.
     candidates = [
-        os.path.join(settings.BASE_DIR, 'static', 'img', 'logo_uen.png'),
+        os.path.join(settings.BASE_DIR, 'static', 'img', 'logo_uen_report_black.png'),
         os.path.join(settings.BASE_DIR, 'static', 'img', 'logo_uen_thermal.png'),
     ]
     for path in candidates:
@@ -163,7 +165,7 @@ def _page_header_footer(canvas, doc):
     canvas.line(doc.leftMargin, 13 * mm, width - doc.rightMargin, 13 * mm)
     canvas.setFont('Helvetica', 7.5)
     canvas.setFillColor(muted)
-    canvas.drawString(doc.leftMargin, 8 * mm, 'Smart Shrimp Farm • Udang Emas Nusantara')
+    canvas.drawString(doc.leftMargin, 8 * mm, 'Smart Shrimp Farm')
     canvas.drawRightString(width - doc.rightMargin, 8 * mm, f'Halaman {doc.page}')
 
     canvas.setFillColor(navy)
@@ -211,10 +213,6 @@ def export_pdf(filename, title, subtitle, headers, rows, total_rows=None):
         'ReportTitle', parent=styles['Title'], fontName='Helvetica-Bold',
         fontSize=17, leading=20, textColor=navy, alignment=TA_LEFT, spaceAfter=3,
     )
-    company_style = ParagraphStyle(
-        'Company', parent=styles['Normal'], fontName='Helvetica-Bold',
-        fontSize=9.5, leading=11, textColor=gold,
-    )
     subtitle_style = ParagraphStyle(
         'Subtitle', parent=styles['Normal'], fontSize=8.5, leading=11,
         textColor=muted,
@@ -236,26 +234,43 @@ def export_pdf(filename, title, subtitle, headers, rows, total_rows=None):
     )
 
     logo = _pdf_logo_path()
+
+    # Struktur header dipertahankan seperti desain awal:
+    # logo di kiri atas, kemudian judul dan periode berada di bawahnya.
+    # Nama perusahaan tidak dicetak lagi karena sudah menjadi bagian logo.
     header_left = []
     if logo:
         try:
-            header_left.append(Image(logo, width=26 * mm, height=17 * mm, kind='proportional'))
+            header_left.append(
+                Image(logo, width=27 * mm, height=27 * mm, kind='proportional')
+            )
+            header_left.append(Spacer(1, 3))
         except Exception:
             pass
+
     header_left.extend([
-        Paragraph('UDANG EMAS NUSANTARA', company_style),
         Paragraph(title, title_style),
         Paragraph(subtitle, subtitle_style),
     ])
+
     generated = timezone.localtime().strftime('%d/%m/%Y %H:%M WIB')
     meta = Paragraph(
-        f'<b>Dokumen laporan resmi</b><br/>Dibuat: {generated}<br/>Sistem: Smart Shrimp Farm',
+        f'<b>Dokumen laporan resmi</b><br/>'
+        f'Dibuat: {generated}<br/>'
+        f'Sistem: Smart Shrimp Farm',
         meta_style,
     )
-    header_table = Table([[header_left, meta]], colWidths=[doc.width * 0.72, doc.width * 0.28])
+
+    header_table = Table(
+        [[header_left, meta]],
+        colWidths=[doc.width * 0.72, doc.width * 0.28],
+    )
     header_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('LEFTPADDING', (0, 0), (0, 0), 0),
+        ('RIGHTPADDING', (1, 0), (1, 0), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
         ('LINEBELOW', (0, 0), (-1, -1), 1.2, gold),
     ]))
