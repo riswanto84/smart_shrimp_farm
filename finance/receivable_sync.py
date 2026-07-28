@@ -161,8 +161,6 @@ def sync_sale_receivable(sale):
     elif auto_payment:
         auto_payment.delete()
 
-    _sync_sale_payment_status(sale)
-
     total_amount = _money(getattr(sale, 'total_amount', Decimal('0')))
     paid_amount = (
         _money(getattr(sale, 'cash_amount', Decimal('0')))
@@ -176,6 +174,7 @@ def sync_sale_receivable(sale):
         if total_amount > Decimal('0') and paid_amount >= total_amount
         else 'Belum Lunas'
     )
+
     if getattr(sale, 'status', None) != calculated_status:
         sale.status = calculated_status
         sale.save(update_fields=['status'])

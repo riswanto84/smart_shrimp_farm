@@ -6,7 +6,7 @@ from finance.receivable_sync import sync_sale_receivable
 
 
 class Command(BaseCommand):
-    help = "Sinkronkan status Nota Penjualan berdasarkan pembayaran aktual."
+    help = "Sinkronkan status nota penjualan berdasarkan pembayaran aktual."
 
     @transaction.atomic
     def handle(self, *args, **options):
@@ -16,6 +16,7 @@ class Command(BaseCommand):
         for sale in Sale.objects.all().order_by("pk").iterator():
             checked += 1
             old_status = sale.status
+
             sync_sale_receivable(sale)
             sale.refresh_from_db(fields=["status"])
 
