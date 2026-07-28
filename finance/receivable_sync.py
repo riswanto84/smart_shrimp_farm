@@ -76,34 +76,6 @@ def _get_synced_account(sale):
 
 @transaction.atomic
 
-def _sync_sale_payment_status(sale, receivable=None):
-    """Pastikan status nota mengikuti saldo piutang sebagai sumber kebenaran."""
-    from decimal import Decimal
-
-    balance = None
-    if receivable is not None:
-        balance = getattr(receivable, 'balance', None)
-        if balance is None:
-            balance = getattr(receivable, 'remaining_balance', None)
-        if balance is None:
-            balance = getattr(receivable, 'saldo', None)
-
-    if balance is None:
-        total = getattr(sale, 'total_amount', Decimal('0')) or Decimal('0')
-        paid = (
-            (getattr(sale, 'cash_amount', Decimal('0')) or Decimal('0'))
-            + (getattr(sale, 'transfer_amount', Decimal('0')) or Decimal('0'))
-            + (getattr(sale, 'qris_amount', Decimal('0')) or Decimal('0'))
-            + (getattr(sale, 'other_payment_amount', Decimal('0')) or Decimal('0'))
-        )
-        balance = total - paid
-
-    new_status = 'Lunas' if balance <= Decimal('0') else 'Belum Lunas'
-    if getattr(sale, 'status', None) != new_status:
-        sale.status = new_status
-        sale.save(update_fields=['status'])
-
-    return new_status
 
 def sync_sale_receivable(sale):
     """Membuat/memperbarui kartu piutang untuk satu nota.
@@ -190,6 +162,22 @@ def sync_sale_receivable(sale):
         auto_payment.delete()
 
     _sync_sale_payment_status(sale)
+
+    from decimal import Decimal
+
+    total_amount = getattr(sale, 'total_amount', Decimal('0')) or Decimal('0')
+    paid_amount = (
+        (getattr(sale, 'cash_amount', Decimal('0')) or Decimal('0'))
+        + (getattr(sale, 'transfer_amount', Decimal('0')) or Decimal('0'))
+        + (getattr(sale, 'qris_amount', Decimal('0')) or Decimal('0'))
+        + (getattr(sale, 'other_payment_amount', Decimal('0')) or Decimal('0'))
+    )
+
+    # Status nota mengikuti pembayaran aktual.
+    calculated_status = 'Lunas' if paid_amount >= total_amount and total_amount > 0 else 'Belum Lunas'
+    if getattr(sale, 'status', None) != calculated_status:
+        sale.status = calculated_status
+        sale.save(update_fields=['status'])
 
     return account
 
