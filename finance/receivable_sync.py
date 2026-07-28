@@ -163,18 +163,19 @@ def sync_sale_receivable(sale):
 
     _sync_sale_payment_status(sale)
 
-    from decimal import Decimal
-
-    total_amount = getattr(sale, 'total_amount', Decimal('0')) or Decimal('0')
+    total_amount = _money(getattr(sale, 'total_amount', Decimal('0')))
     paid_amount = (
-        (getattr(sale, 'cash_amount', Decimal('0')) or Decimal('0'))
-        + (getattr(sale, 'transfer_amount', Decimal('0')) or Decimal('0'))
-        + (getattr(sale, 'qris_amount', Decimal('0')) or Decimal('0'))
-        + (getattr(sale, 'other_payment_amount', Decimal('0')) or Decimal('0'))
+        _money(getattr(sale, 'cash_amount', Decimal('0')))
+        + _money(getattr(sale, 'transfer_amount', Decimal('0')))
+        + _money(getattr(sale, 'qris_amount', Decimal('0')))
+        + _money(getattr(sale, 'other_payment_amount', Decimal('0')))
     )
 
-    # Status nota mengikuti pembayaran aktual.
-    calculated_status = 'Lunas' if paid_amount >= total_amount and total_amount > 0 else 'Belum Lunas'
+    calculated_status = (
+        'Lunas'
+        if total_amount > Decimal('0') and paid_amount >= total_amount
+        else 'Belum Lunas'
+    )
     if getattr(sale, 'status', None) != calculated_status:
         sale.status = calculated_status
         sale.save(update_fields=['status'])

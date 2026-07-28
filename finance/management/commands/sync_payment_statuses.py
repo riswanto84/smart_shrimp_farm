@@ -18,6 +18,7 @@ class Command(BaseCommand):
             old_status = sale.status
             sync_sale_receivable(sale)
             sale.refresh_from_db(fields=["status"])
+
             if sale.status != old_status:
                 updated += 1
                 self.stdout.write(
@@ -26,6 +27,7 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Selesai. {checked} nota diperiksa, {updated} status diperbarui."
+                f"Selesai. {checked} nota diperiksa, "
+                f"{updated} status diperbarui."
             )
         )
