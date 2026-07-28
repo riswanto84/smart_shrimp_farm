@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from accounts.rbac import permission_required
 from django.http import FileResponse, JsonResponse, HttpResponseBadRequest, HttpResponse
+from django.db import transaction
 from django.db.models import Sum, Count, Q
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -128,6 +129,7 @@ def _cashier_context(sale=None, item=None, mode='add'):
         'harvests': harvests,
         'sale': sale,
         'item': item,
+        'sale_items': list(sale.items.select_related('harvest__pond').all()) if sale else [],
         'mode': mode,
     }
 
@@ -145,19 +147,95 @@ def _selected_fk_or_none(model, value, label):
     return obj_id
 
 
-def _get_sale_amounts_from_request(request):
-    weight = _parse_decimal_field(request.POST.get('weight_kg'), 'Berat (Kg)')
-    price = parse_rupiah(request.POST.get('price_per_kg'))
-    if price <= 0:
-        raise ValueError('Harga / Kg wajib diisi dengan angka lebih besar dari 0.')
-    subtotal = weight * price
+def _get_sale_items_from_request(request):
+    """Ambil satu atau beberapa item penjualan dari form kasir.
+
+    Mendukung format baru berupa daftar item dan tetap menerima field lama
+    agar kompatibel dengan request atau template lama.
+    """
+    harvest_values = request.POST.getlist('item_harvest')
+    size_values = request.POST.getlist('item_size')
+    weight_values = request.POST.getlist('item_weight')
+    price_values = request.POST.getlist('item_price')
+
+    if not any([harvest_values, size_values, weight_values, price_values]):
+        harvest_values = [request.POST.get('harvest', '')]
+        size_values = [request.POST.get('size_text', '')]
+        weight_values = [request.POST.get('weight_kg', '')]
+        price_values = [request.POST.get('price_per_kg', '')]
+
+    row_count = max(
+        len(harvest_values),
+        len(size_values),
+        len(weight_values),
+        len(price_values),
+    )
+
+    items = []
+    duplicate_keys = set()
+    for index in range(row_count):
+        harvest_raw = harvest_values[index] if index < len(harvest_values) else ''
+        size_text = (size_values[index] if index < len(size_values) else '').strip()
+        weight_raw = weight_values[index] if index < len(weight_values) else ''
+        price_raw = price_values[index] if index < len(price_values) else ''
+
+        # Baris tambahan yang sepenuhnya kosong diabaikan.
+        if not any(str(value or '').strip() for value in [harvest_raw, size_text, weight_raw, price_raw]):
+            continue
+
+        row_number = index + 1
+        if not size_text:
+            raise ValueError(f'Ukuran udang pada baris {row_number} wajib diisi.')
+
+        harvest_id = _selected_fk_or_none(
+            Harvest,
+            harvest_raw,
+            f'Sumber panen pada baris {row_number}',
+        )
+        weight = _parse_decimal_field(
+            weight_raw,
+            f'Berat pada baris {row_number}',
+        )
+        price = parse_rupiah(price_raw)
+        if price <= 0:
+            raise ValueError(
+                f'Harga/Kg pada baris {row_number} wajib lebih besar dari 0.'
+            )
+
+        duplicate_key = (harvest_id or 0, size_text.casefold())
+        if duplicate_key in duplicate_keys:
+            raise ValueError(
+                f'Ukuran {size_text} dengan sumber panen yang sama tercatat lebih dari sekali. '
+                'Gabungkan beratnya dalam satu baris.'
+            )
+        duplicate_keys.add(duplicate_key)
+
+        items.append({
+            'harvest_id': harvest_id,
+            'size_text': size_text,
+            'weight_kg': weight,
+            'price_per_kg': price,
+            'subtotal': weight * price,
+        })
+
+    if not items:
+        raise ValueError('Minimal satu ukuran udang harus dimasukkan.')
+
+    return items
+
+
+def _get_sale_totals_from_request(request, items):
+    subtotal = sum((item['subtotal'] for item in items), Decimal('0'))
+    total_kg = sum((item['weight_kg'] for item in items), Decimal('0'))
     shipping_cost = parse_rupiah(request.POST.get('shipping_cost'))
     packing_cost = parse_rupiah(request.POST.get('packing_cost'))
     other_cost = parse_rupiah(request.POST.get('other_cost'))
+
     if shipping_cost < 0 or packing_cost < 0 or other_cost < 0:
         raise ValueError('Biaya tambahan tidak boleh bernilai negatif.')
+
     total_amount = subtotal + shipping_cost + packing_cost + other_cost
-    return weight, price, subtotal, shipping_cost, packing_cost, other_cost, total_amount
+    return total_kg, subtotal, shipping_cost, packing_cost, other_cost, total_amount
 
 
 def _money(value):
@@ -321,107 +399,152 @@ def add_customer(request):
 def cashier(request):
     if request.method == 'POST':
         try:
-            customer_id = _selected_fk_or_none(Customer, request.POST.get('customer'), 'Pelanggan')
-            harvest_id = _selected_fk_or_none(Harvest, request.POST.get('harvest'), 'Sumber panen')
-            inv = 'INV' + timezone.now().strftime('%Y%m%d%H%M%S')
-            weight, price, subtotal, shipping_cost, packing_cost, other_cost, total_amount = _get_sale_amounts_from_request(request)
-            method, cash, transfer, qris, other_pay, other_name, paid, auto_status = _payment_data(request, total_amount)
-            sale = Sale.objects.create(
-                cycle=get_selected_cycle(request, required=True),
-                invoice_no=inv,
-                customer_id=customer_id,
-                total_kg=weight,
-                total_amount=total_amount,
-                shipping_cost=shipping_cost,
-                packing_cost=packing_cost,
-                other_cost=other_cost,
-                payment_method=method, cash_amount=cash, transfer_amount=transfer, qris_amount=qris, other_payment_amount=other_pay, other_payment_method=other_name,
-                status=auto_status,
-                cashier=request.user,
-                notes=request.POST.get('notes', ''),
-            )
-            SaleItem.objects.create(sale=sale, harvest_id=harvest_id, size_text=request.POST.get('size_text', ''), weight_kg=weight, price_per_kg=price, subtotal=subtotal)
-            _save_sale_documents(request, sale)
-            sync_sale_receivable(sale)
+            with transaction.atomic():
+                customer_id = _selected_fk_or_none(
+                    Customer,
+                    request.POST.get('customer'),
+                    'Pelanggan',
+                )
+                items = _get_sale_items_from_request(request)
+                total_kg, subtotal, shipping_cost, packing_cost, other_cost, total_amount = (
+                    _get_sale_totals_from_request(request, items)
+                )
+                method, cash, transfer, qris, other_pay, other_name, paid, auto_status = (
+                    _payment_data(request, total_amount)
+                )
+
+                inv = 'INV' + timezone.now().strftime('%Y%m%d%H%M%S%f')
+                sale = Sale.objects.create(
+                    cycle=get_selected_cycle(request, required=True),
+                    invoice_no=inv,
+                    customer_id=customer_id,
+                    total_kg=total_kg,
+                    total_amount=total_amount,
+                    shipping_cost=shipping_cost,
+                    packing_cost=packing_cost,
+                    other_cost=other_cost,
+                    payment_method=method,
+                    cash_amount=cash,
+                    transfer_amount=transfer,
+                    qris_amount=qris,
+                    other_payment_amount=other_pay,
+                    other_payment_method=other_name,
+                    status=auto_status,
+                    cashier=request.user,
+                    notes=request.POST.get('notes', ''),
+                )
+                SaleItem.objects.bulk_create([
+                    SaleItem(sale=sale, **item_data)
+                    for item_data in items
+                ])
+                _save_sale_documents(request, sale)
+                sync_sale_receivable(sale)
+
             return redirect('sales:invoice', pk=sale.pk)
         except ValueError as exc:
             messages.error(request, str(exc))
             return render(request, 'sales/cashier.html', _cashier_context())
-    return render(request, 'sales/cashier.html', _cashier_context())
 
+    return render(request, 'sales/cashier.html', _cashier_context())
 
 
 @login_required
 @permission_required('sales.cashier')
 def edit_sale(request, pk):
-    sale = get_object_or_404(Sale.objects.select_related('customer', 'cashier').prefetch_related('items'), pk=pk)
-    customers = Customer.objects.all().order_by('name')
-    harvests = Harvest.objects.select_related('pond').order_by('-date')[:200]
-    item = sale.items.first()
+    sale = get_object_or_404(
+        Sale.objects.select_related('customer', 'cashier').prefetch_related(
+            'items__harvest__pond',
+            'documents',
+        ),
+        pk=pk,
+    )
 
     if request.method == 'POST':
         invoice_no = (request.POST.get('invoice_no') or sale.invoice_no).strip()
         if Sale.objects.filter(invoice_no=invoice_no).exclude(pk=sale.pk).exists():
-            messages.error(request, 'Nomor nota sudah digunakan. Silakan gunakan nomor nota lain.')
-            return render(request, 'sales/sale_form.html', {'sale': sale, 'item': item, 'customers': customers, 'harvests': harvests, 'mode': 'edit'})
+            messages.error(
+                request,
+                'Nomor nota sudah digunakan. Silakan gunakan nomor nota lain.',
+            )
+            return render(
+                request,
+                'sales/sale_form.html',
+                _cashier_context(sale=sale, item=sale.items.first(), mode='edit'),
+            )
 
         try:
-            customer_id = _selected_fk_or_none(Customer, request.POST.get('customer'), 'Pelanggan')
-            harvest_id = _selected_fk_or_none(Harvest, request.POST.get('harvest'), 'Sumber panen')
-            weight, price, subtotal, shipping_cost, packing_cost, other_cost, total_amount = _get_sale_amounts_from_request(request)
+            with transaction.atomic():
+                customer_id = _selected_fk_or_none(
+                    Customer,
+                    request.POST.get('customer'),
+                    'Pelanggan',
+                )
+                items = _get_sale_items_from_request(request)
+                total_kg, subtotal, shipping_cost, packing_cost, other_cost, total_amount = (
+                    _get_sale_totals_from_request(request, items)
+                )
+                method, cash, transfer, qris, other_pay, other_name, paid, auto_status = (
+                    _payment_data(request, total_amount)
+                )
+
+                requested_status = (request.POST.get('status') or auto_status).strip()
+                if requested_status not in {'Lunas', 'Belum Lunas'}:
+                    requested_status = auto_status
+
+                old_total_amount = sale.total_amount
+                sale.invoice_no = invoice_no
+                sale.customer_id = customer_id
+                sale.total_kg = total_kg
+                sale.total_amount = total_amount
+                sale.shipping_cost = shipping_cost
+                sale.packing_cost = packing_cost
+                sale.other_cost = other_cost
+                sale.payment_method = method
+                sale.cash_amount = cash
+                sale.transfer_amount = transfer
+                sale.qris_amount = qris
+                sale.other_payment_amount = other_pay
+                sale.other_payment_method = other_name
+                sale.status = requested_status
+                sale.notes = request.POST.get('notes', '')
+
+                if old_total_amount != total_amount and sale.status != 'Lunas':
+                    sale.midtrans_order_id = ''
+                    sale.midtrans_snap_token = ''
+                    sale.midtrans_payment_url = ''
+                    sale.midtrans_status = ''
+                    sale.midtrans_transaction_id = ''
+                sale.save()
+
+                # Seluruh detail item diganti sesuai isi keranjang terbaru.
+                sale.items.all().delete()
+                SaleItem.objects.bulk_create([
+                    SaleItem(sale=sale, **item_data)
+                    for item_data in items
+                ])
+
+                _save_sale_documents(request, sale)
+                sync_sale_receivable(sale)
+
+            messages.success(
+                request,
+                'Nota penjualan dan seluruh ukuran udang berhasil diperbarui.',
+            )
+            return redirect('sales:invoice', pk=sale.pk)
         except ValueError as exc:
             messages.error(request, str(exc))
-            return render(request, 'sales/sale_form.html', {'sale': sale, 'item': item, 'customers': customers, 'harvests': harvests, 'mode': 'edit'})
-        try:
-            method, cash, transfer, qris, other_pay, other_name, paid, auto_status = _payment_data(request, total_amount)
-        except ValueError as exc:
-            messages.error(request, str(exc))
-            return render(request, 'sales/sale_form.html', {'sale': sale, 'item': item, 'customers': customers, 'harvests': harvests, 'mode': 'edit'})
+            return render(
+                request,
+                'sales/sale_form.html',
+                _cashier_context(sale=sale, item=sale.items.first(), mode='edit'),
+            )
 
-        requested_status = (request.POST.get('status') or auto_status).strip()
-        if requested_status not in {'Lunas', 'Belum Lunas'}:
-            requested_status = auto_status
-        old_total_amount = sale.total_amount
+    return render(
+        request,
+        'sales/sale_form.html',
+        _cashier_context(sale=sale, item=sale.items.first(), mode='edit'),
+    )
 
-        sale.invoice_no = invoice_no
-        sale.customer_id = customer_id
-        sale.total_kg = weight
-        sale.total_amount = total_amount
-        sale.shipping_cost = shipping_cost
-        sale.packing_cost = packing_cost
-        sale.other_cost = other_cost
-        sale.payment_method = method
-        sale.cash_amount = cash
-        sale.transfer_amount = transfer
-        sale.qris_amount = qris
-        sale.other_payment_amount = other_pay
-        sale.other_payment_method = other_name
-        sale.status = requested_status
-        sale.notes = request.POST.get('notes', '')
-        if old_total_amount != total_amount and sale.status != 'Lunas':
-            # Jika total nota berubah, link Snap lama tidak lagi sesuai nominal baru.
-            sale.midtrans_order_id = ''
-            sale.midtrans_snap_token = ''
-            sale.midtrans_payment_url = ''
-            sale.midtrans_status = ''
-            sale.midtrans_transaction_id = ''
-        sale.save()
-
-        if item is None:
-            item = SaleItem(sale=sale)
-        item.harvest_id = harvest_id
-        item.size_text = request.POST.get('size_text', '')
-        item.weight_kg = weight
-        item.price_per_kg = price
-        item.subtotal = subtotal
-        item.save()
-        _save_sale_documents(request, sale)
-        sync_sale_receivable(sale)
-
-        messages.success(request, 'Nota penjualan berhasil diperbarui dan piutang usaha telah disinkronkan.')
-        return redirect('sales:invoice', pk=sale.pk)
-
-    return render(request, 'sales/sale_form.html', {'sale': sale, 'item': item, 'customers': customers, 'harvests': harvests, 'mode': 'edit'})
 
 def _sales_queryset(request):
     date_from, date_to = get_date_range(request)

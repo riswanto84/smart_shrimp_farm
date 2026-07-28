@@ -1,325 +1,355 @@
 {% extends 'base.html' %}
 {% load currency %}
-{% load l10n %}
 {% block content %}
-<style id="invoice-desktop-layout-fix">
-/* Paksa layout desktop dua kolom tanpa wrapping. Ini menghindari perbedaan viewport/zoom VPS. */
-.invoice-edit-page{
-  max-width:none !important;
-  width:100% !important;
-  overflow-x:auto !important;
-}
-.invoice-edit-shell{
-  display:flex !important;
-  flex-direction:row !important;
-  flex-wrap:nowrap !important;
-  align-items:flex-start !important;
-  gap:22px !important;
-  width:100% !important;
-  min-width:980px !important;
-}
-.invoice-edit-shell>.form-pro{
-  flex:1 1 auto !important;
-  width:auto !important;
-  min-width:620px !important;
-  max-width:none !important;
-}
-.invoice-edit-shell>.invoice-summary-side{
-  display:flex !important;
-  flex:0 0 320px !important;
-  width:320px !important;
-  min-width:320px !important;
-  max-width:320px !important;
-  flex-direction:column !important;
-  position:sticky !important;
-  top:18px !important;
-  align-self:flex-start !important;
-  margin:0 !important;
-  order:2 !important;
-}
-@media (max-width:520px){
-  .invoice-edit-page{overflow-x:visible !important;}
-  .invoice-edit-shell{
-    display:block !important;
-    min-width:0 !important;
-  }
-  .invoice-edit-shell>.form-pro{
-    min-width:0 !important;
-    width:100% !important;
-  }
-  .invoice-edit-shell>.invoice-summary-side{
-    position:static !important;
-    width:100% !important;
-    min-width:0 !important;
-    max-width:none !important;
-    margin-top:18px !important;
-  }
-}
-</style>
-<div class="form-page-pro invoice-edit-page">
-  <div class="form-hero-pro invoice-edit-hero">
+<div class="form-page-pro">
+  <div class="form-hero-pro">
     <div class="form-title-wrap">
-      <div class="form-title-icon"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+      <div class="form-title-icon"><i class="fa-solid fa-cash-register"></i></div>
       <div>
-        <div class="invoice-title-line">
-          <h1>{% if mode == 'edit' %}Edit Nota Penjualan{% else %}Kasir Penjualan{% endif %}</h1>
-          {% if mode == 'edit' %}<span class="invoice-number-chip">{{ sale.invoice_no }}</span>{% endif %}
-        </div>
-        <p>{% if mode == 'edit' %}Perbarui transaksi, pembayaran, dan dokumen dalam satu tampilan yang ringkas.{% else %}Input penjualan udang fresh mentah dengan biaya opsional dan pembayaran online.{% endif %}</p>
+        <h1>{% if mode == 'edit' %}Edit Nota Penjualan{% else %}Kasir Penjualan{% endif %}</h1>
+        <p>Satu pelanggan dapat membeli beberapa ukuran udang dalam satu nomor nota.</p>
       </div>
     </div>
-    {% if mode == 'edit' %}
-    <div class="invoice-header-meta">
-      <span class="status-chip {% if sale.status == 'Lunas' %}paid{% else %}unpaid{% endif %}"><i class="fa-solid {% if sale.status == 'Lunas' %}fa-circle-check{% else %}fa-clock{% endif %}"></i>{{ sale.status }}</span>
-      <span class="meta-chip"><i class="fa-regular fa-credit-card"></i>{{ sale.payment_method|default:'-' }}</span>
-      <span class="meta-chip"><i class="fa-regular fa-calendar"></i>{{ sale.date|date:'d M Y' }}</span>
+    <div class="form-breadcrumb-pro">
+      <i class="fa-solid fa-house"></i><span>/</span>
+      <b>{% if mode == 'edit' %}Edit Nota{% else %}Kasir Penjualan{% endif %}</b>
     </div>
-    {% else %}
-    <div class="form-breadcrumb-pro"><i class="fa-solid fa-house"></i><span>/</span><a href="{% url 'sales:invoices' %}">Nota</a><span>/</span><b>Kasir Penjualan</b></div>
-    {% endif %}
   </div>
 
-  {% if messages %}
-    {% for message in messages %}
-      <div class="alert alert-{{ message.tags|default:'info' }} form-alert-pro">{{ message }}</div>
-    {% endfor %}
-  {% endif %}
+  <div class="form-shell-pro">
+    <form method="post" enctype="multipart/form-data" class="form-pro" id="saleFormPro">
+      {% csrf_token %}
 
-  <div class="form-shell-pro invoice-edit-shell">
-    <form method="post" enctype="multipart/form-data" class="form-pro" id="saleFormPro">{% csrf_token %}
       {% if mode == 'edit' %}
       <section class="form-section-pro">
-        <div class="section-head-pro"><i class="fa-solid fa-receipt"></i><div><h2>Informasi Nota</h2><p>Nomor nota dapat diubah selama belum digunakan nota lain.</p></div></div>
-        <div class="form-grid-pro two">
-          <div class="field-pro">
-            <label>Nomor Nota</label>
-            <div class="input-icon-pro"><i class="fa-solid fa-hashtag"></i><input class="form-control" name="invoice_no" value="{{ sale.invoice_no }}" required></div>
-            <small>Nomor nota tidak boleh sama dengan nota lain.</small>
-          </div>
-          <div class="field-pro">
-            <label>Tanggal Nota</label>
-            <div class="input-icon-pro muted"><i class="fa-regular fa-calendar"></i><input class="form-control" value="{{ sale.date|date:'d/m/Y H:i' }}" disabled></div>
-            <small>Tanggal mengikuti waktu pembuatan transaksi.</small>
-          </div>
+        <div class="section-head-pro"><i class="fa-solid fa-receipt"></i><div><h2>Identitas Nota</h2></div></div>
+        <div class="field-pro">
+          <label>Nomor Nota</label>
+          <input class="form-control" name="invoice_no" value="{{ sale.invoice_no }}" required>
         </div>
       </section>
       {% endif %}
 
       <section class="form-section-pro">
-        <div class="section-head-pro"><i class="fa-solid fa-user-tag"></i><div><h2>Informasi Pelanggan & Panen</h2><p>Pilih pelanggan dan sumber panen bila transaksi terhubung dengan data panen.</p></div></div>
-        <div class="form-grid-pro two">
-          <div class="field-pro">
-            <label>Pelanggan</label>
-            <input type="hidden" name="customer" id="customerIdPro" value="{{ sale.customer_id|default:'' }}">
-            <div class="input-icon-pro"><i class="fa-solid fa-users"></i><input class="form-control" id="customerSearchPro" list="customerListPro" value="{% if sale.customer %}{{ sale.customer.name }}{% if sale.customer.phone %} - {{ sale.customer.phone }}{% endif %}{% endif %}" placeholder="Cari nama / no HP pelanggan..." autocomplete="off"></div>
-            <datalist id="customerListPro">{% for c in customers %}<option data-id="{{ c.id }}" value="{{ c.name }}{% if c.phone %} - {{ c.phone }}{% endif %}{% if c.email %} - {{ c.email }}{% endif %}"></option>{% endfor %}</datalist>
-          </div>
-          <div class="field-pro">
-            <label>Sumber Panen</label>
-            <input type="hidden" name="harvest" id="harvestIdPro" value="{% if item %}{{ item.harvest_id|default:'' }}{% endif %}">
-            <div class="input-icon-pro"><i class="fa-solid fa-water"></i><input class="form-control" id="harvestSearchPro" list="harvestListPro" value="{% if item and item.harvest %}{{ item.harvest.pond.name }} - {{ item.harvest.date|date:'d/m/Y' }} - {{ item.harvest.total_kg|angka:2 }} kg{% else %}Tanpa sumber panen{% endif %}" placeholder="Cari kolam / tanggal panen..." autocomplete="off"></div>
-            <datalist id="harvestListPro"><option data-id="" value="Tanpa sumber panen"></option>{% for h in harvests %}<option data-id="{{ h.id }}" value="{{ h.pond.name }} - {{ h.date|date:'d/m/Y' }} - {{ h.total_kg|angka:2 }} kg"></option>{% endfor %}</datalist>
-          </div>
+        <div class="section-head-pro">
+          <i class="fa-solid fa-user-tag"></i>
+          <div><h2>Informasi Pelanggan</h2><p>Pilih pelanggan untuk seluruh item dalam nota ini.</p></div>
+        </div>
+        <div class="field-pro">
+          <label>Pelanggan</label>
+          <select class="form-select" name="customer">
+            <option value="">Pelanggan umum/tanpa data pelanggan</option>
+            {% for c in customers %}
+            <option value="{{ c.id }}" {% if sale and sale.customer_id == c.id %}selected{% endif %}>
+              {{ c.name }}{% if c.phone %} — {{ c.phone }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
         </div>
       </section>
 
       <section class="form-section-pro">
-        <div class="section-head-pro"><i class="fa-solid fa-cube"></i><div><h2>Informasi Produk</h2><p>Masukkan ukuran, berat, dan harga jual per kilogram.</p></div></div>
-        <div class="field-pro size-field-pro">
-          <label>Ukuran Udang (ekor/kg)</label>
-          <input class="form-control" name="size_text" id="sizeInputPro" value="{{ item.size_text|default:'' }}" placeholder="Contoh: 50 / 40-50 / Campur" required>
-          <div class="size-pills-pro" data-target="sizeInputPro"><button type="button">30</button><button type="button">40</button><button type="button">50</button><button type="button">60</button><button type="button">70</button><button type="button">80</button><button type="button">100</button></div>
-        </div>
-        <div class="form-grid-pro two">
-          <div class="field-pro">
-            <label>Berat (Kg)</label>
-            <div class="input-icon-pro"><i class="fa-solid fa-scale-balanced"></i><input class="form-control numeric-decimal" type="text" inputmode="decimal" name="weight_kg" id="weightInputPro" value="{{ item.weight_kg|default:sale.total_kg|unlocalize }}" required></div>
-          </div>
-          <div class="field-pro">
-            <label>Harga / Kg (Rp)</label>
-            <div class="input-icon-pro prefix"><span>Rp</span><input class="form-control" name="price_per_kg" id="priceInputPro" inputmode="numeric" data-rupiah-input value="{{ item.price_per_kg|angka:0|default:'' }}" placeholder="70.000" required></div>
-            <small>Format otomatis Rupiah, contoh Rp 70.000/kg.</small>
+        <div class="section-head-pro">
+          <i class="fa-solid fa-basket-shopping"></i>
+          <div>
+            <h2>Keranjang Ukuran Udang</h2>
+            <p>Tambahkan satu baris untuk setiap ukuran yang dibeli pelanggan.</p>
           </div>
         </div>
+
+        <div id="saleItemsContainer">
+          {% if sale_items %}
+            {% for i in sale_items %}
+            <div class="sale-item-row" data-item-row>
+              <div class="sale-item-head">
+                <strong><i class="fa-solid fa-shrimp"></i> Item <span data-row-number>{{ forloop.counter }}</span></strong>
+                <button type="button" class="btn btn-sm btn-outline-danger" data-remove-item>
+                  <i class="fa-solid fa-trash"></i> Hapus
+                </button>
+              </div>
+              <div class="form-grid-pro four">
+                <div class="field-pro">
+                  <label>Sumber Panen</label>
+                  <select class="form-select" name="item_harvest">
+                    <option value="">Tanpa sumber panen</option>
+                    {% for h in harvests %}
+                    <option value="{{ h.id }}" {% if i.harvest_id == h.id %}selected{% endif %}>
+                      {{ h.pond.name }} — {{ h.date|date:'d/m/Y' }} — {{ h.total_kg|angka:2 }} kg
+                    </option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="field-pro">
+                  <label>Ukuran (ekor/kg)</label>
+                  <input class="form-control" name="item_size" value="{{ i.size_text }}" placeholder="Contoh: 40" required>
+                </div>
+                <div class="field-pro">
+                  <label>Berat (Kg)</label>
+                  <input class="form-control item-weight" name="item_weight" value="{{ i.weight_kg|floatformat:2 }}" inputmode="decimal" placeholder="0,00" required>
+                </div>
+                <div class="field-pro">
+                  <label>Harga/Kg (Rp)</label>
+                  <input class="form-control item-price" name="item_price" value="{{ i.price_per_kg|floatformat:0 }}" inputmode="numeric" data-rupiah-input placeholder="70.000" required>
+                </div>
+              </div>
+              <div class="item-subtotal-line">
+                <span>Subtotal item</span><strong data-item-subtotal>Rp 0</strong>
+              </div>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div class="sale-item-row" data-item-row>
+              <div class="sale-item-head">
+                <strong><i class="fa-solid fa-shrimp"></i> Item <span data-row-number>1</span></strong>
+                <button type="button" class="btn btn-sm btn-outline-danger" data-remove-item>
+                  <i class="fa-solid fa-trash"></i> Hapus
+                </button>
+              </div>
+              <div class="form-grid-pro four">
+                <div class="field-pro">
+                  <label>Sumber Panen</label>
+                  <select class="form-select" name="item_harvest">
+                    <option value="">Tanpa sumber panen</option>
+                    {% for h in harvests %}
+                    <option value="{{ h.id }}">{{ h.pond.name }} — {{ h.date|date:'d/m/Y' }} — {{ h.total_kg|angka:2 }} kg</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="field-pro"><label>Ukuran (ekor/kg)</label><input class="form-control" name="item_size" placeholder="Contoh: 40" required></div>
+                <div class="field-pro"><label>Berat (Kg)</label><input class="form-control item-weight" name="item_weight" inputmode="decimal" placeholder="0,00" required></div>
+                <div class="field-pro"><label>Harga/Kg (Rp)</label><input class="form-control item-price" name="item_price" inputmode="numeric" data-rupiah-input placeholder="70.000" required></div>
+              </div>
+              <div class="item-subtotal-line"><span>Subtotal item</span><strong data-item-subtotal>Rp 0</strong></div>
+            </div>
+          {% endif %}
+        </div>
+
+        <button type="button" class="btn btn-outline-primary mt-3" id="addSaleItem">
+          <i class="fa-solid fa-plus"></i> Tambah Ukuran Udang
+        </button>
       </section>
 
       <section class="form-section-pro soft">
-        <div class="section-head-pro"><i class="fa-solid fa-circle-plus"></i><div><h2>Biaya Tambahan Opsional</h2><p>Kosongkan bila tidak ada. Nilai ini akan ditambahkan ke total akhir nota.</p></div></div>
+        <div class="section-head-pro"><i class="fa-solid fa-circle-plus"></i><div><h2>Biaya Tambahan</h2><p>Nilai ditambahkan setelah subtotal seluruh item.</p></div></div>
         <div class="form-grid-pro three">
-          <div class="field-pro"><label>Ongkos Kirim (Rp)</label><div class="input-icon-pro"><i class="fa-solid fa-truck-fast"></i><input class="form-control" name="shipping_cost" inputmode="numeric" data-rupiah-input value="{{ sale.shipping_cost|angka:0 }}" placeholder="0"></div></div>
-          <div class="field-pro"><label>Pengepakan (Rp)</label><div class="input-icon-pro"><i class="fa-solid fa-box-open"></i><input class="form-control" name="packing_cost" inputmode="numeric" data-rupiah-input value="{{ sale.packing_cost|angka:0 }}" placeholder="0"></div></div>
-          <div class="field-pro"><label>Biaya Lainnya (Rp)</label><div class="input-icon-pro"><i class="fa-solid fa-ellipsis"></i><input class="form-control" name="other_cost" inputmode="numeric" data-rupiah-input value="{{ sale.other_cost|angka:0 }}" placeholder="0"></div></div>
+          <div class="field-pro"><label>Ongkos Kirim (Rp)</label><input class="form-control" name="shipping_cost" value="{% if sale %}{{ sale.shipping_cost|floatformat:0 }}{% endif %}" inputmode="numeric" data-rupiah-input placeholder="0"></div>
+          <div class="field-pro"><label>Pengepakan (Rp)</label><input class="form-control" name="packing_cost" value="{% if sale %}{{ sale.packing_cost|floatformat:0 }}{% endif %}" inputmode="numeric" data-rupiah-input placeholder="0"></div>
+          <div class="field-pro"><label>Biaya Lainnya (Rp)</label><input class="form-control" name="other_cost" value="{% if sale %}{{ sale.other_cost|floatformat:0 }}{% endif %}" inputmode="numeric" data-rupiah-input placeholder="0"></div>
         </div>
       </section>
 
       <section class="form-section-pro">
-        <div class="section-head-pro"><i class="fa-solid fa-credit-card"></i><div><h2>Pembayaran & Catatan</h2><p>Atur metode pembayaran, status nota, dan catatan untuk pelanggan.</p></div></div>
+        <div class="section-head-pro"><i class="fa-solid fa-credit-card"></i><div><h2>Pembayaran dan Catatan</h2></div></div>
         <div class="form-grid-pro two">
-          <div class="field-pro"><label>Metode Pembayaran</label><div class="input-icon-pro"><i class="fa-regular fa-credit-card"></i><select class="form-select" name="payment_method" id="paymentMethodPro">
-            <option value="Cash" {% if sale.payment_method == 'Cash' %}selected{% endif %}>Cash</option><option value="Transfer" {% if sale.payment_method == 'Transfer' %}selected{% endif %}>Transfer</option><option value="QRIS" {% if sale.payment_method == 'QRIS' %}selected{% endif %}>QRIS</option><option value="Tempo" {% if sale.payment_method == 'Tempo' %}selected{% endif %}>Tempo</option><option value="Midtrans" {% if sale.payment_method == 'Midtrans' %}selected{% endif %}>Midtrans</option><option value="Campuran" {% if sale.payment_method == 'Campuran' %}selected{% endif %}>Pembayaran Campuran</option><option value="Lainnya" {% if sale.payment_method == 'Lainnya' %}selected{% endif %}>Metode Lainnya</option>
-          </select></div><small>Pilih metode pembayaran yang digunakan pelanggan.</small></div>
-          {% if mode == 'edit' %}<div class="field-pro"><label>Status Pembayaran</label><div class="input-icon-pro"><i class="fa-solid fa-circle-check"></i><select class="form-select" name="status" id="paymentStatusPro" required><option value="Belum Lunas" {% if sale.status == 'Belum Lunas' %}selected{% endif %}>Belum Lunas</option><option value="Lunas" {% if sale.status == 'Lunas' %}selected{% endif %}>Lunas</option></select></div><small>Status dapat diperbarui secara manual saat mengedit nota.</small></div>{% endif %}
+          <div class="field-pro">
+            <label>Metode Pembayaran</label>
+            <select class="form-select" name="payment_method" id="paymentMethodPro">
+              {% for value, label in sale.PAYMENT %}
+              <option value="{{ value }}" {% if sale and sale.payment_method == value %}selected{% endif %}>{{ label }}</option>
+              {% empty %}
+              <option value="Cash">Cash</option><option value="Transfer">Transfer</option><option value="QRIS">QRIS</option><option value="Tempo">Tempo</option><option value="Midtrans">Midtrans</option><option value="Campuran">Pembayaran Campuran</option><option value="Lainnya">Metode Lainnya</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% if mode == 'edit' %}
+          <div class="field-pro">
+            <label>Status</label>
+            <select class="form-select" name="status">
+              <option value="Lunas" {% if sale.status == 'Lunas' %}selected{% endif %}>Lunas</option>
+              <option value="Belum Lunas" {% if sale.status == 'Belum Lunas' %}selected{% endif %}>Belum Lunas</option>
+            </select>
+          </div>
+          {% endif %}
         </div>
+
         <div id="mixedPaymentFields" class="form-grid-pro two" style="display:none">
-          <div class="field-pro"><label>Cash (Rp)</label><input class="form-control" name="cash_amount" inputmode="numeric" data-rupiah-input value="{% if sale %}{{ sale.cash_amount|floatformat:0 }}{% endif %}"></div>
-          <div class="field-pro"><label>Transfer (Rp)</label><input class="form-control" name="transfer_amount" inputmode="numeric" data-rupiah-input value="{% if sale %}{{ sale.transfer_amount|floatformat:0 }}{% endif %}"></div>
-          <div class="field-pro"><label>QRIS (Rp)</label><input class="form-control" name="qris_amount" inputmode="numeric" data-rupiah-input value="{% if sale %}{{ sale.qris_amount|floatformat:0 }}{% endif %}"></div>
-          <div class="field-pro"><label>Pembayaran Lainnya (Rp)</label><input class="form-control" name="other_payment_amount" inputmode="numeric" data-rupiah-input value="{% if sale %}{{ sale.other_payment_amount|floatformat:0 }}{% endif %}"></div>
+          <div class="field-pro"><label>Cash (Rp)</label><input class="form-control" name="cash_amount" value="{% if sale %}{{ sale.cash_amount|floatformat:0 }}{% endif %}" inputmode="numeric" data-rupiah-input></div>
+          <div class="field-pro"><label>Transfer (Rp)</label><input class="form-control" name="transfer_amount" value="{% if sale %}{{ sale.transfer_amount|floatformat:0 }}{% endif %}" inputmode="numeric" data-rupiah-input></div>
+          <div class="field-pro"><label>QRIS (Rp)</label><input class="form-control" name="qris_amount" value="{% if sale %}{{ sale.qris_amount|floatformat:0 }}{% endif %}" inputmode="numeric" data-rupiah-input></div>
+          <div class="field-pro"><label>Pembayaran Lainnya (Rp)</label><input class="form-control" name="other_payment_amount" value="{% if sale %}{{ sale.other_payment_amount|floatformat:0 }}{% endif %}" inputmode="numeric" data-rupiah-input></div>
         </div>
-        <div id="otherPaymentName" class="field-pro" style="display:none"><label>Nama Metode Lainnya</label><input class="form-control" name="other_payment_method" value="{% if sale %}{{ sale.other_payment_method }}{% endif %}" placeholder="Contoh: E-Wallet, Giro, Setoran bank"></div>
-        <div class="field-pro"><label>Catatan</label><textarea class="form-control" name="notes" rows="4" placeholder="Tulis catatan tambahan (opsional)...">{% if sale %}{{ sale.notes }}{% endif %}</textarea></div>
+
+        <div id="otherPaymentName" class="field-pro" style="display:none">
+          <label>Nama Metode Lainnya</label>
+          <input class="form-control" name="other_payment_method" value="{% if sale %}{{ sale.other_payment_method }}{% endif %}">
+        </div>
+
+        <div class="field-pro"><label>Catatan</label><textarea class="form-control" name="notes" rows="4">{% if sale %}{{ sale.notes }}{% endif %}</textarea></div>
+
         <div class="form-grid-pro two">
           <div class="field-pro"><label>Jenis Dokumen</label><select class="form-select" name="document_type"><option>Bukti Transfer</option><option>Tanda Terima</option><option>Kwitansi</option><option>Invoice</option><option>Surat Jalan</option><option>Faktur Pajak</option><option value="Lainnya">Dokumen Lainnya</option></select></div>
-          <div class="field-pro"><label>Upload Bukti / Tanda Terima</label><input type="file" class="form-control" name="documents" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"><small>Maksimal 10 MB per file.</small></div>
+          <div class="field-pro"><label>Upload Bukti/Tanda Terima</label><input type="file" class="form-control" name="documents" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"></div>
         </div>
-        <div class="field-pro"><label>Keterangan Dokumen</label><input class="form-control" name="document_description" placeholder="Contoh: Bukti transfer pembayaran pertama"></div>
-</section>
+        <div class="field-pro"><label>Keterangan Dokumen</label><input class="form-control" name="document_description"></div>
+      </section>
 
-      {% if sale.documents.all %}<section class="form-section-pro"><div class="section-head-pro"><i class="fa-solid fa-paperclip"></i><div><h2>Dokumen Tersimpan</h2><p>Bukti transfer dan tanda terima transaksi.</p></div></div><div class="table-responsive"><table class="table"><thead><tr><th>Jenis</th><th>File</th><th>Keterangan</th><th>Aksi</th></tr></thead><tbody>{% for d in sale.documents.all %}<tr><td>{{ d.document_type }}</td><td><a href="{{ d.file.url }}" target="_blank">{{ d.file.name }}</a></td><td>{{ d.description|default:'-' }}</td><td><button class="btn btn-sm btn-danger" type="submit" formaction="{% url 'sales:delete_sale_document' d.id %}" formmethod="post" formnovalidate onclick="return confirm('Hapus dokumen ini?')" title="Hapus dokumen" aria-label="Hapus dokumen"><i class="fa-solid fa-trash"></i></button></td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
       <div class="form-actions-pro">
-        <button class="btn btn-primary btn-lg"><i class="fa-solid fa-floppy-disk"></i> {% if mode == 'edit' %}Simpan Perubahan{% else %}Simpan & Buat Nota{% endif %}</button>
-        {% if mode == 'edit' %}<a class="btn btn-outline-secondary btn-lg" href="{% url 'sales:invoice' sale.id %}"><i class="fa-solid fa-xmark"></i> Batal</a>{% endif %}
+        <button class="btn btn-primary btn-lg" type="submit">
+          <i class="fa-solid fa-floppy-disk"></i>
+          {% if mode == 'edit' %}Simpan Perubahan{% else %}Simpan dan Buat Nota{% endif %}
+        </button>
+        {% if mode == 'edit' %}
+        <a class="btn btn-outline-secondary btn-lg" href="{% url 'sales:invoice' sale.id %}">Batal</a>
+        {% endif %}
       </div>
     </form>
 
-    <aside class="form-side-pro invoice-summary-side">
-      <div class="side-card-pro total-card-pro invoice-total-card">
-        <span>Total Penjualan</span>
-        <strong id="grandTotalPreview">Rp 0</strong>
+    <aside class="form-side-pro">
+      <div class="side-card-pro total-card-pro">
+        <span>Total Berat</span><strong id="totalWeightPreview">0,00 kg</strong>
         <div class="summary-divider"></div>
-        <div class="summary-money-row"><span>Sudah Dibayar</span><b id="paidAmountPreview">Rp 0</b></div>
-        <div class="summary-money-row"><span>Sisa Piutang</span><b id="outstandingPreview">Rp 0</b></div>
-        <small id="paymentSummaryHint">Nilai diperbarui otomatis dari transaksi.</small>
+        <span>Total Penjualan</span><strong id="grandTotalPreview">Rp 0</strong>
+        <small>Jumlah seluruh item ditambah biaya tambahan.</small>
       </div>
-
-      {% if mode == 'edit' %}
-      <div class="side-card-pro transaction-card-pro">
-        <div class="side-card-title"><i class="fa-solid fa-user"></i><h3>Pelanggan</h3></div>
-        <strong>{{ sale.customer.name|default:'Tanpa pelanggan' }}</strong>
-        {% if sale.customer.phone %}<span><i class="fa-solid fa-phone"></i>{{ sale.customer.phone }}</span>{% endif %}
-        {% if sale.customer.address %}<span><i class="fa-solid fa-location-dot"></i>{{ sale.customer.address|truncatechars:80 }}</span>{% endif %}
+      <div class="side-card-pro">
+        <h3>Transaksi Multiukuran</h3>
+        <div class="side-list-pro">
+          <div><i class="fa-solid fa-layer-group"></i><p><b>Beberapa ukuran</b><small>Size 30, 40, 50, dan lainnya dalam satu nota.</small></p></div>
+          <div><i class="fa-solid fa-receipt"></i><p><b>Satu pelanggan</b><small>Semua item tercatat pada satu nomor nota.</small></p></div>
+          <div><i class="fa-solid fa-calculator"></i><p><b>Total otomatis</b><small>Berat dan subtotal setiap item dihitung otomatis.</small></p></div>
+        </div>
       </div>
-
-      <div class="side-card-pro transaction-card-pro">
-        <div class="side-card-title"><i class="fa-solid fa-water"></i><h3>Sumber Panen</h3></div>
-        {% if item and item.harvest %}
-          <strong>{{ item.harvest.pond.name }}</strong>
-          <div class="mini-info-grid">
-            <div><small>Tanggal</small><b>{{ item.harvest.date|date:'d M Y' }}</b></div>
-            <div><small>Berat</small><b>{{ item.harvest.total_kg|angka:2 }} kg</b></div>
-            <div><small>Size</small><b>{{ item.size_text|default:'-' }} /kg</b></div>
-            <div><small>Harga</small><b>Rp {{ item.price_per_kg|angka:0 }}</b></div>
-          </div>
-        {% else %}
-          <span class="empty-side-info">Transaksi tidak terhubung dengan data panen.</span>
-        {% endif %}
-      </div>
-
-      <div class="side-actions-pro sticky-side-actions">
-        <a class="btn btn-outline-primary w-100" href="{% url 'sales:invoice' sale.id %}"><i class="fa-solid fa-receipt"></i> Lihat Nota</a>
-        <a class="btn btn-light w-100" href="{% url 'sales:invoices' %}"><i class="fa-solid fa-arrow-left"></i> Daftar Nota</a>
-      </div>
-      {% endif %}
     </aside>
   </div>
 </div>
+
+<template id="saleItemTemplate">
+  <div class="sale-item-row" data-item-row>
+    <div class="sale-item-head">
+      <strong><i class="fa-solid fa-shrimp"></i> Item <span data-row-number></span></strong>
+      <button type="button" class="btn btn-sm btn-outline-danger" data-remove-item><i class="fa-solid fa-trash"></i> Hapus</button>
+    </div>
+    <div class="form-grid-pro four">
+      <div class="field-pro">
+        <label>Sumber Panen</label>
+        <select class="form-select" name="item_harvest">
+          <option value="">Tanpa sumber panen</option>
+          {% for h in harvests %}<option value="{{ h.id }}">{{ h.pond.name }} — {{ h.date|date:'d/m/Y' }} — {{ h.total_kg|angka:2 }} kg</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field-pro"><label>Ukuran (ekor/kg)</label><input class="form-control" name="item_size" placeholder="Contoh: 40" required></div>
+      <div class="field-pro"><label>Berat (Kg)</label><input class="form-control item-weight" name="item_weight" inputmode="decimal" placeholder="0,00" required></div>
+      <div class="field-pro"><label>Harga/Kg (Rp)</label><input class="form-control item-price" name="item_price" inputmode="numeric" data-rupiah-input placeholder="70.000" required></div>
+    </div>
+    <div class="item-subtotal-line"><span>Subtotal item</span><strong data-item-subtotal>Rp 0</strong></div>
+  </div>
+</template>
+
+<style>
+.sale-item-row{border:1px solid #dbe5f0;border-radius:16px;padding:16px;margin-bottom:14px;background:#fff}
+.sale-item-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}
+.sale-item-head strong{display:flex;align-items:center;gap:8px}
+.item-subtotal-line{display:flex;justify-content:flex-end;gap:18px;padding-top:10px;border-top:1px dashed #d6e0eb}
+.item-subtotal-line strong{min-width:140px;text-align:right}
+.form-grid-pro.four{grid-template-columns:1.4fr .7fr .7fr .9fr}
+@media(max-width:1100px){.form-grid-pro.four{grid-template-columns:1fr 1fr}}
+@media(max-width:650px){.form-grid-pro.four{grid-template-columns:1fr}.sale-item-head{align-items:flex-start}.item-subtotal-line{justify-content:space-between}}
+</style>
+
 <script>
 (function(){
-  function digits(v){return String(v||'').replace(/[^0-9]/g,'')||'0'}
-  function money(n){return 'Rp ' + Number(n||0).toLocaleString('id-ID')}
-  function bindDatalist(inputId, hiddenId, listId){
-    const input=document.getElementById(inputId), hidden=document.getElementById(hiddenId), list=document.getElementById(listId);
-    if(!input||!hidden||!list) return;
-    function sync(){const opt=[...list.options].find(o=>o.value===input.value);hidden.value=opt ? (opt.dataset.id||'') : '';}
-    input.addEventListener('input', sync); input.addEventListener('change', sync); sync();
-  }
-  bindDatalist('customerSearchPro','customerIdPro','customerListPro');
-  bindDatalist('harvestSearchPro','harvestIdPro','harvestListPro');
-  function parseLocaleDecimal(value){
+  const form=document.getElementById('saleFormPro');
+  const container=document.getElementById('saleItemsContainer');
+  const template=document.getElementById('saleItemTemplate');
+  const addButton=document.getElementById('addSaleItem');
+
+  function digits(value){ return String(value||'').replace(/[^0-9]/g,'') || '0'; }
+  function money(value){ return 'Rp ' + Math.round(Number(value||0)).toLocaleString('id-ID'); }
+  function decimal(value){
     let raw=String(value||'').trim().replace(/\s/g,'').replace(/[^0-9,.-]/g,'');
-    if(!raw) return NaN;
+    if(!raw) return 0;
     const comma=raw.lastIndexOf(','), dot=raw.lastIndexOf('.');
     if(comma>=0 && dot>=0){
-      const decimalSep=comma>dot?',':'.';
-      const thousandSep=decimalSep===','?'.':',';
-      raw=raw.split(thousandSep).join('');
-      const idx=raw.lastIndexOf(decimalSep);
-      raw=raw.slice(0,idx).replace(/[.,]/g,'')+'.'+raw.slice(idx+1).replace(/[.,]/g,'');
+      const sep=comma>dot?',':'.', thousand=sep===','?'.':',';
+      raw=raw.split(thousand).join('');
+      const pos=raw.lastIndexOf(sep);
+      raw=raw.slice(0,pos).replace(/[.,]/g,'')+'.'+raw.slice(pos+1).replace(/[.,]/g,'');
     }else if(comma>=0){
-      const idx=raw.lastIndexOf(',');
-      raw=raw.slice(0,idx).replace(/,/g,'')+'.'+raw.slice(idx+1).replace(/,/g,'');
+      const pos=raw.lastIndexOf(',');
+      raw=raw.slice(0,pos).replace(/,/g,'')+'.'+raw.slice(pos+1).replace(/,/g,'');
     }else if(dot>=0){
-      const idx=raw.lastIndexOf('.');
-      raw=raw.slice(0,idx).replace(/\./g,'')+'.'+raw.slice(idx+1).replace(/\./g,'');
+      const pos=raw.lastIndexOf('.');
+      raw=raw.slice(0,pos).replace(/\./g,'')+'.'+raw.slice(pos+1).replace(/\./g,'');
     }
-    return Number(raw);
+    return Number(raw)||0;
   }
-  function canonicalDecimal(value){
-    const number=parseLocaleDecimal(value);
-    return Number.isFinite(number) ? String(number) : '';
-  }
-  function formatWeight(value){
-    const number=parseLocaleDecimal(value);
-    if(!Number.isFinite(number)) return value;
-    return number.toLocaleString('id-ID',{minimumFractionDigits:0,maximumFractionDigits:2});
-  }
-  function recalc(){
-    const weight = parseLocaleDecimal(document.getElementById('weightInputPro')?.value) || 0;
-    const price = Number(digits(document.getElementById('priceInputPro')?.value));
-    const ship = Number(digits(document.querySelector('[name="shipping_cost"]')?.value));
-    const pack = Number(digits(document.querySelector('[name="packing_cost"]')?.value));
-    const other = Number(digits(document.querySelector('[name="other_cost"]')?.value));
-    const total = weight * price + ship + pack + other;
-    const method = document.getElementById('paymentMethodPro')?.value || '';
-    const status = document.getElementById('paymentStatusPro')?.value || '';
-    let paid = 0;
-    if(method === 'Campuran'){
-      paid = ['cash_amount','transfer_amount','qris_amount','other_payment_amount'].reduce((sum,name)=>sum + Number(digits(document.querySelector(`[name="${name}"]`)?.value)),0);
-    }else if(status === 'Lunas'){
-      paid = total;
-    }
-    paid = Math.min(paid,total);
-    const outstanding = Math.max(total-paid,0);
-    const totalOut = document.getElementById('grandTotalPreview'); if(totalOut) totalOut.textContent = money(total);
-    const paidOut = document.getElementById('paidAmountPreview'); if(paidOut) paidOut.textContent = money(paid);
-    const outstandingOut = document.getElementById('outstandingPreview'); if(outstandingOut) outstandingOut.textContent = money(outstanding);
-    const hint = document.getElementById('paymentSummaryHint');
-    if(hint) hint.textContent = outstanding > 0 ? 'Masih terdapat saldo yang perlu dibayar pelanggan.' : 'Pembayaran transaksi telah lunas.';
-  }
-  document.querySelectorAll('#saleFormPro input, #saleFormPro select').forEach(el => { el.addEventListener('input', recalc); el.addEventListener('change', recalc); });
 
-  document.querySelectorAll('#saleFormPro .numeric-decimal').forEach(function(input){
-    input.addEventListener('input', function(){
-      input.value=input.value.replace(/[^0-9.,]/g,'');
-      recalc();
+  function renumber(){
+    [...container.querySelectorAll('[data-item-row]')].forEach((row,index)=>{
+      row.querySelector('[data-row-number]').textContent=index+1;
+      row.querySelector('[data-remove-item]').disabled=container.querySelectorAll('[data-item-row]').length===1;
     });
-    input.addEventListener('focus', function(){
-      const canonical=canonicalDecimal(input.value);
-      if(canonical) input.value=canonical.replace('.',',');
+  }
+
+  function recalc(){
+    let subtotal=0, totalWeight=0;
+    container.querySelectorAll('[data-item-row]').forEach(row=>{
+      const weight=decimal(row.querySelector('.item-weight')?.value);
+      const price=Number(digits(row.querySelector('.item-price')?.value));
+      const itemTotal=weight*price;
+      totalWeight+=weight;
+      subtotal+=itemTotal;
+      row.querySelector('[data-item-subtotal]').textContent=money(itemTotal);
     });
-    input.addEventListener('blur', function(){
-      if(input.value.trim()) input.value=formatWeight(input.value);
+    const extras=['shipping_cost','packing_cost','other_cost'].reduce((sum,name)=>sum+Number(digits(form.querySelector(`[name="${name}"]`)?.value)),0);
+    document.getElementById('totalWeightPreview').textContent=totalWeight.toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2})+' kg';
+    document.getElementById('grandTotalPreview').textContent=money(subtotal+extras);
+  }
+
+  function bindRow(row){
+    row.querySelectorAll('input,select').forEach(el=>{
+      el.addEventListener('input',recalc);
+      el.addEventListener('change',recalc);
     });
-  });
-  document.getElementById('saleFormPro')?.addEventListener('submit', function(event){
-    const msgs=[];
-    document.querySelectorAll('#saleFormPro .numeric-decimal').forEach(function(input){
-      const canonical=canonicalDecimal(input.value);
-      if(!canonical || Number(canonical)<=0){
-        const label=input.closest('.field-pro')?.querySelector('label')?.innerText || input.name;
-        msgs.push(label + ' harus angka valid. Contoh: 1188,40 atau 1.188,40');
-        input.classList.add('is-invalid');
-      } else {
-        input.classList.remove('is-invalid');
-        input.value=canonical;
+    row.querySelector('[data-remove-item]').addEventListener('click',()=>{
+      if(container.querySelectorAll('[data-item-row]').length>1){
+        row.remove(); renumber(); recalc();
       }
     });
-    if(msgs.length){ event.preventDefault(); alert('Periksa kembali input angka:\n- ' + msgs.join('\n- ')); }
+  }
+
+  container.querySelectorAll('[data-item-row]').forEach(bindRow);
+  addButton.addEventListener('click',()=>{
+    const row=template.content.firstElementChild.cloneNode(true);
+    container.appendChild(row);
+    bindRow(row); renumber(); recalc();
+    row.querySelector('[name="item_size"]').focus();
   });
-  document.querySelectorAll('.size-pills-pro button').forEach(btn => btn.addEventListener('click', function(){ const target=document.getElementById(this.parentElement.dataset.target); if(target){ target.value=this.textContent.trim(); target.dispatchEvent(new Event('input')); }}));
-  recalc();
+
+  form.querySelectorAll('[name="shipping_cost"],[name="packing_cost"],[name="other_cost"]').forEach(el=>{
+    el.addEventListener('input',recalc); el.addEventListener('change',recalc);
+  });
+
+  const method=document.getElementById('paymentMethodPro');
+  const mixed=document.getElementById('mixedPaymentFields');
+  const otherName=document.getElementById('otherPaymentName');
+  function paymentToggle(){
+    mixed.style.display=method.value==='Campuran'?'grid':'none';
+    otherName.style.display=(method.value==='Campuran'||method.value==='Lainnya')?'block':'none';
+  }
+  method.addEventListener('change',paymentToggle);
+  paymentToggle();
+
+  form.addEventListener('submit',event=>{
+    const rows=[...container.querySelectorAll('[data-item-row]')];
+    if(!rows.length){event.preventDefault();alert('Tambahkan minimal satu ukuran udang.');return;}
+    let invalid=false;
+    rows.forEach((row,index)=>{
+      const size=row.querySelector('[name="item_size"]');
+      const weight=row.querySelector('[name="item_weight"]');
+      const price=row.querySelector('[name="item_price"]');
+      if(!size.value.trim() || decimal(weight.value)<=0 || Number(digits(price.value))<=0){
+        invalid=true;
+        [size,weight,price].forEach(el=>el.classList.add('is-invalid'));
+      }else{
+        [size,weight,price].forEach(el=>el.classList.remove('is-invalid'));
+        weight.value=String(decimal(weight.value));
+      }
+    });
+    if(invalid){event.preventDefault();alert('Lengkapi ukuran, berat, dan harga pada seluruh baris item.');}
+  });
+
+  renumber(); recalc();
 })();
 </script>
-
-<script>(function(){const m=document.getElementById('paymentMethodPro'),mix=document.getElementById('mixedPaymentFields'),other=document.getElementById('otherPaymentName');function toggle(){if(!m)return;mix.style.display=m.value==='Campuran'?'grid':'none';other.style.display=(m.value==='Campuran'||m.value==='Lainnya')?'block':'none';}if(m){m.addEventListener('change',toggle);toggle();}})();</script>
 {% endblock %}
