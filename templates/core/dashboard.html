@@ -134,15 +134,28 @@
     </div>
   </section>
   <section class="panel production-panel">
-    <h2>Biomassa Aktif Tersisa <span>(Ton){% if latest_sampling_date %} · Sampling {{ latest_sampling_date|date:"d M Y" }}{% endif %}</span></h2>
-    <div class="donut" style="background:conic-gradient({{ production_gradient }});"><span>Total<br><b>{{ production_total_ton|floatformat:2 }}</b><br>Ton</span></div>
+    <h2>Biomassa Aktif Tersisa — FR <span>(Ton){% if latest_sampling_date %} · Sampling {{ latest_sampling_date|date:"d M Y" }}{% endif %}</span></h2>
+    <div class="donut" style="background:conic-gradient({{ production_gradient }});"><span>Total FR<br><b>{{ production_total_ton|floatformat:2 }}</b><br>Ton</span></div>
     <ul>
       {% for item in production_items %}
       <li><b style="--c:{{ item.color }}"></b> {{ item.pond.name }} <span>{{ item.biomass_ton|floatformat:2 }} Ton</span></li>
       {% empty %}
-      <li>Belum ada data sampling.</li>
+      <li>Belum ada data biomassa FR.</li>
       {% endfor %}
     </ul>
+    <small class="text-muted">Biomassa FR sampling terakhir dikurangi panen parsial dan mortalitas setelah sampling.</small>
+  </section>
+  <section class="panel production-panel">
+    <h2>Biomassa Aktif Tersisa — Index <span>(Ton){% if latest_sampling_date %} · Sampling {{ latest_sampling_date|date:"d M Y" }}{% endif %}</span></h2>
+    <div class="donut" style="background:conic-gradient({{ production_index_gradient }});"><span>Total Index<br><b>{{ production_index_total_ton|floatformat:2 }}</b><br>Ton</span></div>
+    <ul>
+      {% for item in production_index_items %}
+      <li><b style="--c:{{ item.color }}"></b> {{ item.pond.name }} <span>{{ item.biomass_ton|floatformat:2 }} Ton</span></li>
+      {% empty %}
+      <li>Belum ada data biomassa Index.</li>
+      {% endfor %}
+    </ul>
+    <small class="text-muted">Biomassa Index sampling terakhir dikurangi panen parsial dan mortalitas setelah sampling.</small>
   </section>
   <section class="panel doc120-panel" style="grid-column:1 / -1;">
     <div class="panel-head"><h2>Estimasi Produksi Aktif DOC 120 <span>{% if latest_sampling_date %}berdasarkan sampling {{ latest_sampling_date|date:"d M Y" }}{% endif %}</span></h2></div>

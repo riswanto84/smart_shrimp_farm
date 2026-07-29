@@ -283,6 +283,7 @@ def dashboard(request):
             completed_pond_ids.add(pond.id)
 
     production_items = []
+    production_index_items = []
     # Mortalitas siphon setelah sampling terakhir ikut mengurangi populasi dan biomassa tersisa.
     siphon_qs = filter_selected_cycle(
         request,
@@ -382,6 +383,11 @@ def dashboard(request):
             'biomass_kg': float(remaining_biomass),
             'biomass_ton': float(remaining_biomass / Decimal('1000')),
         })
+        production_index_items.append({
+            'pond': pond,
+            'biomass_kg': float(remaining_biomass_index),
+            'biomass_ton': float(remaining_biomass_index / Decimal('1000')),
+        })
         production_total_kg += float(remaining_biomass)
         production_index_total_kg += remaining_biomass_index
         active_projection_records.append(record)
@@ -434,6 +440,17 @@ def dashboard(request):
         cumulative += percentage
         gradient_parts.append(f"{item['color']} {start_pct:.3f}% {cumulative:.3f}%")
     production_gradient = ','.join(gradient_parts) if gradient_parts else '#e2e8f0 0 100%'
+
+    index_gradient_parts = []
+    index_cumulative = 0.0
+    production_index_total_float = float(production_index_total_kg)
+    for index, item in enumerate(production_index_items):
+        item['color'] = palette[index % len(palette)]
+        percentage = (item['biomass_kg'] / production_index_total_float * 100) if production_index_total_float else 0
+        start_pct = index_cumulative
+        index_cumulative += percentage
+        index_gradient_parts.append(f"{item['color']} {start_pct:.3f}% {index_cumulative:.3f}%")
+    production_index_gradient = ','.join(index_gradient_parts) if index_gradient_parts else '#e2e8f0 0 100%'
 
     latest_temperature = latest.temperature if latest else None
     latest_ph = None
@@ -497,11 +514,13 @@ def dashboard(request):
         'temperature_records': temperature_records,
         'temperature_points': temperature_points,
         'production_items': production_items,
+        'production_index_items': production_index_items,
         'production_total_kg': production_total_kg,
         'production_total_ton': production_total_ton,
         'production_index_total_kg': production_index_total_kg,
         'production_index_total_ton': production_index_total_ton,
         'production_gradient': production_gradient,
+        'production_index_gradient': production_index_gradient,
         'active_pond_count': active_pond_count,
         'completed_pond_count': len(completed_pond_ids),
         'total_cycle_potential_ton': total_cycle_potential_ton,
