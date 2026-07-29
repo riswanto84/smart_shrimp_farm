@@ -20,7 +20,7 @@
 
   <div class="alert alert-info border-0 shadow-sm mb-3" role="status">
     <i class="fa-solid fa-circle-info me-2"></i>
-    Grafik hanya memproyeksikan kolam aktif. Panen parsial tetap dihitung dari populasi tersisa; kolam panen total otomatis dikeluarkan.
+    Grafik hanya memproyeksikan kolam aktif. Populasi tersisa otomatis dikurangi panen parsial dan udang mati yang tercatat setelah sampling terakhir; kolam panen total otomatis dikeluarkan.
     {% if completed_pond_count %}<strong>{{ completed_pond_count }} kolam selesai panen tidak disertakan.</strong>{% endif %}
   </div>
 
@@ -50,7 +50,7 @@
     <div class="kpi"><div class="kpi-icon"><i class="fa-solid fa-shrimp"></i></div><span>Size Aktual</span><strong>{{ selected_payload.latest_size|floatformat:0 }}/kg</strong><small>ABW {{ selected_payload.latest_abw|floatformat:2 }} g</small></div>
     <div class="kpi"><div class="kpi-icon"><i class="fa-solid fa-gauge-high"></i></div><span>ADG Prediksi</span><strong>{{ selected_payload.adg|floatformat:3 }} g/hari</strong><small>Target siklus {{ target_adg|floatformat:3 }}</small></div>
     <div class="kpi"><div class="kpi-icon"><i class="fa-solid fa-bullseye"></i></div><span>Size DOC {{ horizon_doc }}</span><strong>{{ selected_payload.projected_size|floatformat:0 }}/kg</strong><small>ABW {{ selected_payload.projected_abw|floatformat:2 }} g</small></div>
-    <div class="kpi"><div class="kpi-icon"><i class="fa-solid fa-weight-hanging"></i></div><span>Biomassa Prediksi</span><strong>{{ selected_payload.projected_biomass_ton|floatformat:2 }} ton</strong><small>Populasi tersisa {{ selected_payload.population|angka0 }} ekor{% if selected_payload.partial_harvest_population_after_sampling %} · dikurangi panen parsial {{ selected_payload.partial_harvest_population_after_sampling|angka0 }} ekor{% endif %}</small></div>
+    <div class="kpi"><div class="kpi-icon"><i class="fa-solid fa-weight-hanging"></i></div><span>Biomassa Prediksi</span><strong>{{ selected_payload.projected_biomass_ton|floatformat:2 }} ton</strong><small>Populasi tersisa {{ selected_payload.population|angka0 }} ekor{% if selected_payload.partial_harvest_population_after_sampling %} · panen parsial −{{ selected_payload.partial_harvest_population_after_sampling|angka0 }}{% endif %}{% if selected_payload.mortality_population_after_sampling %} · mortalitas −{{ selected_payload.mortality_population_after_sampling|angka0 }}{% endif %}</small></div>
     <div class="kpi status-card"><div class="kpi-icon"><i class="fa-solid fa-circle-check"></i></div><span>Status Pertumbuhan</span><strong class="status-{{ selected_payload.status_class }}">{{ selected_payload.growth_status }}</strong><small>Dibanding target ADG siklus</small></div>
   </div>
 
@@ -84,12 +84,15 @@
         <div class="summary-row"><span>Sampling Tersedia</span><b>{{ selected_payload.actual|length }} titik</b></div>
         <div class="summary-row"><span>FCR Terakhir</span><b>{{ selected_payload.fcr|floatformat:2 }}</b></div>
         <div class="summary-row"><span>Populasi Tersisa</span><b>{{ selected_payload.population|angka0 }}</b></div>
-        <div class="summary-row"><span>Panen Parsial Setelah Sampling</span><b>{{ selected_payload.partial_harvest_kg_after_sampling|floatformat:2 }} kg</b></div>
+        <div class="summary-row"><span>Populasi Saat Sampling Terakhir</span><b>{{ selected_payload.population_at_latest_sampling|angka0 }} ekor</b></div>
+        <div class="summary-row"><span>Panen Parsial Setelah Sampling</span><b>{{ selected_payload.partial_harvest_kg_after_sampling|floatformat:2 }} kg / {{ selected_payload.partial_harvest_population_after_sampling|angka0 }} ekor</b></div>
+        <div class="summary-row"><span>Udang Mati Setelah Sampling</span><b>{{ selected_payload.mortality_population_after_sampling|angka0 }} ekor</b></div>
         <div class="summary-row"><span>Proyeksi Hingga</span><b>DOC {{ horizon_doc }}</b></div>
       </div>
       <hr>
       <div class="formula">
         <div><b>Sumber aktual</b>ABW dan size berasal langsung dari Sampling per kolam.</div>
+        <div><b>Populasi tersisa</b>Populasi sampling terakhir dikurangi ekor panen parsial dan mortalitas siphon setelah sampling.</div>
         <div><b>Prediksi pertumbuhan</b>Rata-rata slope ABW dari maksimal empat sampling terakhir.</div>
         <div><b>Fallback</b>ADG sampling terakhir, ADG kumulatif, atau target ADG siklus.</div>
       </div>

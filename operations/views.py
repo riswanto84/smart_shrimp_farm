@@ -470,8 +470,23 @@ def growth_prediction_dashboard(request):
             if harvest_kg > 0 and harvest_size > 0:
                 partial_harvest_population += round(harvest_kg * harvest_size)
 
-        population_before_partial = population
-        population = max(0, population - partial_harvest_population)
+        # Mortalitas yang tercatat setelah sampling terakhir juga harus
+        # mengurangi populasi tersisa. Mortalitas pada/before tanggal sampling
+        # diasumsikan sudah tercermin dalam nilai populasi sampling terbaru.
+        pond_mortality_after_sampling = filter_selected_cycle(
+            request,
+            SiphonRecord.objects.filter(
+                pond=pond,
+                date__gt=latest.date,
+            ),
+        ).aggregate(total=Sum('dead_count')).get('total') or 0
+        mortality_population = max(0, int(pond_mortality_after_sampling))
+
+        population_at_latest_sampling = population
+        population = max(
+            0,
+            population - partial_harvest_population - mortality_population,
+        )
         latest_fcr = _float(latest.fcr)
 
         actual = []
@@ -557,9 +572,11 @@ def growth_prediction_dashboard(request):
             'adg': round(adg, 3),
             'fcr': round(latest_fcr, 3),
             'population': population,
-            'population_before_partial': population_before_partial,
+            'population_at_latest_sampling': population_at_latest_sampling,
+            'population_before_partial': max(0, population_at_latest_sampling - mortality_population),
             'partial_harvest_kg_after_sampling': round(partial_harvest_kg, 2),
             'partial_harvest_population_after_sampling': partial_harvest_population,
+            'mortality_population_after_sampling': mortality_population,
             'projected_size': target_projection['size'],
             'projected_abw': target_projection['abw'],
             'projected_biomass_ton': target_projection['biomass_ton'],
