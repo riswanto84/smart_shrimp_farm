@@ -273,6 +273,7 @@ def dashboard(request):
         siphons_by_pond.setdefault(siphon.pond_id, []).append(siphon)
 
     production_total_kg = 0.0
+    production_index_total_kg = Decimal('0')
     active_projection_records = []
 
     # Target panen size 30 = ABW 33,33 gram/ekor.
@@ -314,6 +315,7 @@ def dashboard(request):
         adg_actual = Decimal(str(record.adg_weekly or 0))
         population_fr = int(record.population or 0)
         sampling_biomass = Decimal(str(record.biomass_kg or 0))
+        sampling_biomass_index = Decimal(str(record.biomass_index_kg or 0))
 
         # Hanya panen setelah sampling yang mengurangi snapshot biomassa terbaru.
         partial_harvests = [
@@ -329,6 +331,10 @@ def dashboard(request):
         )
         mortality_biomass_kg = (Decimal(dead_after_sampling) * current_abw / Decimal('1000')) if current_abw > 0 else Decimal('0')
         remaining_biomass = max(Decimal('0'), sampling_biomass - partial_kg - mortality_biomass_kg)
+        remaining_biomass_index = max(
+            Decimal('0'),
+            sampling_biomass_index - partial_kg - mortality_biomass_kg,
+        )
         remaining_population = max(0, population_fr - dead_after_sampling)
         for h in partial_harvests:
             size = _parse_harvest_size(h.size_text)
@@ -343,6 +349,7 @@ def dashboard(request):
 
         pond.dashboard_partial_harvest_kg = partial_kg
         pond.dashboard_remaining_biomass_kg = remaining_biomass
+        pond.dashboard_remaining_biomass_index_kg = remaining_biomass_index
 
         if pond.id in completed_pond_ids:
             pond.dashboard_size30_status = 'Kolam sudah selesai panen'
@@ -356,6 +363,7 @@ def dashboard(request):
             'biomass_ton': float(remaining_biomass / Decimal('1000')),
         })
         production_total_kg += float(remaining_biomass)
+        production_index_total_kg += remaining_biomass_index
         active_projection_records.append(record)
 
         if current_abw >= target_abw_30:
@@ -390,6 +398,7 @@ def dashboard(request):
             pond.dashboard_doc120_status = 'ADG aktual belum tersedia'
 
     production_total_ton = production_total_kg / 1000
+    production_index_total_ton = production_index_total_kg / Decimal('1000')
     doc120_total_ton = doc120_total_kg / Decimal('1000')
     doc120_normal_ton = doc120_total_ton * Decimal('0.95')
     doc120_conservative_ton = doc120_total_ton * Decimal('0.90')
@@ -467,6 +476,8 @@ def dashboard(request):
         'production_items': production_items,
         'production_total_kg': production_total_kg,
         'production_total_ton': production_total_ton,
+        'production_index_total_kg': production_index_total_kg,
+        'production_index_total_ton': production_index_total_ton,
         'production_gradient': production_gradient,
         'active_pond_count': active_pond_count,
         'completed_pond_count': len(completed_pond_ids),
