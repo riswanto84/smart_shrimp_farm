@@ -209,8 +209,13 @@ def dashboard(request):
             selected_sampling_records[record.pond_id] = record
 
     harvests_by_pond = {}
+    harvest_total_by_pond = {}
     for harvest in harvest_qs.order_by('date', 'id'):
         harvests_by_pond.setdefault(harvest.pond_id, []).append(harvest)
+        harvest_total_by_pond[harvest.pond_id] = (
+            harvest_total_by_pond.get(harvest.pond_id, Decimal('0'))
+            + Decimal(str(harvest.total_kg or 0))
+        )
 
     completed_pond_ids = set()
     for pond in ponds:
@@ -242,6 +247,10 @@ def dashboard(request):
         pond.dashboard_stocking_date = record.date if record else None
         pond.dashboard_doc = int(record.doc or 0) if record else None
         pond.dashboard_is_completed = pond.id in completed_pond_ids
+        pond.dashboard_real_harvest_kg = harvest_total_by_pond.get(pond.id, Decimal('0'))
+        pond.dashboard_real_harvest_ton = (
+            pond.dashboard_real_harvest_kg / Decimal('1000')
+        ).quantize(Decimal('0.01'))
         pond.dashboard_size30_date = None
         pond.dashboard_size30_days = None
         pond.dashboard_size30_status = 'Belum ada data sampling'
