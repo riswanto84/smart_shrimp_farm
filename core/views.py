@@ -4,7 +4,7 @@ from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 from accounts.rbac import permission_required
 from ponds.models import Pond
-from operations.models import DailyParameter, SamplingRecord, Harvest
+from operations.models import DailyParameter, SamplingRecord, Harvest, SiphonRecord
 from sales.models import Sale, SaleItem
 from finance.models import OperationalExpense
 from django.db.models import Sum
@@ -51,10 +51,7 @@ def dashboard(request):
         request,
         Sale.objects.exclude(status__in=['Gagal', 'Expired', 'Dibatalkan', 'Refund']),
     )
-    sales_total = (
-        valid_sales.filter(date__date=today).aggregate(s=Sum('total_amount'))['s']
-        or Decimal('0')
-    )
+    sales_total = valid_sales.aggregate(s=Sum('total_amount'))['s'] or Decimal('0')
     yesterday_sales_total = (
         valid_sales.filter(date__date=yesterday).aggregate(s=Sum('total_amount'))['s']
         or Decimal('0')
@@ -266,6 +263,15 @@ def dashboard(request):
             completed_pond_ids.add(pond.id)
 
     production_items = []
+    # Mortalitas siphon setelah sampling terakhir ikut mengurangi populasi dan biomassa tersisa.
+    siphon_qs = filter_selected_cycle(
+        request,
+        SiphonRecord.objects.select_related('pond').order_by('date', 'id'),
+    )
+    siphons_by_pond = {}
+    for siphon in siphon_qs:
+        siphons_by_pond.setdefault(siphon.pond_id, []).append(siphon)
+
     production_total_kg = 0.0
     active_projection_records = []
 
@@ -315,8 +321,15 @@ def dashboard(request):
             if h.date >= record.date and not _is_total_harvest_type(h.harvest_type)
         ]
         partial_kg = sum((Decimal(str(h.total_kg or 0)) for h in partial_harvests), Decimal('0'))
-        remaining_biomass = max(Decimal('0'), sampling_biomass - partial_kg)
-        remaining_population = population_fr
+        # Udang mati setelah snapshot sampling terakhir juga mengurangi estimasi sisa.
+        dead_after_sampling = sum(
+            int(s.dead_count or 0)
+            for s in siphons_by_pond.get(pond.id, [])
+            if s.date >= record.date
+        )
+        mortality_biomass_kg = (Decimal(dead_after_sampling) * current_abw / Decimal('1000')) if current_abw > 0 else Decimal('0')
+        remaining_biomass = max(Decimal('0'), sampling_biomass - partial_kg - mortality_biomass_kg)
+        remaining_population = max(0, population_fr - dead_after_sampling)
         for h in partial_harvests:
             size = _parse_harvest_size(h.size_text)
             if size > 0:
