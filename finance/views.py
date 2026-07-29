@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.views.decorators.http import require_POST
 from accounts.rbac import permission_required
-from django.db.models import Sum, Count, Min, Max
+from django.db.models import Sum, Count, Min, Max, Q
 from django.db.models.functions import TruncDate, TruncWeek, TruncMonth
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -66,6 +66,16 @@ def _expense_queryset(request):
         items = items.filter(category=category)
     if pond:
         items = items.filter(pond_id=pond)
+    q = (request.GET.get('q') or '').strip()
+    if q:
+        items = items.filter(
+            Q(category__icontains=q) |
+            Q(name__icontains=q) |
+            Q(payment_method__icontains=q) |
+            Q(notes__icontains=q) |
+            Q(document_number__icontains=q) |
+            Q(pond__name__icontains=q)
+        ).distinct()
     return items, date_from, date_to
 
 
