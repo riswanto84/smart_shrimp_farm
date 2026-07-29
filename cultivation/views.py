@@ -1,7 +1,10 @@
 from django.contrib import messages
+from django.db import transaction
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
+from django.utils import timezone
+from datetime import timedelta
 
 from accounts.rbac import owner_required, is_owner
 from core.reporting import export_pdf, angka
@@ -118,6 +121,109 @@ def cycle_report_pdf(request, pk):
         headers=headers,
         rows=rows,
     )
+
+
+@owner_required
+@require_POST
+@transaction.atomic
+def close_and_create_next_cycle(request, pk):
+    """Tutup siklus lama sebagai arsip dan buat siklus berikutnya yang kosong.
+
+    Data lama tidak dihapus atau diubah kepemilikannya. Seluruh nilai operasional
+    pada siklus baru otomatis nol karena setiap transaksi tetap terikat pada
+    ``cycle`` asalnya dan tampilan aplikasi difilter menggunakan siklus terpilih.
+    """
+    cycle = get_object_or_404(CultivationCycle.objects.select_for_update(), pk=pk)
+    if cycle.status == CultivationCycle.STATUS_COMPLETED:
+        messages.warning(request, "Siklus tersebut sudah selesai dan telah menjadi arsip.")
+        return redirect("cultivation:list")
+
+    # Jangan menutup siklus bila masih ada siklus lain yang terbuka. Ini menjaga
+    # agar transaksi baru tidak salah masuk ke dua siklus aktif sekaligus.
+    other_open = CultivationCycle.objects.exclude(pk=cycle.pk).filter(
+        status__in=[
+            CultivationCycle.STATUS_PREPARATION,
+            CultivationCycle.STATUS_ACTIVE,
+            CultivationCycle.STATUS_HARVEST,
+        ]
+    ).first()
+    if other_open:
+        messages.error(
+            request,
+            f"Masih ada siklus terbuka: {other_open.name}. Selesaikan atau tutup siklus tersebut terlebih dahulu.",
+        )
+        return redirect("cultivation:list")
+
+    end_date_raw = (request.POST.get("actual_end_date") or "").strip()
+    if end_date_raw:
+        try:
+            actual_end_date = CultivationCycle._coerce_date(end_date_raw)
+        except (TypeError, ValueError):
+            messages.error(request, "Tanggal selesai aktual tidak valid.")
+            return redirect("cultivation:list")
+    else:
+        actual_end_date = timezone.localdate()
+
+    if actual_end_date < cycle.start_date:
+        messages.error(request, "Tanggal selesai tidak boleh lebih awal dari tanggal mulai siklus.")
+        return redirect("cultivation:list")
+
+    cycle.status = CultivationCycle.STATUS_COMPLETED
+    cycle.actual_end_date = actual_end_date
+    cycle.save(update_fields=["status", "actual_end_date", "completed_at", "updated_at"])
+
+    requested_name = (request.POST.get("next_cycle_name") or "").strip()
+    if not requested_name:
+        base = "Siklus"
+        number = CultivationCycle.objects.count() + 1
+        requested_name = f"{base} {number}"
+        while CultivationCycle.objects.filter(name=requested_name).exists():
+            number += 1
+            requested_name = f"{base} {number}"
+    elif CultivationCycle.objects.filter(name=requested_name).exists():
+        messages.error(request, "Nama siklus berikutnya sudah digunakan.")
+        transaction.set_rollback(True)
+        return redirect("cultivation:list")
+
+    next_start_raw = (request.POST.get("next_start_date") or "").strip()
+    if next_start_raw:
+        try:
+            next_start_date = CultivationCycle._coerce_date(next_start_raw)
+        except (TypeError, ValueError):
+            messages.error(request, "Tanggal mulai siklus berikutnya tidak valid.")
+            transaction.set_rollback(True)
+            return redirect("cultivation:list")
+    else:
+        next_start_date = actual_end_date + timedelta(days=1)
+
+    if next_start_date <= actual_end_date:
+        messages.error(request, "Tanggal mulai siklus berikutnya harus setelah tanggal selesai siklus lama.")
+        transaction.set_rollback(True)
+        return redirect("cultivation:list")
+
+    next_cycle = CultivationCycle.objects.create(
+        name=requested_name,
+        start_date=next_start_date,
+        target_duration_days=cycle.target_duration_days,
+        target_doc=cycle.target_doc,
+        target_size=cycle.target_size,
+        target_biomass_ton=cycle.target_biomass_ton,
+        target_sr_percent=cycle.target_sr_percent,
+        target_fcr=cycle.target_fcr,
+        target_adg=cycle.target_adg,
+        target_population=0,
+        estimated_price_per_kg=cycle.estimated_price_per_kg,
+        target_cost=cycle.target_cost,
+        status=CultivationCycle.STATUS_PREPARATION,
+        notes="",
+    )
+    request.session["selected_cycle_id"] = next_cycle.pk
+    request.session.modified = True
+    messages.success(
+        request,
+        f"{cycle.name} berhasil ditutup dan diarsipkan. {next_cycle.name} telah dibuat dengan nilai operasional awal nol.",
+    )
+    return redirect("core:dashboard")
 
 
 @owner_required
