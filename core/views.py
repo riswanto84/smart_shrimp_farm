@@ -80,7 +80,27 @@ def dashboard(request):
         sales_change_state = 'neutral'
         sales_change_text = 'Belum ada omzet hari ini maupun kemarin'
 
-    expense_total = filter_selected_cycle(request, OperationalExpense.objects.all()).aggregate(s=Sum('amount'))['s'] or 0
+    expense_total = (
+        filter_selected_cycle(request, OperationalExpense.objects.all())
+        .aggregate(s=Sum('amount'))['s']
+        or Decimal('0')
+    )
+
+    # Ringkasan laba/rugi dashboard menggunakan basis yang sama dengan dua card
+    # di atas: total omzet valid dikurangi total pengeluaran operasional pada
+    # siklus yang sedang dipilih.
+    profit_loss_total = sales_total - expense_total
+    profit_margin_percent = (
+        (profit_loss_total / sales_total) * Decimal('100')
+        if sales_total > 0
+        else Decimal('0')
+    )
+    if profit_loss_total > 0:
+        profit_loss_status = 'Laba'
+    elif profit_loss_total < 0:
+        profit_loss_status = 'Rugi'
+    else:
+        profit_loss_status = 'Impas'
 
     # Realisasi panen riil diambil langsung dari menu Panen pada siklus terpilih.
     selected_cycle = get_selected_cycle(request)
@@ -443,6 +463,9 @@ def dashboard(request):
         'sales_change_state': sales_change_state,
         'sales_change_text': sales_change_text,
         'expense_total': expense_total,
+        'profit_loss_total': profit_loss_total,
+        'profit_margin_percent': profit_margin_percent,
+        'profit_loss_status': profit_loss_status,
         'selected_cycle': selected_cycle,
         'harvest_total_kg': harvest_total_kg,
         'harvest_total_ton': harvest_total_ton,

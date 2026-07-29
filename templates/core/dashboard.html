@@ -10,6 +10,14 @@
 <div class="kpi-grid">
   <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-chart-line"></i></div><div><span>Total Omzet</span><strong>{{ sales_total|rupiah }}</strong><small>Total omzet pada siklus yang dipilih</small></div></div>
   <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-wallet"></i></div><div><span>Total Pengeluaran</span><strong>{{ expense_total|rupiah }}</strong><small>Total pengeluaran pada siklus yang dipilih</small></div></div>
+  <div class="kpi-card">
+    <div class="kpi-icon {% if profit_loss_total > 0 %}green{% elif profit_loss_total < 0 %}red{% else %}gold{% endif %}"><i class="fa-solid {% if profit_loss_total < 0 %}fa-chart-line-down{% else %}fa-chart-line{% endif %}"></i></div>
+    <div>
+      <span>Laba / Rugi</span>
+      <strong>{{ profit_loss_total|rupiah }}</strong>
+      <small>{{ profit_loss_status }} · margin {{ profit_margin_percent|floatformat:2 }}% pada siklus yang dipilih</small>
+    </div>
+  </div>
   <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-water"></i></div><div><span>Kolam Aktif</span><strong>{{ active_pond_count }}</strong><small>{{ completed_pond_count }} kolam selesai panen</small></div></div>
   <div class="kpi-card" id="ollama-status-card">
     <div class="kpi-icon purple"><i class="fa-solid fa-microchip"></i></div>
