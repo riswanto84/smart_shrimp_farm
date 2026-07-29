@@ -198,3 +198,87 @@
 @media(max-width:1040px){.ai-top-detail{display:none}.ai-top-status{max-width:180px}}
 @media(max-width:820px){.ai-top-status{margin-left:auto;padding:6px 7px;max-width:145px}.ai-top-copy small{display:none}.ai-top-copy strong{font-size:11px}.ai-top-refresh{width:25px;height:25px}.ai-top-icon{width:27px;height:27px}.topbar-spacer{display:none}}
 @media(max-width:520px){.ai-top-status{max-width:112px;gap:5px}.ai-top-copy{max-width:48px;overflow:hidden}.ai-top-copy strong{overflow:hidden;text-overflow:ellipsis}.ai-top-refresh{display:none}}
+
+
+/* ================================================================
+   Desktop collapsible sidebar
+   - Desktop: sidebar becomes an icon rail and the dashboard expands.
+   - Mobile: existing off-canvas/overlay behaviour remains unchanged.
+   ================================================================ */
+@media (min-width:821px){
+  .sidebar,
+  .main{transition:width .26s ease,margin-left .26s ease,padding .26s ease}
+  .main{max-width:none;width:auto}
+
+  body.sidebar-collapsed .sidebar{
+    width:82px;
+    padding-left:10px;
+    padding-right:10px;
+    overflow-x:hidden;
+  }
+  body.sidebar-collapsed .main{
+    margin-left:82px;
+    width:calc(100% - 82px);
+  }
+  body.sidebar-collapsed .sidebar-brand{
+    justify-content:center;
+    gap:0;
+    padding-left:0;
+    padding-right:0;
+  }
+  body.sidebar-collapsed .sidebar-brand img{
+    width:54px;
+    height:54px;
+  }
+  body.sidebar-collapsed .sidebar-brand>div,
+  body.sidebar-collapsed .sidebar-user>div:not(.avatar),
+  body.sidebar-collapsed .menu p,
+  body.sidebar-collapsed .menu a span{
+    display:none!important;
+  }
+  body.sidebar-collapsed .menu a{
+    justify-content:center;
+    padding:11px 8px;
+    gap:0;
+    min-height:42px;
+  }
+  body.sidebar-collapsed .menu a i{
+    width:auto;
+    font-size:17px;
+  }
+  body.sidebar-collapsed .sidebar-user{
+    justify-content:center;
+    padding:8px;
+    border-radius:12px;
+  }
+  body.sidebar-collapsed .sidebar-user .avatar{
+    width:36px;
+    height:36px;
+  }
+  body.sidebar-collapsed .hamburger i{
+    transform:rotate(180deg);
+  }
+  .hamburger i{transition:transform .25s ease}
+
+  /* Native tooltip is supplied through title; keep the icon rail readable. */
+  body.sidebar-collapsed .menu a{position:relative}
+  body.sidebar-collapsed .menu a:hover:after{
+    content:attr(title);
+    position:fixed;
+    left:91px;
+    z-index:1000;
+    padding:7px 10px;
+    border-radius:8px;
+    background:#071b3a;
+    color:#fff;
+    font-size:12px;
+    font-weight:700;
+    white-space:nowrap;
+    box-shadow:0 8px 24px rgba(2,6,23,.22);
+    pointer-events:none;
+  }
+}
+
+@media (max-width:820px){
+  body.sidebar-collapsed .main{margin-left:0;width:auto}
+}
