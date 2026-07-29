@@ -96,6 +96,43 @@ def dashboard(request):
     harvest_count = harvest_qs.count()
     latest_harvests = list(harvest_qs[:8])
 
+    # Ringkasan panen parsial pada dashboard. Panen total/final tidak masuk
+    # ke angka ini agar pengguna dapat membedakan hasil parsial dan panen akhir.
+    partial_harvests = [
+        harvest for harvest in harvest_qs
+        if not _is_total_harvest_type(harvest.harvest_type)
+    ]
+    partial_harvest_total_kg = sum(
+        (Decimal(str(harvest.total_kg or 0)) for harvest in partial_harvests),
+        Decimal('0'),
+    )
+    partial_harvest_total_ton = partial_harvest_total_kg / Decimal('1000')
+    partial_harvest_count = len(partial_harvests)
+    partial_harvest_pond_count = len({harvest.pond_id for harvest in partial_harvests})
+    latest_partial_harvest = partial_harvests[0] if partial_harvests else None
+
+    partial_by_pond_map = {}
+    for harvest in partial_harvests:
+        row = partial_by_pond_map.setdefault(harvest.pond_id, {
+            'pond': harvest.pond,
+            'total_kg': Decimal('0'),
+            'count': 0,
+            'latest_date': harvest.date,
+            'latest_size': harvest.size_text or '-',
+        })
+        row['total_kg'] += Decimal(str(harvest.total_kg or 0))
+        row['count'] += 1
+        if harvest.date >= row['latest_date']:
+            row['latest_date'] = harvest.date
+            row['latest_size'] = harvest.size_text or '-'
+    partial_harvest_by_pond = sorted(
+        partial_by_pond_map.values(),
+        key=lambda row: (row['total_kg'], row['latest_date']),
+        reverse=True,
+    )
+    for row in partial_harvest_by_pond:
+        row['total_ton'] = row['total_kg'] / Decimal('1000')
+
     # Harga jual dan size riil dipadankan dari detail nota penjualan yang
     # menunjuk ke record panen. Tidak memerlukan perubahan model/migrasi.
     latest_harvest_ids = [harvest.id for harvest in latest_harvests]
@@ -388,6 +425,12 @@ def dashboard(request):
         'harvest_total_kg': harvest_total_kg,
         'harvest_total_ton': harvest_total_ton,
         'harvest_count': harvest_count,
+        'partial_harvest_total_kg': partial_harvest_total_kg,
+        'partial_harvest_total_ton': partial_harvest_total_ton,
+        'partial_harvest_count': partial_harvest_count,
+        'partial_harvest_pond_count': partial_harvest_pond_count,
+        'latest_partial_harvest': latest_partial_harvest,
+        'partial_harvest_by_pond': partial_harvest_by_pond,
         'latest_harvests': latest_harvests,
         'latest_harvest_rows': latest_harvest_rows,
         'latest_harvest_size': latest_harvest_size,
