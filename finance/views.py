@@ -70,14 +70,20 @@ def _expense_queryset(request):
 
 
 def _expense_rows(items):
+    """Build raw expense rows for export.
+
+    Keep ``amount`` as a Decimal so it is formatted exactly once by each
+    exporter. Previously the value was converted to a Rupiah string here and
+    then formatted again in the PDF exporter, causing every detail row to be
+    rendered as Rp 0.
+    """
     rows = []
     for i in items:
         rows.append([
             i.date.strftime('%d/%m/%Y'),
             i.category,
             i.name,
-            i.pond.name if i.pond else 'Semua Kolam',
-            rupiah(i.amount),
+            i.amount or Decimal('0'),
             i.payment_method,
             i.notes,
         ])
@@ -132,9 +138,9 @@ def export_expenses_excel(request):
         'laporan_pengeluaran_operasional',
         'Laporan Pengeluaran Operasional',
         f'Periode: {format_date_range(date_from, date_to)}',
-        ['Tanggal', 'Kategori', 'Nama Pengeluaran', 'Kolam', 'Jumlah', 'Metode Bayar', 'Catatan'],
+        ['Tanggal', 'Kategori', 'Nama Pengeluaran', 'Jumlah', 'Metode Bayar', 'Catatan'],
         rows,
-        [['', '', 'TOTAL', '', rupiah(total), '', '']]
+        [['', '', 'TOTAL', total, '', '']]
     )
 
 
@@ -144,14 +150,14 @@ def export_expenses_pdf(request):
     items, date_from, date_to = _expense_queryset(request)
     rows = _expense_rows(items)
     total = items.aggregate(s=Sum('amount'))['s'] or 0
-    pdf_rows = [[r[0], r[1], r[2], r[3], rupiah(r[4]), r[5], r[6]] for r in rows]
+    pdf_rows = [[r[0], r[1], r[2], rupiah(r[3]), r[4], r[5]] for r in rows]
     return export_pdf(
         'laporan_pengeluaran_operasional',
         'Laporan Pengeluaran Operasional',
         f'Periode: {format_date_range(date_from, date_to)}',
-        ['Tanggal', 'Kategori', 'Nama Pengeluaran', 'Kolam', 'Jumlah', 'Metode', 'Catatan'],
+        ['Tanggal', 'Kategori', 'Nama Pengeluaran', 'Jumlah', 'Metode', 'Catatan'],
         pdf_rows,
-        [['', '', 'TOTAL', '', rupiah(total), '', '']]
+        [['', '', 'TOTAL', rupiah(total), '', '']]
     )
 
 
