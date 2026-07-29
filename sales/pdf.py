@@ -102,8 +102,19 @@ def build_invoice_pdf(sale):
     item_subtotal = sum((it.subtotal for it in items), 0)
     extra_rows = sum(1 for value in [sale.shipping_cost, sale.packing_cost, sale.other_cost] if value)
     width = 80 * mm
-    # tinggi dinamis agar nota tidak terpotong; minimal 220 mm
-    height = max(220 * mm, (196 + len(items) * 19 + extra_rows * 6) * mm)
+    # Tinggi dinamis agar item dan catatan database tidak terpotong.
+    note_text = (sale.notes or '').strip()
+    estimated_note_lines = max(0, (len(note_text) + 41) // 42) if note_text else 0
+    height = max(
+        220 * mm,
+        (
+            196
+            + len(items) * 19
+            + extra_rows * 6
+            + estimated_note_lines * 4
+            + (10 if note_text else 0)
+        ) * mm,
+    )
     margin = 6 * mm
     right = width - margin
     y = height - 8 * mm
@@ -234,25 +245,30 @@ def build_invoice_pdf(sale):
             c.drawRightString(right, y, _money_plain(remaining))
             y -= 5 * mm
 
-    _line(c, y, width, margin)
-    y -= 5 * mm
-    c.setFont('Courier-Bold', 8)
-    c.drawString(margin, y, 'CATATAN:')
-    y -= 4 * mm
-    c.setFont('Courier', 8)
-    note = sale.notes or 'Pengiriman menggunakan mobil berpendingin. Terima kasih atas kepercayaannya.'
-    words, line = note.split(), ''
-    max_chars = 42
-    for word in words:
-        if len(line + ' ' + word) > max_chars:
-            c.drawString(margin, y, line.strip())
-            y -= 4 * mm
-            line = word
-        else:
-            line = f'{line} {word}'
-    if line:
-        c.drawString(margin, y, line.strip())
+    # Catatan hanya diambil dari field Sale.notes pada database.
+    # Bila kosong, bagian catatan tidak ditampilkan dan tidak ada teks default.
+    note = (sale.notes or '').strip()
+    if note:
+        _line(c, y, width, margin)
         y -= 5 * mm
+        c.setFont('Courier-Bold', 8)
+        c.drawString(margin, y, 'CATATAN:')
+        y -= 4 * mm
+        c.setFont('Courier', 8)
+
+        words, line = note.split(), ''
+        max_chars = 42
+        for word in words:
+            if len(line + ' ' + word) > max_chars:
+                c.drawString(margin, y, line.strip())
+                y -= 4 * mm
+                line = word
+            else:
+                line = f'{line} {word}'
+
+        if line:
+            c.drawString(margin, y, line.strip())
+            y -= 5 * mm
 
     _line(c, y, width, margin)
     y -= 6 * mm
