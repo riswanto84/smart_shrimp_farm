@@ -73,6 +73,7 @@
       </form>
       {% endif %}
 
+      {% block topbar_extra %}{% endblock %}
       <div class="top-pill weather-top-pill" title="{{ live_weather.condition|default:'Data cuaca tidak tersedia' }} · Sumber {{ live_weather.source|default:'Open-Meteo' }}">
         <i class="fa-solid {{ live_weather.icon|default:'fa-cloud' }} text-warning"></i>
         <strong>{% if live_weather.temperature is not None %}{{ live_weather.temperature|floatformat:0 }}°C{% else %}—{% endif %}</strong>

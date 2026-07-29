@@ -1,5 +1,18 @@
 {% extends 'base.html' %}
 {% load currency %}
+{% block topbar_extra %}
+<div class="ai-top-status" id="ollama-status-wrap" title="Status koneksi AI Ollama">
+  <span class="ai-top-icon"><i class="fa-solid fa-robot"></i></span>
+  <span class="ai-top-copy">
+    <small>AI Ollama</small>
+    <strong id="ollama-status-badge" class="{% if ollama_status.status == 'online' %}online{% elif ollama_status.status == 'model_missing' or ollama_status.status == 'timeout' %}warning{% else %}offline{% endif %}">
+      {% if ollama_status.status == 'online' %}Online{% elif ollama_status.status == 'model_missing' %}Model belum tersedia{% elif ollama_status.status == 'timeout' %}Timeout{% else %}Offline{% endif %}
+    </strong>
+  </span>
+  <span id="ollama-status-detail" class="ai-top-detail">{% if ollama_status.ok %}{{ ollama_status.model }} · {{ ollama_status.latency_ms }} ms{% else %}Tidak tersambung{% endif %}</span>
+  <button type="button" id="ollama-recheck" class="ai-top-refresh" title="Cek ulang status Ollama" aria-label="Cek ulang status Ollama"><i class="fa-solid fa-rotate"></i></button>
+</div>
+{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
@@ -19,20 +32,6 @@
     </div>
   </div>
   <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-water"></i></div><div><span>Kolam Aktif</span><strong>{{ active_pond_count }}</strong><small>{{ completed_pond_count }} kolam selesai panen</small></div></div>
-  <div class="kpi-card" id="ollama-status-card">
-    <div class="kpi-icon purple"><i class="fa-solid fa-microchip"></i></div>
-    <div>
-      <span>Status AI</span>
-      <strong>Ollama</strong>
-      <small id="ollama-status-badge" class="{% if ollama_status.status == 'online' %}online{% elif ollama_status.status == 'model_missing' or ollama_status.status == 'timeout' %}warning{% else %}offline{% endif %}">
-        {% if ollama_status.status == 'online' %}Online{% elif ollama_status.status == 'model_missing' %}Model belum tersedia{% elif ollama_status.status == 'timeout' %}Timeout{% else %}Offline{% endif %}
-      </small>
-      <small id="ollama-status-detail" class="text-muted d-block">
-        {% if ollama_status.ok %}{{ ollama_status.model }} · {{ ollama_status.latency_ms }} ms{% else %}Tidak tersambung{% endif %}
-      </small>
-      <button type="button" id="ollama-recheck" class="btn btn-sm btn-outline-primary mt-1">Cek ulang</button>
-    </div>
-  </div>
 </div>
 <section class="panel real-harvest-panel" style="margin-bottom:20px;">
   <div class="panel-head">
@@ -42,10 +41,9 @@
   <div class="kpi-grid" style="margin-bottom:16px;">
     <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-shrimp"></i></div><div><span>Total Panen Riil</span><strong>{{ harvest_total_kg|angka:2 }} kg</strong><small>{{ harvest_total_ton|floatformat:2 }} ton · {{ harvest_count }} kali panen</small></div></div>
     <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-layer-group"></i></div><div><span>Total Panen Parsial</span><strong>{{ partial_harvest_total_kg|angka:2 }} kg</strong><small>{{ partial_harvest_total_ton|floatformat:2 }} ton · {{ partial_harvest_count }} kali pada {{ partial_harvest_pond_count }} kolam</small></div></div>
-    <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-water"></i></div><div><span>Estimasi Sisa Udang di Kolam</span><strong>{{ production_total_kg|angka:2 }} kg</strong><small>{{ production_total_ton|floatformat:2 }} ton · setelah panen parsial dan mortalitas</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-water"></i></div><div><span>Estimasi Sisa Udang di Kolam (FR)</span><strong>{{ production_total_kg|angka:2 }} kg</strong><small>{{ production_total_ton|floatformat:2 }} ton · biomassa FR setelah panen parsial dan mortalitas</small></div></div>
     <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-calculator"></i></div><div><span>Estimasi Sisa Udang (Index)</span><strong>{{ production_index_total_kg|angka:2 }} kg</strong><small>{{ production_index_total_ton|floatformat:2 }} ton · biomassa index setelah panen parsial dan mortalitas</small></div></div>
     <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-bullseye"></i></div><div><span>Target Produksi</span><strong>{{ target_harvest_ton|floatformat:2 }} ton</strong><small>Sisa target {{ harvest_remaining_kg|angka:2 }} kg</small></div></div>
-    <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-coins"></i></div><div><span>Omzet Siklus</span><strong>{{ cycle_sales_total|rupiah }}</strong><small>{{ cycle_sales_kg|angka:2 }} kg tercatat di penjualan</small></div></div>
     <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-tag"></i></div><div><span>Harga Jual Rata-rata</span><strong>{{ average_sale_price|rupiah }}</strong><small>Omzet ÷ berat penjualan</small></div></div>
     <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-ruler-combined"></i></div><div><span>Size Panen Riil Terbaru</span><strong>{{ latest_harvest_size }}</strong><small>Berdasarkan detail penjualan/panen terbaru</small></div></div>
     <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-money-bill-trend-up"></i></div><div><span>Harga Panen Terbaru</span><strong>{% if latest_harvest_price > 0 %}{{ latest_harvest_price|rupiah }}{% else %}—{% endif %}</strong><small>Harga rata-rata tertimbang per kg</small></div></div>
@@ -333,7 +331,8 @@
 
   async function checkOllama() {
     button.disabled = true;
-    button.textContent = 'Memeriksa...';
+    button.disabled = true;
+    button.classList.add('is-checking');
     try {
       const response = await fetch('/ollama/status/', {headers: {'X-Requested-With': 'XMLHttpRequest'}});
       applyStatus(await response.json());
@@ -341,7 +340,7 @@
       applyStatus({status: 'offline', message: 'Gagal memeriksa status Ollama'});
     } finally {
       button.disabled = false;
-      button.textContent = 'Cek ulang';
+      button.classList.remove('is-checking');
     }
   }
 
