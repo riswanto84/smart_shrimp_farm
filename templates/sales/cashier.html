@@ -35,16 +35,22 @@
           <i class="fa-solid fa-user-tag"></i>
           <div><h2>Informasi Pelanggan</h2><p>Pilih pelanggan untuk seluruh item dalam nota ini.</p></div>
         </div>
-        <div class="field-pro">
-          <label>Pelanggan</label>
-          <select class="form-select" name="customer">
-            <option value="">Pelanggan umum/tanpa data pelanggan</option>
-            {% for c in customers %}
-            <option value="{{ c.id }}" {% if sale and sale.customer_id == c.id %}selected{% endif %}>
-              {{ c.name }}{% if c.phone %} — {{ c.phone }}{% endif %}
-            </option>
-            {% endfor %}
-          </select>
+        <div class="field-pro customer-autocomplete" data-url="{% url 'sales:customer_autocomplete' %}">
+          <label for="customerSearch">Pelanggan</label>
+          <input type="hidden" name="customer" id="customerId" value="{% if sale and sale.customer_id %}{{ sale.customer_id }}{% endif %}">
+          <div class="position-relative">
+            <div class="input-group">
+              <span class="input-group-text"><i class="fa-solid fa-magnifying-glass"></i></span>
+              <input type="search" class="form-control" id="customerSearch"
+                     value="{% if sale and sale.customer %}{{ sale.customer.name }}{% if sale.customer.phone %} — {{ sale.customer.phone }}{% endif %}{% endif %}"
+                     placeholder="Ketik nama, nomor HP, email, atau alamat pelanggan..." autocomplete="off">
+              <button class="btn btn-outline-secondary" type="button" id="clearCustomer" title="Pelanggan umum">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            <div id="customerResults" class="customer-search-results shadow-sm" hidden></div>
+          </div>
+          <small class="text-muted">Ketik minimal 1 karakter. Kosongkan untuk pelanggan umum.</small>
         </div>
       </section>
 
@@ -352,4 +358,72 @@
   renumber(); recalc();
 })();
 </script>
+
+<script id="customer-autocomplete-script">
+(function () {
+  const box = document.querySelector('.customer-autocomplete');
+  if (!box) return;
+  const search = document.getElementById('customerSearch');
+  const customerId = document.getElementById('customerId');
+  const results = document.getElementById('customerResults');
+  const clear = document.getElementById('clearCustomer');
+  let timer = null;
+
+  function closeResults() { results.hidden = true; results.innerHTML = ''; }
+  function choose(item) {
+    customerId.value = item.id;
+    search.value = item.text;
+    search.setCustomValidity('');
+    closeResults();
+  }
+  async function lookup() {
+    const q = search.value.trim();
+    customerId.value = '';
+    if (!q) { closeResults(); return; }
+    try {
+      const response = await fetch(box.dataset.url + '?q=' + encodeURIComponent(q), {headers: {'X-Requested-With':'XMLHttpRequest'}});
+      if (!response.ok) throw new Error('Gagal mengambil data pelanggan');
+      const data = await response.json();
+      results.innerHTML = '';
+      if (!data.results.length) {
+        results.innerHTML = '<div class="customer-search-empty">Pelanggan tidak ditemukan.</div>';
+      } else {
+        data.results.forEach(function (item) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'customer-search-item';
+          button.innerHTML = '<strong></strong><small></small>';
+          button.querySelector('strong').textContent = item.name;
+          button.querySelector('small').textContent = [item.phone, item.email, item.address].filter(Boolean).join(' · ');
+          button.addEventListener('click', function () { choose(item); });
+          results.appendChild(button);
+        });
+      }
+      results.hidden = false;
+    } catch (error) {
+      results.innerHTML = '<div class="customer-search-empty">Data pelanggan gagal dimuat. Silakan ulangi.</div>';
+      results.hidden = false;
+    }
+  }
+  search.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(lookup, 250); });
+  search.addEventListener('focus', function () { if (search.value.trim() && !customerId.value) lookup(); });
+  clear.addEventListener('click', function () { customerId.value=''; search.value=''; closeResults(); search.focus(); });
+  document.addEventListener('click', function (event) { if (!box.contains(event.target)) closeResults(); });
+  search.form.addEventListener('submit', function (event) {
+    if (search.value.trim() && !customerId.value) {
+      event.preventDefault();
+      search.setCustomValidity('Pilih pelanggan dari hasil pencarian, atau kosongkan untuk pelanggan umum.');
+      search.reportValidity();
+    }
+  });
+})();
+</script>
+<style>
+.customer-search-results{position:absolute;z-index:1050;left:0;right:0;top:calc(100% + 4px);max-height:320px;overflow:auto;background:#fff;border:1px solid #dbe3ef;border-radius:12px;padding:6px}
+.customer-search-item{display:flex;width:100%;flex-direction:column;gap:2px;text-align:left;border:0;background:#fff;padding:10px 12px;border-radius:9px}
+.customer-search-item:hover,.customer-search-item:focus{background:#eef5ff;outline:none}
+.customer-search-item small{color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.customer-search-empty{padding:14px;color:#64748b;text-align:center}
+</style>
+
 {% endblock %}

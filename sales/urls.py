@@ -6,6 +6,7 @@ urlpatterns = [
     path('cashier/', views.cashier, name='cashier'),
     path('customers/', views.customers, name='customers'),
     path('customers/add/', views.add_customer, name='add_customer'),
+    path('customers/autocomplete/', views.customer_autocomplete, name='customer_autocomplete'),
     path('invoices/', views.invoices, name='invoices'),
     path('invoices/export/excel/', views.export_sales_excel, name='export_sales_excel'),
     path('invoices/export/pdf/', views.export_sales_pdf, name='export_sales_pdf'),

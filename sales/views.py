@@ -454,6 +454,32 @@ def add_customer(request):
 
 @login_required
 @permission_required('sales.cashier')
+def customer_autocomplete(request):
+    q = (request.GET.get('q') or '').strip()
+    customers = Customer.objects.all().order_by('name')
+    if q:
+        customers = customers.filter(
+            Q(name__icontains=q) | Q(phone__icontains=q) |
+            Q(email__icontains=q) | Q(address__icontains=q)
+        )
+    customers = customers[:20]
+    return JsonResponse({
+        'results': [
+            {
+                'id': customer.pk,
+                'name': customer.name,
+                'phone': customer.phone or '',
+                'email': customer.email or '',
+                'address': customer.address or '',
+                'text': f"{customer.name}{' — ' + customer.phone if customer.phone else ''}",
+            }
+            for customer in customers
+        ]
+    })
+
+
+@login_required
+@permission_required('sales.cashier')
 def cashier(request):
     if request.method == 'POST':
         try:
@@ -629,6 +655,13 @@ def _sales_queryset(request):
     status = request.GET.get('status') or ''
     if status:
         sales = sales.filter(status=status)
+    q = (request.GET.get('q') or '').strip()
+    if q:
+        sales = sales.filter(
+            Q(invoice_no__icontains=q) | Q(customer__name__icontains=q) |
+            Q(customer__phone__icontains=q) | Q(payment_method__icontains=q) |
+            Q(status__icontains=q) | Q(cashier__username__icontains=q)
+        ).distinct()
     return sales, date_from, date_to
 
 

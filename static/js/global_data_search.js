@@ -1,22 +1,11 @@
 (function () {
   "use strict";
 
-  function normalizeText(value) {
-    return String(value || "")
-      .toLocaleLowerCase("id-ID")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-
   function isUsefulTable(table) {
     if (!table || table.dataset.globalSearch === "off") return false;
     if (table.closest(".django-admin, #changelist")) return false;
-
     var tbody = table.tBodies && table.tBodies[0];
     if (!tbody) return false;
-
     return Array.from(tbody.rows).some(function (row) {
       return !row.querySelector("td[colspan]");
     });
@@ -26,10 +15,8 @@
     var toolbar = document.createElement("form");
     toolbar.className = "global-data-search";
     toolbar.setAttribute("role", "search");
-    toolbar.dataset.searchFor = "global-table-" + index;
 
     var inputId = "global-data-search-input-" + index;
-
     toolbar.innerHTML =
       '<div class="global-data-search__field">' +
         '<label class="visually-hidden" for="' + inputId + '">Cari data</label>' +
@@ -46,89 +33,50 @@
       '<div class="global-data-search__meta" aria-live="polite"></div>';
 
     var wrapper = table.closest(".table-responsive");
-    var insertionTarget = wrapper || table;
-    insertionTarget.parentNode.insertBefore(toolbar, insertionTarget);
-
+    var target = wrapper || table;
+    target.parentNode.insertBefore(toolbar, target);
     return toolbar;
   }
 
   function installTableSearch(table, index) {
     if (!isUsefulTable(table) || table.dataset.globalSearchReady === "1") return;
-
     table.dataset.globalSearchReady = "1";
-    table.id = table.id || "global-table-" + index;
 
     var toolbar = createToolbar(table, index);
     var input = toolbar.querySelector(".global-data-search__input");
     var resetButton = toolbar.querySelector(".global-data-search__reset");
     var meta = toolbar.querySelector(".global-data-search__meta");
-    var tbody = table.tBodies[0];
-
-    var rows = Array.from(tbody.rows);
-    var searchableRows = rows.filter(function (row) {
+    var rowsOnPage = Array.from(table.tBodies[0].rows).filter(function (row) {
       return !row.querySelector("td[colspan]");
-    });
-    var emptyRows = rows.filter(function (row) {
-      return !!row.querySelector("td[colspan]");
-    });
+    }).length;
+    var url = new URL(window.location.href);
+    var currentKeyword = url.searchParams.get("q") || "";
 
-    searchableRows.forEach(function (row) {
-      row.dataset.searchText = normalizeText(row.innerText);
-    });
+    input.value = currentKeyword;
+    meta.textContent = currentKeyword
+      ? rowsOnPage + " hasil pada halaman ini · pencarian seluruh database"
+      : rowsOnPage + " data pada halaman ini";
 
-    var noResultRow = document.createElement("tr");
-    noResultRow.className = "global-data-search__empty";
-    noResultRow.hidden = true;
-
-    var emptyCell = document.createElement("td");
-    emptyCell.colSpan = Math.max(table.rows[0] ? table.rows[0].cells.length : 1, 1);
-    emptyCell.className = "text-center text-muted py-4";
-    emptyCell.textContent = "Tidak ada data yang cocok dengan pencarian.";
-    noResultRow.appendChild(emptyCell);
-    tbody.appendChild(noResultRow);
-
-    function applySearch() {
-      var keyword = normalizeText(input.value);
-      var visible = 0;
-
-      searchableRows.forEach(function (row) {
-        var matched = !keyword || row.dataset.searchText.indexOf(keyword) !== -1;
-        row.hidden = !matched;
-        if (matched) visible += 1;
-      });
-
-      emptyRows.forEach(function (row) {
-        row.hidden = !!keyword;
-      });
-
-      noResultRow.hidden = !keyword || visible > 0;
-
-      if (keyword) {
-        meta.textContent = visible + " dari " + searchableRows.length + " data ditemukan";
-      } else {
-        meta.textContent = searchableRows.length + " data pada halaman ini";
-      }
+    function navigate(keyword) {
+      var nextUrl = new URL(window.location.href);
+      if (keyword) nextUrl.searchParams.set("q", keyword);
+      else nextUrl.searchParams.delete("q");
+      nextUrl.searchParams.delete("page");
+      window.location.assign(nextUrl.toString());
     }
 
     toolbar.addEventListener("submit", function (event) {
       event.preventDefault();
-      applySearch();
+      navigate(input.value.trim());
     });
 
     resetButton.addEventListener("click", function () {
-      input.value = "";
-      applySearch();
-      input.focus();
+      navigate("");
     });
 
     input.addEventListener("keydown", function (event) {
-      if (event.key === "Escape") {
-        input.value = "";
-        applySearch();
-      }
+      if (event.key === "Escape") navigate("");
     });
-
-    meta.textContent = searchableRows.length + " data pada halaman ini";
   }
 
   function installAll() {
