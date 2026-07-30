@@ -296,7 +296,8 @@ def dashboard(request):
     production_total_kg = 0.0
     production_index_total_kg = Decimal('0')
     carrying_capacity_items = []
-    carrying_capacity_total_ton = Decimal('0')
+    carrying_capacity_total_biomass_kg = Decimal('0')
+    carrying_capacity_total_area_m2 = Decimal('0')
     active_projection_records = []
 
     # Target panen size 30 = ABW 33,33 gram/ekor.
@@ -342,16 +343,7 @@ def dashboard(request):
         index_score = Decimal(str(record.index_score or 0))
         pond_area_m2 = Decimal(str(pond.area_m2 or 0))
 
-        # Carrying Capacity (CC) mengikuti rumus lapangan:
-        # CC (ton) = Index (kg/m2) x luas kolam (m2) / 1.000.
-        # Nilai memakai Index pada sampling terbaru dan tidak dikurangi panen,
-        # karena CC menunjukkan kapasitas kolam, bukan biomassa aktual tersisa.
-        carrying_capacity_ton = (
-            (index_score * pond_area_m2 / Decimal('1000')).quantize(Decimal('0.01'))
-            if index_score > 0 and pond_area_m2 > 0 else Decimal('0')
-        )
         pond.dashboard_index_score = index_score
-        pond.dashboard_carrying_capacity_ton = carrying_capacity_ton
 
         # Hanya panen setelah sampling yang mengurangi snapshot biomassa terbaru.
         partial_harvests = [
@@ -387,6 +379,16 @@ def dashboard(request):
         pond.dashboard_remaining_biomass_kg = remaining_biomass
         pond.dashboard_remaining_biomass_index_kg = remaining_biomass_index
 
+        # Carrying Capacity (CC) mengikuti rumus lapangan yang digunakan:
+        # CC (kg/m2) = biomassa tersisa metode Index (kg) / luas kolam (m2).
+        # Biomassa yang dipakai sudah dikurangi panen parsial dan mortalitas
+        # setelah sampling terakhir.
+        carrying_capacity_cc = (
+            (remaining_biomass_index / pond_area_m2).quantize(Decimal('0.01'))
+            if remaining_biomass_index > 0 and pond_area_m2 > 0 else Decimal('0')
+        )
+        pond.dashboard_carrying_capacity_cc = carrying_capacity_cc
+
         if pond.id in completed_pond_ids:
             pond.dashboard_size30_status = 'Kolam sudah selesai panen'
             pond.dashboard_doc120_status = 'Tidak dihitung: panen total/selesai'
@@ -405,12 +407,12 @@ def dashboard(request):
         })
         carrying_capacity_items.append({
             'pond': pond,
-            'index_score': index_score,
+            'biomass_index_kg': remaining_biomass_index,
             'area_m2': pond_area_m2,
-            'cc_ton': carrying_capacity_ton,
-            'cc_kg': carrying_capacity_ton * Decimal('1000'),
+            'cc': carrying_capacity_cc,
         })
-        carrying_capacity_total_ton += carrying_capacity_ton
+        carrying_capacity_total_biomass_kg += remaining_biomass_index
+        carrying_capacity_total_area_m2 += pond_area_m2
         production_total_kg += float(remaining_biomass)
         production_index_total_kg += remaining_biomass_index
         active_projection_records.append(record)
@@ -543,8 +545,12 @@ def dashboard(request):
         'production_index_total_kg': production_index_total_kg,
         'production_index_total_ton': production_index_total_ton,
         'carrying_capacity_items': carrying_capacity_items,
-        'carrying_capacity_total_ton': carrying_capacity_total_ton,
-        'carrying_capacity_total_kg': carrying_capacity_total_ton * Decimal('1000'),
+        'carrying_capacity_average_cc': (
+            (carrying_capacity_total_biomass_kg / carrying_capacity_total_area_m2).quantize(Decimal('0.01'))
+            if carrying_capacity_total_area_m2 > 0 else Decimal('0')
+        ),
+        'carrying_capacity_total_biomass_kg': carrying_capacity_total_biomass_kg,
+        'carrying_capacity_total_area_m2': carrying_capacity_total_area_m2,
         'production_gradient': production_gradient,
         'production_index_gradient': production_index_gradient,
         'active_pond_count': active_pond_count,
