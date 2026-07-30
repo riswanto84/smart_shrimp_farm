@@ -1461,6 +1461,70 @@ def _balance_sheet_data(request):
     operational_working_capital = operational_current_assets - total_liabilities
     biomass_asset_percent = ((biomass_active_value / (total_assets + biomass_active_value)) * Decimal('100')) if (total_assets + biomass_active_value) else Decimal('0')
 
+    def ratio_health(value, ratio_type):
+        """Menghasilkan indikator warna dan interpretasi otomatis untuk rasio."""
+        if value is None:
+            return {
+                'level': 'neutral', 'icon': 'fa-circle-minus', 'label': 'Belum dapat dihitung',
+                'description': 'Kewajiban atau basis pembanding belum tersedia.'
+            }
+
+        value = Decimal(value)
+        thresholds = {
+            'current': [
+                (Decimal('2.00'), 'excellent', 'fa-circle-check', 'Sangat Sehat', 'Aset lancar sangat kuat untuk menutup kewajiban jangka pendek.'),
+                (Decimal('1.00'), 'good', 'fa-circle-check', 'Sehat', 'Aset lancar cukup untuk menutup kewajiban jangka pendek.'),
+                (Decimal('0.75'), 'warning', 'fa-circle-exclamation', 'Perlu Perhatian', 'Likuiditas cukup ketat dan perlu pengaturan arus kas.'),
+                (Decimal('-Infinity'), 'danger', 'fa-triangle-exclamation', 'Likuiditas Rendah', 'Aset lancar belum cukup untuk menutup kewajiban jangka pendek.'),
+            ],
+            'cash': [
+                (Decimal('1.00'), 'excellent', 'fa-circle-check', 'Kas Sangat Kuat', 'Kas dan bank mampu menutup seluruh kewajiban lancar.'),
+                (Decimal('0.50'), 'good', 'fa-circle-check', 'Kas Cukup', 'Kas cukup memadai selama penerimaan usaha berjalan normal.'),
+                (Decimal('0.25'), 'warning', 'fa-circle-exclamation', 'Kas Terbatas', 'Perlu menjaga jadwal pembayaran dan penerimaan kas.'),
+                (Decimal('-Infinity'), 'danger', 'fa-triangle-exclamation', 'Kas Rendah', 'Kas siap pakai masih rendah dibanding kewajiban.'),
+            ],
+            'debt_to_equity': [
+                (Decimal('0.50'), 'excellent', 'fa-circle-check', 'Sangat Baik', 'Utang relatif rendah dibanding modal sendiri.'),
+                (Decimal('1.00'), 'good', 'fa-circle-check', 'Sehat', 'Struktur modal masih seimbang dan terkendali.'),
+                (Decimal('2.00'), 'warning', 'fa-circle-exclamation', 'Perlu Perhatian', 'Ketergantungan terhadap utang mulai meningkat.'),
+                (Decimal('Infinity'), 'danger', 'fa-triangle-exclamation', 'Utang Tinggi', 'Utang jauh lebih besar dibanding modal sendiri.'),
+            ],
+            'debt_ratio': [
+                (Decimal('0.30'), 'excellent', 'fa-circle-check', 'Sangat Baik', 'Sebagian besar aset dibiayai oleh modal sendiri.'),
+                (Decimal('0.50'), 'good', 'fa-circle-check', 'Sehat', 'Porsi aset yang dibiayai utang masih wajar.'),
+                (Decimal('0.70'), 'warning', 'fa-circle-exclamation', 'Perlu Perhatian', 'Porsi pembiayaan dari utang mulai tinggi.'),
+                (Decimal('Infinity'), 'danger', 'fa-triangle-exclamation', 'Risiko Utang Tinggi', 'Sebagian besar aset dibiayai oleh utang.'),
+            ],
+            'operational_current': [
+                (Decimal('2.00'), 'excellent', 'fa-circle-check', 'Sangat Sehat', 'Aset lancar dan biomassa sangat kuat menutup kewajiban.'),
+                (Decimal('1.50'), 'good', 'fa-circle-check', 'Sehat', 'Aset operasional cukup aman untuk menutup kewajiban.'),
+                (Decimal('1.00'), 'warning', 'fa-circle-exclamation', 'Cukup', 'Kewajiban tertutup, tetapi ruang pengamannya masih terbatas.'),
+                (Decimal('-Infinity'), 'danger', 'fa-triangle-exclamation', 'Belum Aman', 'Aset operasional belum cukup menutup kewajiban.'),
+            ],
+            'biomass_coverage': [
+                (Decimal('2.00'), 'excellent', 'fa-circle-check', 'Biomassa Sangat Kuat', 'Nilai biomassa melebihi dua kali kewajiban.'),
+                (Decimal('1.00'), 'good', 'fa-circle-check', 'Biomassa Mencukupi', 'Nilai biomassa secara estimasi dapat menutup kewajiban.'),
+                (Decimal('0.50'), 'warning', 'fa-circle-exclamation', 'Menutup Sebagian', 'Biomassa hanya menutup sebagian kewajiban.'),
+                (Decimal('-Infinity'), 'danger', 'fa-triangle-exclamation', 'Coverage Rendah', 'Nilai biomassa masih rendah dibanding kewajiban.'),
+            ],
+        }
+
+        rules = thresholds[ratio_type]
+        lower_is_better = ratio_type in {'debt_to_equity', 'debt_ratio'}
+        for threshold, level, icon, label, description in rules:
+            if (value <= threshold) if lower_is_better else (value >= threshold):
+                return {'level': level, 'icon': icon, 'label': label, 'description': description}
+        return {'level': 'neutral', 'icon': 'fa-circle-minus', 'label': 'Belum dinilai', 'description': ''}
+
+    ratio_healths = {
+        'current': ratio_health(current_ratio, 'current'),
+        'cash': ratio_health(cash_ratio, 'cash'),
+        'debt_to_equity': ratio_health(debt_to_equity, 'debt_to_equity'),
+        'debt_ratio': ratio_health(debt_ratio, 'debt_ratio'),
+        'operational_current': ratio_health(operational_current_ratio, 'operational_current'),
+        'biomass_coverage': ratio_health(biomass_coverage_ratio, 'biomass_coverage'),
+    }
+
     def percentage(part, whole):
         return (part / whole * Decimal('100')) if whole else Decimal('0')
 
@@ -1502,6 +1566,7 @@ def _balance_sheet_data(request):
         'operational_working_capital': operational_working_capital,
         'biomass_asset_percent': biomass_asset_percent,
         'asset_composition': asset_composition, 'validation_checks': validation_checks,
+        'ratio_healths': ratio_healths,
         'is_balanced': difference == 0,
         'is_reconciled': reconciliation_equity == 0,
         'balance_status': (
