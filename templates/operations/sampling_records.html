@@ -18,10 +18,10 @@
       <tr>
         <th rowspan="2">Tanggal</th><th rowspan="2">Kolam</th><th rowspan="2">DOC</th>
         <th colspan="2">SHRIMP</th><th colspan="4">ABW / Size</th><th colspan="3">ADG</th>
-        <th colspan="2">SR%</th><th colspan="2">Biomassa</th><th rowspan="2">FCR</th><th colspan="2">Populasi</th><th rowspan="2">Pakan<br>Kum.</th><th rowspan="2">Tebar</th><th rowspan="2">F/D</th><th rowspan="2">FR</th><th rowspan="2">Index</th><th rowspan="2">Estimasi</th><th rowspan="2" class="text-end">Aksi</th>
+        <th colspan="2">SR%</th><th colspan="2">Biomassa</th><th colspan="2">CC (kg/m²)</th><th rowspan="2">FCR</th><th colspan="2">Populasi</th><th rowspan="2">Pakan<br>Kum.</th><th rowspan="2">Tebar</th><th rowspan="2">F/D</th><th rowspan="2">FR</th><th rowspan="2">Index</th><th rowspan="2">Estimasi</th><th rowspan="2" class="text-end">Aksi</th>
       </tr>
       <tr>
-        <th>Berat</th><th>Jumlah</th><th>Last</th><th>Today</th><th>Target</th><th>Size</th><th>Target</th><th>Actual</th><th>Accum</th><th>FR</th><th>Index</th><th>FR</th><th>Index</th><th>FR</th><th>Index</th>
+        <th>Berat</th><th>Jumlah</th><th>Last</th><th>Today</th><th>Target</th><th>Size</th><th>Target</th><th>Actual</th><th>Accum</th><th>FR</th><th>Index</th><th>FR</th><th>Index</th><th>FR</th><th>Index</th><th>FR</th><th>Index</th>
       </tr>
     </thead>
     <tbody>
@@ -33,10 +33,11 @@
         <td>{{i.adg_weekly_target|angka:2}}</td><td>{{i.adg_weekly|angka:2}}</td><td>{{i.adg_cumulative|angka:2}}</td>
         <td>{{i.estimated_sr|angka:2}}</td><td>{{i.sr_index_percent|angka:2}}</td>
         <td>{{i.biomass_kg|angka:2}}</td><td>{{i.biomass_index_kg|angka:2}}</td>
+        <td><b>{{i.cc_fr|angka:2}}</b></td><td><b>{{i.cc_index|angka:2}}</b></td>
         <td><span class="badge-soft">{{i.fcr|angka:2}}</span></td><td>{{i.population|ribuan}}</td><td>{{i.population_index|ribuan}}</td>
         <td>{{i.cumulative_feed_kg|angka:2}}</td><td>{{i.stocking_count|ribuan}}</td><td>{{i.daily_feed_kg|angka:2}}</td><td>{{i.fr_percent|angka:2}}</td><td>{{i.index_score|angka:2}}</td><td>{{i.harvest_estimation}}</td><td>{% url 'operations:sampling_detail' i.id as detail_url %}{% url 'operations:edit_sampling_record' i.id as edit_url %}{% url 'operations:delete_sampling_record' i.id as delete_url %}{% include 'operations/_row_actions_icon_only.html' %}</td>
       </tr>
-      {% empty %}<tr><td colspan="26" class="text-center text-muted">Belum ada data sampling.</td></tr>{% endfor %}
+      {% empty %}<tr><td colspan="28" class="text-center text-muted">Belum ada data sampling.</td></tr>{% endfor %}
     </tbody>
   </table>
 </div>

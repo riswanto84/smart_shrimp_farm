@@ -774,6 +774,12 @@ def production_dashboard(request):
         ]
         latest_doc = max(doc_candidates, key=lambda x: x[0])[1] if doc_candidates else None
 
+        pond_area = Decimal(str(pond.area_m2 or 0))
+        biomass_fr = Decimal(str(getattr(sample, 'biomass_kg', 0) or 0)) if sample else Decimal('0')
+        biomass_index = Decimal(str(getattr(sample, 'biomass_index_kg', 0) or 0)) if sample else Decimal('0')
+        cc_fr = (biomass_fr / pond_area).quantize(Decimal('0.01')) if pond_area > 0 else Decimal('0')
+        cc_index = (biomass_index / pond_area).quantize(Decimal('0.01')) if pond_area > 0 else Decimal('0')
+
         pond_cards.append({
             'pond': pond,
             'sample': sample,
@@ -783,6 +789,8 @@ def production_dashboard(request):
             'parameter': parameter,
             'latest_feed': latest_feed,
             'latest_doc': latest_doc,
+            'cc_fr': cc_fr,
+            'cc_index': cc_index,
         })
 
     # ---------------------------------------------------------------
@@ -1515,6 +1523,16 @@ def sampling_records(request):
     )
 
     page_obj = paginate_queryset(request, items, per_page=10)
+    # CC pada daftar sampling dihitung dari biomassa masing-masing metode
+    # dibagi luas kolam. Nilai ini hanya atribut runtime dan tidak memerlukan
+    # perubahan model atau migration.
+    for sample in page_obj.object_list:
+        pond_area = Decimal(str(sample.pond.area_m2 or 0))
+        biomass_fr = Decimal(str(sample.biomass_kg or 0))
+        biomass_index = Decimal(str(sample.biomass_index_kg or 0))
+        sample.cc_fr = (biomass_fr / pond_area).quantize(Decimal('0.01')) if pond_area > 0 else Decimal('0')
+        sample.cc_index = (biomass_index / pond_area).quantize(Decimal('0.01')) if pond_area > 0 else Decimal('0')
+
     return render(request, 'operations/sampling_records.html', {
         'items': page_obj, 'page_obj': page_obj, 'date_from': date_from, 'date_to': date_to, 'ponds': Pond.objects.all(),
         'avg_abw': avg_abw, 'avg_fcr': avg_fcr, 'avg_adg': avg_adg, 'biomass': biomass
@@ -1808,6 +1826,11 @@ def anco_detail(request, pk):
 @permission_required('operations.sampling')
 def sampling_detail(request, pk):
     obj = get_object_or_404(SamplingRecord.objects.select_related('pond', 'cycle'), pk=pk)
+    pond_area = Decimal(str(obj.pond.area_m2 or 0))
+    biomass_fr = Decimal(str(obj.biomass_kg or 0))
+    biomass_index = Decimal(str(obj.biomass_index_kg or 0))
+    cc_fr = (biomass_fr / pond_area).quantize(Decimal('0.01')) if pond_area > 0 else Decimal('0')
+    cc_index = (biomass_index / pond_area).quantize(Decimal('0.01')) if pond_area > 0 else Decimal('0')
     sections = [
         {'title': 'Identitas Sampling', 'icon': 'fa-calendar-check', 'rows': [
             ('Tanggal', obj.date.strftime('%d/%m/%Y')), ('Kolam', obj.pond.name),
@@ -1820,6 +1843,8 @@ def sampling_detail(request, pk):
         ]},
         {'title': 'Estimasi Produksi', 'icon': 'fa-chart-pie', 'rows': [
             ('Estimasi SR', _detail_value(obj.estimated_sr, ' %')), ('Biomassa FR', _detail_value(obj.biomass_kg, ' kg')),
+            ('Biomassa Index', _detail_value(obj.biomass_index_kg, ' kg')), ('CC FR', _detail_value(cc_fr, ' kg/m²')),
+            ('CC Index', _detail_value(cc_index, ' kg/m²')), ('Luas Kolam', _detail_value(obj.pond.area_m2, ' m²')),
             ('FCR', obj.fcr), ('Populasi', _detail_value(obj.population, ' ekor')),
             ('Pakan Kumulatif', _detail_value(obj.cumulative_feed_kg, ' kg')), ('Estimasi Panen', obj.harvest_estimation or '-'),
             ('Catatan', obj.notes or '-'),
