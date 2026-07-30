@@ -26,6 +26,7 @@ def _sync_expense(record):
             f'Dibuat otomatis dari modul penggajian. Periode {record.period.start_date:%d/%m/%Y} '
             f's.d. {record.period.end_date:%d/%m/%Y}.'
             + (f' Keterangan: {record.notes}' if record.notes else '')
+            + (f' Catatan: {record.catatan}' if record.catatan else '')
         ),
         'is_fiscal_deductible': True,
     }

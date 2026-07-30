@@ -42,15 +42,19 @@ class PayrollRecordForm(forms.ModelForm):
 
     class Meta:
         model = PayrollRecord
-        fields = ['employee', 'work_days', 'base_salary', 'overtime_pay', 'meal_allowance', 'transport_allowance', 'other_allowance', 'bonus', 'bpjs_deduction', 'tax_deduction', 'loan_deduction', 'other_deduction', 'amount_paid', 'payment_method', 'payment_date', 'notes']
+        fields = ['employee', 'work_days', 'base_salary', 'overtime_pay', 'meal_allowance', 'transport_allowance', 'other_allowance', 'bonus', 'bpjs_deduction', 'tax_deduction', 'loan_deduction', 'other_deduction', 'amount_paid', 'payment_method', 'payment_date', 'notes', 'catatan']
         widgets = {
             'payment_date': DateInput(),
             'notes': forms.Textarea(attrs={
                 'rows': 4,
                 'placeholder': 'Contoh: bonus panen, lembur, potongan kasbon, atau informasi pembayaran lainnya.',
             }),
+            'catatan': forms.Textarea(attrs={
+                'rows': 3,
+                'placeholder': 'Masukkan catatan tambahan untuk data gaji karyawan.',
+            }),
         }
-        labels = {'notes': 'Keterangan'}
+        labels = {'notes': 'Keterangan', 'catatan': 'Catatan'}
 
     def __init__(self, *args, period=None, **kwargs):
         super().__init__(*args, **kwargs)

@@ -17,7 +17,7 @@
           <div class="card-body">
             <div class="row g-3">
               {% for field in form %}
-                {% if field.name != 'payment_method' and field.name != 'payment_date' and field.name != 'amount_paid' and field.name != 'notes' %}
+                {% if field.name != 'payment_method' and field.name != 'payment_date' and field.name != 'amount_paid' and field.name != 'notes' and field.name != 'catatan' %}
                   <div class="col-md-6">
                     <label class="form-label fw-semibold">{{ field.label }}</label>
                     {% if field.name == 'employee' %}
@@ -50,7 +50,7 @@
           <div class="card-header bg-white py-3"><h5 class="mb-0 fw-bold">Pembayaran</h5></div>
           <div class="card-body">
             {% for field in form %}
-              {% if field.name == 'payment_method' or field.name == 'payment_date' or field.name == 'amount_paid' or field.name == 'notes' %}
+              {% if field.name == 'payment_method' or field.name == 'payment_date' or field.name == 'amount_paid' or field.name == 'notes' or field.name == 'catatan' %}
                 <div class="mb-3">
                   <label class="form-label fw-semibold">{{ field.label }}</label>
                   {{ field }}{{ field.errors }}
