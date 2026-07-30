@@ -367,12 +367,14 @@ def growth_prediction_dashboard(request):
         for row in harvest_qs
         if _is_total_harvest(row.harvest_type)
     }
-    ponds = Pond.objects.exclude(id__in=completed_pond_ids).order_by('name')
+    # Semua kolam tetap dibaca. Kolam selesai panen masuk ringkasan total siklus
+    # menggunakan hasil panen riil, sedangkan kolam aktif diproyeksikan ke DOC target.
+    ponds = Pond.objects.all().order_by('name')
 
     samples_qs = filter_selected_cycle(
         request,
         SamplingRecord.objects.select_related('pond').all(),
-    ).exclude(pond_id__in=completed_pond_ids)
+    )
 
     pond_id = request.GET.get('pond') or ''
     try:
@@ -439,7 +441,27 @@ def growth_prediction_dashboard(request):
 
     for pond in ponds:
         records = unique_doc_samples(pond)
+        pond_harvests = [row for row in harvest_qs if row.pond_id == pond.id]
+        total_real_harvest_kg = sum((_float(row.total_kg) for row in pond_harvests), 0.0)
+        is_completed = pond.id in completed_pond_ids
         if not records:
+            # Kolam selesai panen tetap masuk total siklus meskipun histori sampling
+            # tidak tersedia, selama memiliki hasil panen riil.
+            if is_completed and total_real_harvest_kg > 0:
+                pond_payloads.append({
+                    'pond': pond, 'actual': [], 'projection': [], 'latest': None,
+                    'latest_doc': 0, 'latest_abw': 0, 'latest_size': 0, 'adg': 0,
+                    'fcr': 0, 'population': 0, 'population_at_latest_sampling': 0,
+                    'population_before_partial': 0,
+                    'partial_harvest_kg_after_sampling': 0,
+                    'partial_harvest_population_after_sampling': 0,
+                    'mortality_population_after_sampling': 0,
+                    'projected_size': 0, 'projected_abw': 0,
+                    'projected_biomass_ton': round(total_real_harvest_kg / 1000.0, 3),
+                    'real_harvest_ton': round(total_real_harvest_kg / 1000.0, 3),
+                    'milestones': [], 'growth_status': 'Selesai panen',
+                    'status_class': 'done', 'is_completed': True,
+                })
             continue
         latest = records[-1]
         latest_doc = int(latest.doc or 0)
@@ -451,6 +473,35 @@ def growth_prediction_dashboard(request):
             stocking = int(latest.stocking_count or getattr(pond, 'capacity_seed', 0) or 0)
             sr = _float(latest.estimated_sr) or _float(latest.sr_index_percent) or _float(getattr(selected_cycle, 'target_sr_percent', 85) or 85)
             population = round(stocking * sr / 100.0) if stocking and sr else 0
+
+        if is_completed:
+            actual = []
+            for sample in records:
+                abw = _float(sample.abw_g)
+                size = 1000.0 / abw if abw > 0 else 0
+                biomass = _float(sample.biomass_kg) or _float(sample.biomass_index_kg)
+                actual.append({'doc': int(sample.doc or 0), 'date': sample.date.strftime('%d %b %Y'),
+                    'abw': round(abw, 2), 'size': round(size, 1),
+                    'biomass_ton': round(biomass / 1000.0, 3),
+                    'adg': round(_float(sample.adg_weekly) or _float(sample.adg_cumulative), 3),
+                    'fcr': round(_float(sample.fcr), 3)})
+                all_chart_rows.setdefault(int(sample.doc or 0), {'doc': int(sample.doc or 0)})[f'p{pond.id}'] = round(size, 1)
+            pond_payloads.append({
+                'pond': pond, 'actual': actual, 'projection': [], 'latest': latest,
+                'latest_doc': latest_doc, 'latest_abw': round(latest_abw, 2),
+                'latest_size': round(latest_size, 1), 'adg': round(adg, 3),
+                'fcr': round(_float(latest.fcr), 3), 'population': 0,
+                'population_at_latest_sampling': int(latest.population or latest.population_index or 0),
+                'population_before_partial': 0, 'partial_harvest_kg_after_sampling': 0,
+                'partial_harvest_population_after_sampling': 0,
+                'mortality_population_after_sampling': 0, 'projected_size': latest_size,
+                'projected_abw': latest_abw,
+                'projected_biomass_ton': round(total_real_harvest_kg / 1000.0, 3),
+                'real_harvest_ton': round(total_real_harvest_kg / 1000.0, 3),
+                'milestones': [], 'growth_status': 'Selesai panen',
+                'status_class': 'done', 'is_completed': True,
+            })
+            continue
 
         # Kurangi populasi hanya dari panen parsial yang terjadi setelah
         # sampling terbaru. Panen sebelum/di tanggal sampling diasumsikan sudah
@@ -583,11 +634,15 @@ def growth_prediction_dashboard(request):
             'milestones': milestones,
             'growth_status': growth_status,
             'status_class': status_class,
+            'is_completed': False,
+            'real_harvest_ton': round(total_real_harvest_kg / 1000.0, 3),
         })
 
     selected_payload = None
     if pond_payloads:
-        selected_payload = next((x for x in pond_payloads if x['pond'].id == pond_id_int), pond_payloads[0])
+        selected_payload = next((x for x in pond_payloads if x['pond'].id == pond_id_int), None)
+        if selected_payload is None:
+            selected_payload = next((x for x in pond_payloads if not x.get('is_completed')), pond_payloads[0])
         pond_id_int = selected_payload['pond'].id
 
     all_series = [
@@ -595,6 +650,28 @@ def growth_prediction_dashboard(request):
         for x in pond_payloads
     ]
     all_chart = [all_chart_rows[d] for d in sorted(all_chart_rows)]
+
+    active_payloads = [x for x in pond_payloads if not x.get('is_completed')]
+    completed_payloads = [x for x in pond_payloads if x.get('is_completed')]
+    estimated_active_ton = round(sum(_float(x.get('projected_biomass_ton')) for x in active_payloads), 3)
+    real_completed_ton = round(sum(_float(x.get('real_harvest_ton')) for x in completed_payloads), 3)
+    # Panen parsial pada kolam aktif sudah mengurangi populasi proyeksi, tetapi hasil
+    # panennya tetap harus ditambahkan kembali untuk memperoleh total produksi siklus.
+    real_active_harvest_ton = round(sum(_float(x.get('real_harvest_ton')) for x in active_payloads), 3)
+    total_real_harvest_ton = round(real_completed_ton + real_active_harvest_ton, 3)
+    total_cycle_projection_ton = round(estimated_active_ton + total_real_harvest_ton, 3)
+    target_biomass_ton = _float(getattr(selected_cycle, 'target_biomass_ton', 25) or 25)
+    target_difference_ton = round(total_cycle_projection_ton - target_biomass_ton, 3)
+    target_achievement_percent = round((total_cycle_projection_ton / target_biomass_ton * 100), 1) if target_biomass_ton else 0
+    cycle_production_rows = sorted([
+        {
+            'pond_name': x['pond'].name,
+            'status': 'Selesai Panen' if x.get('is_completed') else 'Aktif',
+            'real_harvest_ton': round(_float(x.get('real_harvest_ton')), 3),
+            'remaining_projection_ton': 0 if x.get('is_completed') else round(_float(x.get('projected_biomass_ton')), 3),
+            'total_potential_ton': round(_float(x.get('real_harvest_ton')) + (0 if x.get('is_completed') else _float(x.get('projected_biomass_ton'))), 3),
+        } for x in pond_payloads
+    ], key=lambda row: row['pond_name'])
 
     context = {
         'ponds': ponds,
@@ -608,6 +685,14 @@ def growth_prediction_dashboard(request):
         'all_chart': all_chart,
         'all_series': all_series,
         'completed_pond_count': len(completed_pond_ids),
+        'active_pond_count': len(active_payloads),
+        'estimated_active_ton': estimated_active_ton,
+        'total_real_harvest_ton': total_real_harvest_ton,
+        'total_cycle_projection_ton': total_cycle_projection_ton,
+        'target_biomass_ton': target_biomass_ton,
+        'target_difference_ton': target_difference_ton,
+        'target_achievement_percent': target_achievement_percent,
+        'cycle_production_rows': cycle_production_rows,
     }
     return render(request, 'operations/growth_prediction_dashboard.html', context)
 
