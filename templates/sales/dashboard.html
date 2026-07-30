@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+{% load currency %}
+{% block content %}
+<div class="sales-dash-page">
+  <div class="sales-hero">
+    <div>
+      <span class="sales-kicker"><i class="fa-solid fa-chart-pie"></i> DASHBOARD PENJUALAN</span>
+      <h1>Ringkasan Performa Penjualan Udang</h1>
+      <p>Monitoring omzet, kilogram terjual, transaksi, piutang, metode bayar, size udang, dan pelanggan terbesar untuk kebutuhan manajemen.</p>
+    </div>
+    <div class="sales-hero-actions">
+      <a class="btn btn-light" href="{% url 'sales:cashier' %}"><i class="fa-solid fa-cash-register"></i> Transaksi Baru</a>
+      <a class="btn btn-outline-light" href="{% url 'sales:invoices' %}"><i class="fa-solid fa-file-invoice-dollar"></i> Daftar Nota</a>
+    </div>
+  </div>
+
+  <div class="sales-filter-card">
+    <form method="get" class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label">Tanggal Mulai</label>
+        <input class="form-control" type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Tanggal Selesai</label>
+        <input class="form-control" type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Status</label>
+        <select class="form-select" name="status">
+          <option value="">Semua</option>
+          {% for value,label in status_choices %}<option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Metode Bayar</label>
+        <select class="form-select" name="payment_method">
+          <option value="">Semua</option>
+          {% for value,label in payment_choices %}<option value="{{ value }}" {% if payment_filter == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 d-grid">
+        <button class="btn btn-primary"><i class="fa-solid fa-filter"></i> Terapkan</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="sales-kpi-grid">
+    <div class="sales-kpi-card primary"><i class="fa-solid fa-sack-dollar"></i><span>Total Omzet</span><b>{{ total_revenue|rupiah }}</b><small>Periode {{ date_from|date:'d/m/Y' }} - {{ date_to|date:'d/m/Y' }}</small></div>
+    <div class="sales-kpi-card success"><i class="fa-solid fa-scale-balanced"></i><span>Total Kg Terjual</span><b>{{ total_kg|angka:2 }} Kg</b><small>Rata-rata {{ avg_price|rupiah }}/kg</small></div>
+    <div class="sales-kpi-card info"><i class="fa-solid fa-receipt"></i><span>Total Transaksi</span><b>{{ total_transactions|ribuan }}</b><small>{{ paid_count|ribuan }} lunas · {{ receivable_count|ribuan }} piutang/pending</small></div>
+    <div class="sales-kpi-card warning"><i class="fa-solid fa-hand-holding-dollar"></i><span>Piutang / Pending</span><b>{{ receivable_revenue|rupiah }}</b><small>Perlu monitoring pembayaran</small></div>
+  </div>
+
+  <div class="sales-grid-main">
+    <section class="sales-panel sales-panel-wide">
+      <div class="sales-panel-head">
+        <div><h2>Tren Omzet Harian</h2><p>Perbandingan omzet dan volume transaksi harian.</p></div>
+        <span>{{ trend_rows|length }} hari</span>
+      </div>
+      <div class="sales-trend-list">
+        {% for row in trend_rows %}
+        <div class="sales-trend-row">
+          <div class="trend-date">{{ row.label }}</div>
+          <div class="trend-bar-wrap"><span style="width:{{ row.revenue_width|angka:0 }}%"></span></div>
+          <div class="trend-value"><b>{{ row.revenue|rupiah }}</b><small>{{ row.kg|angka:1 }} Kg · {{ row.count|ribuan }} trx</small></div>
+        </div>
+        {% empty %}
+        <div class="sales-empty">Belum ada transaksi pada periode ini.</div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="sales-panel">
+      <div class="sales-panel-head"><div><h2>Status Pembayaran</h2><p>Komposisi nilai nota.</p></div></div>
+      <div class="sales-progress-list">
+        {% for row in status_rows %}
+        <div class="sales-progress-item"><div><b>{{ row.label }}</b><span>{{ row.count|ribuan }} nota · {{ row.amount|rupiah }}</span></div><em><i style="width:{{ row.width|angka:0 }}%"></i></em></div>
+        {% empty %}<div class="sales-empty">Belum ada status pembayaran.</div>{% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <div class="sales-grid-3">
+    <section class="sales-panel">
+      <div class="sales-panel-head"><div><h2>Metode Pembayaran</h2><p>Cash, transfer, tempo, QRIS, dan Midtrans.</p></div></div>
+      <div class="sales-progress-list compact">
+        {% for row in payment_rows %}
+        <div class="sales-progress-item"><div><b>{{ row.label }}</b><span>{{ row.count|ribuan }} transaksi · {{ row.amount|rupiah }}</span></div><em><i style="width:{{ row.width|angka:0 }}%"></i></em></div>
+        {% empty %}<div class="sales-empty">Belum ada data metode bayar.</div>{% endfor %}
+      </div>
+    </section>
+
+    <section class="sales-panel">
+      <div class="sales-panel-head"><div><h2>Penjualan per Size</h2><p>Size udang paling banyak terjual.</p></div></div>
+      <div class="sales-progress-list compact">
+        {% for row in size_rows %}
+        <div class="sales-progress-item"><div><b>Size {{ row.label }}</b><span>{{ row.kg|angka:2 }} Kg · {{ row.amount|rupiah }}</span></div><em><i style="width:{{ row.width|angka:0 }}%"></i></em></div>
+        {% empty %}<div class="sales-empty">Belum ada data size.</div>{% endfor %}
+      </div>
+    </section>
+
+    <section class="sales-panel">
+      <div class="sales-panel-head"><div><h2>Top Pelanggan</h2><p>Pelanggan dengan omzet terbesar.</p></div></div>
+      <div class="sales-rank-list">
+        {% for row in top_customers %}
+        <div class="sales-rank-item"><strong>{{ forloop.counter|ribuan }}</strong><div><b>{{ row.label }}</b><span>{{ row.kg|angka:2 }} Kg · {{ row.count|ribuan }} transaksi</span></div><em>{{ row.amount|rupiah }}</em></div>
+        {% empty %}<div class="sales-empty">Belum ada pelanggan.</div>{% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <div class="sales-grid-main">
+    <section class="sales-panel sales-panel-wide">
+      <div class="sales-panel-head"><div><h2>Nota Terbaru</h2><p>Transaksi terakhir pada periode terpilih.</p></div><a href="{% url 'sales:invoices' %}">Lihat semua</a></div>
+      <div class="table-responsive">
+        <table class="table app-table align-middle sales-table-clean">
+          <thead><tr><th>Tanggal</th><th>Nota</th><th>Pelanggan</th><th>Kg</th><th>Total</th><th>Metode</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+          {% for s in recent_sales %}
+            <tr><td>{{ s.date|date:'d/m/Y H:i' }}</td><td><b>{{ s.invoice_no }}</b></td><td>{{ s.customer.name|default:'-' }}</td><td>{{ s.total_kg|angka:2 }}</td><td>{{ s.total_amount|rupiah }}</td><td>{{ s.payment_method }}</td><td><span class="status {% if s.status == 'Lunas' %}status-budidaya{% else %}status-panen{% endif %}">{{ s.status }}</span></td><td><a class="btn btn-sm btn-outline-primary" href="{% url 'sales:invoice' s.id %}">Detail</a></td></tr>
+          {% empty %}<tr><td colspan="8" class="text-center text-muted">Belum ada nota.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="sales-panel sales-alert-panel">
+      <div class="sales-panel-head"><div><h2>Piutang & Pending</h2><p>Perlu ditindaklanjuti.</p></div></div>
+      <div class="sales-unpaid-list">
+        {% for s in unpaid_sales %}
+        <a href="{% url 'sales:invoice' s.id %}"><b>{{ s.invoice_no }}</b><span>{{ s.customer.name|default:'-' }} · {{ s.total_amount|rupiah }}</span><em>{{ s.status }}</em></a>
+        {% empty %}<div class="sales-empty success"><i class="fa-solid fa-circle-check"></i> Tidak ada piutang/pending pada periode ini.</div>{% endfor %}
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

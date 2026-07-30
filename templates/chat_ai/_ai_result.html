@@ -1,0 +1,12 @@
+<div class="ai-card ai-result-card">
+  <div class="ai-section-title"><i class="fa-solid fa-brain"></i><h2>Hasil Analisa Ollama</h2></div>
+  {% if ai_text %}
+    <div class="ai-text-output">{{ ai_text|linebreaksbr }}</div>
+  {% else %}
+    <div class="ai-empty-state">
+      <i class="fa-solid fa-wand-magic-sparkles"></i>
+      <b>Analisa Ollama belum dibuat.</b>
+      <span>Klik tombol <b>Generate AI</b> untuk meminta Ollama menganalisa data terbaru.</span>
+    </div>
+  {% endif %}
+</div>

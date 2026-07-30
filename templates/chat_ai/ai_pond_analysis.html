@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}AI Analisa Kondisi Kolam{% endblock %}
+{% block content %}
+{% include 'chat_ai/_ai_header.html' with page_title='AI Analisa Kondisi Kolam' page_subtitle='Analisis otomatis kondisi kolam berbasis data harian, anco, sampling, siphon, dan parameter air.' %}
+<div class="ai-kpi-grid">
+  <div class="ai-kpi success"><i class="fa-solid fa-shield-heart"></i><span>Status Kolam</span><b>{{ status }}</b><small>Kondisi berdasarkan skor gabungan</small></div>
+  <div class="ai-kpi"><i class="fa-solid fa-gauge-high"></i><span>Skor Kesehatan</span><b>{{ health|angka:0 }}/100</b><small>Semakin tinggi semakin baik</small></div>
+  <div class="ai-kpi warning"><i class="fa-solid fa-triangle-exclamation"></i><span>Risiko</span><b>{{ risk_label }}</b><small>{% if reasons %}{{ reasons|join:', ' }}{% else %}Tidak ada risiko dominan{% endif %}</small></div>
+  <div class="ai-kpi"><i class="fa-solid fa-weight-scale"></i><span>ABW / FCR</span><b>{% if ctx.latest_sampling %}{{ ctx.latest_sampling.abw_g|angka:2 }} g / {{ ctx.latest_sampling.fcr|angka:2 }}{% else %}-{% endif %}</b><small>Sampling terakhir</small></div>
+</div>
+<div class="ai-dashboard-grid">
+  <div class="ai-card wide">
+    <div class="ai-section-title"><i class="fa-solid fa-microchip"></i><h2>Ringkasan Analisa AI</h2></div>
+    <div class="ai-two-col">
+      <div>
+        <h3>Status Overall</h3>
+        <div class="ai-big-status {% if status == 'BAIK' %}good{% elif status == 'WASPADA' %}warn{% else %}danger{% endif %}">{{ status }}</div>
+        <ul class="ai-check-list">
+          <li><i class="fa-solid fa-utensils"></i> Nafsu makan: {% if ctx.latest_anco %}{{ ctx.latest_anco.appetite_status }}{% else %}-{% endif %}</li>
+          <li><i class="fa-solid fa-water"></i> Total pakan 7 hari: {{ ctx.feed_7d|angka:2 }} kg</li>
+          <li><i class="fa-solid fa-skull"></i> Mortalitas siphon 7 hari: {{ ctx.dead_7d|ribuan }} ekor</li>
+          <li><i class="fa-solid fa-chart-line"></i> FCR: {% if ctx.latest_sampling %}{{ ctx.latest_sampling.fcr|angka:2 }}{% else %}-{% endif %}</li>
+        </ul>
+      </div>
+      <div class="ai-mini-chart">
+        <h3>Indikator Utama</h3>
+        <div class="ai-meter"><span style="width:{{ health|angka:0 }}%"></span></div>
+        <p>Skor kesehatan {{ health|angka:0 }}/100. Parameter ini menggabungkan kualitas air, anco, FCR, sampling, dan tren siphon.</p>
+      </div>
+    </div>
+  </div>
+  <div class="ai-card">
+    <div class="ai-section-title"><i class="fa-solid fa-list-check"></i><h2>Rekomendasi Cepat</h2></div>
+    <ul class="ai-reco-list">
+      <li><i class="fa-solid fa-check"></i>Pertahankan aerasi malam dan cek DO subuh.</li>
+      <li><i class="fa-solid fa-check"></i>Evaluasi pakan berdasarkan hasil anco sore.</li>
+      <li><i class="fa-solid fa-check"></i>Lakukan siphon dasar bila endapan meningkat.</li>
+      <li><i class="fa-solid fa-check"></i>Bandingkan sampling terbaru dengan target ADG.</li>
+    </ul>
+  </div>
+</div>
+{% include 'chat_ai/_ai_result.html' %}
+{% include 'chat_ai/_source_data.html' %}
+{% endblock %}

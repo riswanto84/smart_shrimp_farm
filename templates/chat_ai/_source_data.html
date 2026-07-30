@@ -1,0 +1,8 @@
+<div class="ai-source-strip">
+  <b>Sumber Data</b>
+  <div><i class="fa-solid fa-chart-simple"></i><span>Data Harian<br><small>{% if ctx.latest_daily %}{{ ctx.latest_daily.date }}{% else %}Belum ada{% endif %}</small></span></div>
+  <div><i class="fa-solid fa-shrimp"></i><span>Cek Anco<br><small>{% if ctx.latest_anco %}{{ ctx.latest_anco.date }}{% else %}Belum ada{% endif %}</small></span></div>
+  <div><i class="fa-solid fa-flask-vial"></i><span>Sampling<br><small>{% if ctx.latest_sampling %}{{ ctx.latest_sampling.date }}{% else %}Belum ada{% endif %}</small></span></div>
+  <div><i class="fa-solid fa-water-ladder"></i><span>Siphon<br><small>{% if ctx.latest_siphon %}{{ ctx.latest_siphon.date }}{% else %}Belum ada{% endif %}</small></span></div>
+  <div><i class="fa-solid fa-droplet"></i><span>Parameter Air<br><small>{% if ctx.latest_param %}{{ ctx.latest_param.date }}{% else %}Belum ada{% endif %}</small></span></div>
+</div>

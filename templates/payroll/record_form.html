@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container-fluid py-4 px-3 px-lg-4">
+  <div class="mb-4">
+    <h1 class="h3 fw-bold">{{ title }}</h1>
+    <p class="text-muted">Periode {{ period.name }}</p>
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="row g-4">
+      <div class="col-xl-8">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white py-3">
+            <h5 class="mb-0 fw-bold">Pendapatan dan Potongan</h5>
+          </div>
+          <div class="card-body">
+            <div class="row g-3">
+              {% for field in form %}
+                {% if field.name != 'payment_method' and field.name != 'payment_date' and field.name != 'amount_paid' and field.name != 'notes' and field.name != 'catatan' %}
+                  <div class="col-md-6">
+                    <label class="form-label fw-semibold">{{ field.label }}</label>
+                    {% if field.name == 'employee' %}
+                      <div class="employee-search" data-employee-search>
+                        {{ field }}
+                        <input type="text"
+                               class="form-control employee-search-input"
+                               placeholder="Cari nama, NIK, atau jabatan karyawan..."
+                               autocomplete="off"
+                               aria-label="Cari karyawan">
+                        <button type="button" class="employee-search-toggle" tabindex="-1" aria-label="Buka pilihan karyawan">⌄</button>
+                        <div class="employee-search-menu" role="listbox"></div>
+                      </div>
+                      <small class="text-muted d-block mt-1">Ketik nama, NIK/kode, atau jabatan karyawan.</small>
+                    {% else %}
+                      {{ field }}
+                    {% endif %}
+                    {% if field.help_text %}<small class="text-muted">{{ field.help_text }}</small>{% endif %}
+                    {{ field.errors }}
+                  </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-xl-4">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white py-3"><h5 class="mb-0 fw-bold">Pembayaran</h5></div>
+          <div class="card-body">
+            {% for field in form %}
+              {% if field.name == 'payment_method' or field.name == 'payment_date' or field.name == 'amount_paid' or field.name == 'notes' or field.name == 'catatan' %}
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">{{ field.label }}</label>
+                  {{ field }}{{ field.errors }}
+                </div>
+              {% endif %}
+            {% endfor %}
+            <div class="alert alert-info small">Status pembayaran dihitung otomatis dari jumlah dibayar. Gaji yang lunas otomatis masuk Pengeluaran Operasional kategori Tenaga Kerja.</div>
+            <div class="d-grid gap-2">
+              <button class="btn btn-primary">Simpan Perhitungan</button>
+              <a class="btn btn-outline-secondary" href="{% url 'payroll:period_detail' period.pk %}">Batal</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<style>
+.employee-search{position:relative}.employee-search-source{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}.employee-search-input{padding-right:42px}.employee-search-toggle{position:absolute;right:1px;top:1px;width:40px;height:calc(100% - 2px);border:0;background:transparent;font-size:22px;color:#5d6b82}.employee-search-menu{display:none;position:absolute;z-index:1050;top:calc(100% + 5px);left:0;right:0;max-height:270px;overflow:auto;background:#fff;border:1px solid #d8e1ee;border-radius:10px;box-shadow:0 12px 28px rgba(16,35,65,.16);padding:6px}.employee-search.open .employee-search-menu{display:block}.employee-search-option{display:block;width:100%;border:0;background:#fff;text-align:left;border-radius:7px;padding:9px 11px;color:#17233b}.employee-search-option:hover,.employee-search-option.active{background:#edf4ff}.employee-search-empty{padding:12px;color:#6b7280;text-align:center}.employee-search-input.is-invalid-selection{border-color:#dc3545;box-shadow:0 0 0 .25rem rgba(220,53,69,.12)}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('[data-employee-search]').forEach(function (wrapper) {
+    const select = wrapper.querySelector('select');
+    const input = wrapper.querySelector('.employee-search-input');
+    const menu = wrapper.querySelector('.employee-search-menu');
+    const toggle = wrapper.querySelector('.employee-search-toggle');
+    const options = Array.from(select.options).filter(o => o.value);
+
+    function selectedLabel() {
+      const option = options.find(o => o.value === select.value);
+      return option ? option.text.trim() : '';
+    }
+    input.value = selectedLabel();
+
+    function render(query) {
+      const needle = (query || '').trim().toLocaleLowerCase('id-ID');
+      const matches = options.filter(o => o.text.toLocaleLowerCase('id-ID').includes(needle));
+      menu.innerHTML = '';
+      if (!matches.length) {
+        const empty = document.createElement('div');
+        empty.className = 'employee-search-empty';
+        empty.textContent = 'Karyawan tidak ditemukan';
+        menu.appendChild(empty);
+        return;
+      }
+      matches.forEach(function (option) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'employee-search-option' + (option.value === select.value ? ' active' : '');
+        button.textContent = option.text;
+        button.addEventListener('mousedown', function (event) {
+          event.preventDefault();
+          select.value = option.value;
+          input.value = option.text.trim();
+          input.classList.remove('is-invalid-selection');
+          select.dispatchEvent(new Event('change', {bubbles:true}));
+          wrapper.classList.remove('open');
+        });
+        menu.appendChild(button);
+      });
+    }
+    function openMenu() { render(input.value === selectedLabel() ? '' : input.value); wrapper.classList.add('open'); }
+    input.addEventListener('focus', openMenu);
+    input.addEventListener('input', function () { select.value = ''; input.classList.remove('is-invalid-selection'); render(input.value); wrapper.classList.add('open'); });
+    toggle.addEventListener('click', function () { wrapper.classList.toggle('open'); if (wrapper.classList.contains('open')) { input.focus(); render(''); } });
+    document.addEventListener('mousedown', function (event) { if (!wrapper.contains(event.target)) wrapper.classList.remove('open'); });
+    input.closest('form').addEventListener('submit', function (event) {
+      if (!select.value) { event.preventDefault(); input.classList.add('is-invalid-selection'); input.focus(); wrapper.classList.add('open'); render(input.value); }
+    });
+  });
+});
+</script>
+{% endblock %}

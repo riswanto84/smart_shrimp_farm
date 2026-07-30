@@ -1,0 +1,24 @@
+{% if page_obj and page_obj.paginator.num_pages > 1 %}
+<nav class="pagination-wrap" aria-label="Navigasi halaman data">
+  <div class="pagination-info">
+    Menampilkan {{ page_obj.start_index|ribuan }}–{{ page_obj.end_index|ribuan }} dari {{ page_obj.paginator.count|ribuan }} data
+  </div>
+  <ul class="pagination pagination-sm mb-0">
+    {% if page_obj.has_previous %}
+      <li class="page-item"><a class="page-link" href="?{{ request.GET.urlencode }}&page=1">Awal</a></li>
+      <li class="page-item"><a class="page-link" href="?{{ request.GET.urlencode }}&page={{ page_obj.previous_page_number|ribuan }}">Sebelumnya</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">Awal</span></li>
+      <li class="page-item disabled"><span class="page-link">Sebelumnya</span></li>
+    {% endif %}
+    <li class="page-item active"><span class="page-link">{{ page_obj.number|ribuan }} / {{ page_obj.paginator.num_pages|ribuan }}</span></li>
+    {% if page_obj.has_next %}
+      <li class="page-item"><a class="page-link" href="?{{ request.GET.urlencode }}&page={{ page_obj.next_page_number|ribuan }}">Berikutnya</a></li>
+      <li class="page-item"><a class="page-link" href="?{{ request.GET.urlencode }}&page={{ page_obj.paginator.num_pages|ribuan }}">Akhir</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">Berikutnya</span></li>
+      <li class="page-item disabled"><span class="page-link">Akhir</span></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}

@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Akses Ditolak{% endblock %}
+{% block content %}
+<section class="card p-4 shadow-sm border-0 rounded-4">
+  <div class="d-flex align-items-center gap-3">
+    <div class="rounded-circle bg-danger-subtle text-danger d-flex align-items-center justify-content-center" style="width:56px;height:56px">
+      <i class="fa-solid fa-lock fa-xl"></i>
+    </div>
+    <div>
+      <h3 class="mb-1">Akses ditolak</h3>
+      <p class="text-muted mb-0">Role Anda tidak memiliki izin untuk membuka fitur ini.</p>
+    </div>
+  </div>
+  <hr>
+  <a href="/dashboard/" class="btn btn-primary">Kembali ke Dashboard</a>
+</section>
+{% endblock %}

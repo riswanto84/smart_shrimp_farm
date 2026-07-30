@@ -1,0 +1,22 @@
+<div class="ai-page-head">
+  <div>
+    <div class="ai-title-row"><span class="ai-spark"><i class="fa-solid fa-wand-magic-sparkles"></i></span><h1>{{ page_title }}</h1></div>
+    <p>{{ page_subtitle }}</p>
+  </div>
+  <form class="ai-filter-bar" method="get">
+    {% if show_pond|default:True %}
+    <label>Pilih Kolam
+      <select name="pond" class="form-select" onchange="this.form.submit()">
+        {% for p in ponds %}<option value="{{p.id}}" {% if selected_pond and selected_pond.id == p.id %}selected{% endif %}>{{p.name}}</option>{% endfor %}
+      </select>
+    </label>
+    {% endif %}
+    {% block extra_filters %}{% endblock %}
+    <input type="hidden" name="generate" value="1">
+    <button class="btn btn-primary"><i class="fa-solid fa-rotate"></i> Generate AI</button>
+  </form>
+</div>
+<div class="ai-status-line">
+  <span class="badge {% if ollama_health.ok %}text-bg-success{% else %}text-bg-warning{% endif %}"><i class="fa-solid fa-robot"></i> {{ ollama_health.message }}</span>
+  <span class="text-muted">Model: {{ ollama_health.model }} | URL: {{ ollama_health.url }}</span>
+</div>

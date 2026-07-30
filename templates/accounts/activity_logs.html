@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Log Aktivitas{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Log Riwayat Aktivitas</h1><p>Pemantauan aktivitas seluruh pengguna. Hanya Root/Superuser dan Owner yang dapat membuka halaman ini.</p></div></div>
+<div class="kpi-grid mb-3">
+  <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-list-check"></i></div><div><span>Total Aktivitas</span><strong>{{ summary.total|default:0 }}</strong><small>Seluruh catatan tersimpan</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-calendar-day"></i></div><div><span>Hari Ini</span><strong>{{ today_count }}</strong><small>Aktivitas tanggal berjalan</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-users"></i></div><div><span>Pengguna Tercatat</span><strong>{{ active_users }}</strong><small>Akun dengan riwayat aktivitas</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-triangle-exclamation"></i></div><div><span>Aksi Gagal</span><strong>{{ failed_count }}</strong><small>Respons HTTP gagal</small></div></div>
+</div>
+<div class="panel mb-3">
+<form method="get" class="row g-2 align-items-end">
+  <div class="col-lg-3"><label class="form-label">Pencarian</label><input class="form-control" name="q" value="{{ request.GET.q }}" placeholder="Pengguna, aktivitas, atau URL"></div>
+  <div class="col-lg-2"><label class="form-label">Pengguna</label><select class="form-select" name="user"><option value="">Semua</option>{% for u in all_users %}<option value="{{ u.id }}" {% if request.GET.user == u.id|stringformat:'s' %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>{% endfor %}</select></div>
+  <div class="col-lg-2"><label class="form-label">Jenis Aksi</label><select class="form-select" name="action_type"><option value="">Semua</option>{% for value,label in action_choices %}<option value="{{ value }}" {% if request.GET.action_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  <div class="col-lg-2"><label class="form-label">Modul</label><select class="form-select" name="module"><option value="">Semua</option>{% for m in modules %}<option value="{{ m }}" {% if request.GET.module == m %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></div>
+  <div class="col-lg-1"><label class="form-label">Dari</label><input class="form-control" type="date" name="date_from" value="{{ request.GET.date_from }}"></div>
+  <div class="col-lg-1"><label class="form-label">Sampai</label><input class="form-control" type="date" name="date_to" value="{{ request.GET.date_to }}"></div>
+  <div class="col-lg-1 d-flex gap-1"><button class="btn btn-primary icon-only-btn" title="Terapkan filter" aria-label="Terapkan filter"><i class="fa-solid fa-filter"></i></button><a class="btn btn-outline-secondary icon-only-btn" href="{% url 'accounts:activity_logs' %}" title="Reset filter" aria-label="Reset filter"><i class="fa-solid fa-rotate-left"></i></a></div>
+</form>
+</div>
+<div class="panel table-responsive">
+<table class="table align-middle activity-table"><thead><tr><th>Waktu</th><th>Pengguna</th><th>Role</th><th>Aktivitas</th><th>Modul</th><th>IP</th><th>Status</th><th class="text-end">Aksi</th></tr></thead><tbody>
+{% for log in logs %}<tr>
+<td><b>{{ log.created_at|date:"d M Y" }}</b><small class="d-block text-muted">{{ log.created_at|date:"H:i:s" }} WIB</small></td>
+<td><b>{{ log.user.get_full_name|default:log.user.username|default:"Sistem" }}</b><small class="d-block text-muted">{% if log.user %}@{{ log.user.username }}{% else %}Tanpa akun{% endif %}</small></td>
+<td><span class="badge text-bg-light">{{ log.role_snapshot|default:"-" }}</span></td>
+<td><span class="activity-type activity-{{ log.action_type }}">{{ log.get_action_type_display }}</span><div class="mt-1">{{ log.action }}</div></td>
+<td>{{ log.module|default:"-" }}</td><td><code>{{ log.ip_address|default:"-" }}</code></td>
+<td>{% if log.status_code < 400 %}<span class="badge bg-success-subtle text-success">{{ log.status_code }}</span>{% else %}<span class="badge bg-danger-subtle text-danger">{{ log.status_code }}</span>{% endif %}</td>
+<td class="text-end"><a class="btn btn-sm btn-outline-primary icon-only-btn" href="{% url 'accounts:activity_log_detail' log.id %}" title="Lihat detail" aria-label="Lihat detail"><i class="fa-solid fa-eye"></i></a></td>
+</tr>{% empty %}<tr><td colspan="8" class="text-center text-muted py-5"><i class="fa-solid fa-clock-rotate-left fa-2x mb-2 d-block"></i>Belum ada riwayat aktivitas yang sesuai.</td></tr>{% endfor %}
+</tbody></table>
+{% include "_pagination.html" %}
+</div>
+{% endblock %}

@@ -1,0 +1,420 @@
+{% extends 'base.html' %}
+{% load currency %}
+{% block topbar_extra %}
+<div class="ai-top-status" id="ollama-status-wrap" title="Status koneksi AI Ollama">
+  <span class="ai-top-icon"><i class="fa-solid fa-robot"></i></span>
+  <span class="ai-top-copy">
+    <small>AI Ollama</small>
+    <strong id="ollama-status-badge" class="{% if ollama_status.status == 'online' %}online{% elif ollama_status.status == 'model_missing' or ollama_status.status == 'timeout' %}warning{% else %}offline{% endif %}">
+      {% if ollama_status.status == 'online' %}Online{% elif ollama_status.status == 'model_missing' %}Model belum tersedia{% elif ollama_status.status == 'timeout' %}Timeout{% else %}Offline{% endif %}
+    </strong>
+  </span>
+  <span id="ollama-status-detail" class="ai-top-detail">{% if ollama_status.ok %}{{ ollama_status.model }} · {{ ollama_status.latency_ms }} ms{% else %}Tidak tersambung{% endif %}</span>
+  <button type="button" id="ollama-recheck" class="ai-top-refresh" title="Cek ulang status Ollama" aria-label="Cek ulang status Ollama"><i class="fa-solid fa-rotate"></i></button>
+</div>
+{% endblock %}
+{% block content %}
+<style>
+/* Dashboard proporsional: panel data utama memanfaatkan seluruh lebar area konten. */
+.dashboard-grid.dashboard-balanced{
+  grid-template-columns:minmax(0,1.35fr) minmax(360px,.85fr);
+  align-items:start;
+}
+.dashboard-balanced .pond-summary,
+.dashboard-balanced .production-panel,
+.dashboard-balanced .doc120-panel,
+.dashboard-balanced .harvest-chart-panel,
+.dashboard-balanced .harvest-history-panel,
+.dashboard-balanced .activity-panel{grid-column:1 / -1;}
+.dashboard-balanced .parameters-panel{grid-column:1;}
+.dashboard-balanced .chart-panel{grid-column:2;}
+.dashboard-balanced .production-panel{
+  display:grid;
+  grid-template-columns:190px minmax(0,1fr);
+  column-gap:28px;
+  row-gap:12px;
+  align-items:center;
+}
+.dashboard-balanced .production-panel h2,
+.dashboard-balanced .production-panel > small{grid-column:1 / -1;}
+.dashboard-balanced .production-panel .donut{justify-self:center;}
+.dashboard-balanced .production-panel ul{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(240px,1fr));
+  gap:4px 28px;
+  width:100%;
+}
+.dashboard-balanced .production-panel li{
+  min-height:32px;
+  margin:2px 0;
+  padding:5px 0;
+  border-bottom:1px dashed #e5edf7;
+}
+.dashboard-balanced .production-panel li span{white-space:nowrap;}
+.dashboard-balanced .doc120-panel .kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
+.dashboard-balanced .activity-panel{min-height:auto;}
+@media(max-width:1280px){
+  .dashboard-grid.dashboard-balanced{grid-template-columns:1fr;}
+  .dashboard-balanced .parameters-panel,
+  .dashboard-balanced .chart-panel{grid-column:1 / -1;}
+}
+@media(max-width:900px){
+  .dashboard-balanced .production-panel{grid-template-columns:1fr;}
+  .dashboard-balanced .production-panel h2,
+  .dashboard-balanced .production-panel > small{grid-column:1;}
+  .dashboard-balanced .production-panel ul{grid-template-columns:1fr;}
+  .dashboard-balanced .doc120-panel .kpi-grid{grid-template-columns:1fr;}
+}
+@media(max-width:560px){
+  .dashboard-balanced .production-panel li{align-items:flex-start;flex-wrap:wrap;}
+  .dashboard-balanced .production-panel li span{width:100%;margin-left:18px;white-space:normal;}
+}
+</style>
+<div class="page-head">
+  <div>
+    <h1>Dashboard</h1>
+    <p>Selamat datang, <b>{{ user.get_full_name|default:user.username }}</b>! Berikut ringkasan kondisi tambak hari ini.</p>
+  </div>
+</div>
+<div class="kpi-grid">
+  <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-chart-line"></i></div><div><span>Total Omzet</span><strong>{{ sales_total|rupiah }}</strong><small>Total omzet pada siklus yang dipilih</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-wallet"></i></div><div><span>Total Pengeluaran</span><strong>{{ expense_total|rupiah }}</strong><small>Total pengeluaran pada siklus yang dipilih</small></div></div>
+  <div class="kpi-card">
+    <div class="kpi-icon {% if profit_loss_total > 0 %}green{% elif profit_loss_total < 0 %}red{% else %}gold{% endif %}"><i class="fa-solid {% if profit_loss_total > 0 %}fa-arrow-trend-up{% elif profit_loss_total < 0 %}fa-arrow-trend-down{% else %}fa-scale-balanced{% endif %}"></i></div>
+    <div>
+      <span>Laba / Rugi</span>
+      <strong>{{ profit_loss_total|rupiah }}</strong>
+      <small>{{ profit_loss_status }} · margin {{ profit_margin_percent|floatformat:2 }}% pada siklus yang dipilih</small>
+    </div>
+  </div>
+  <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-water"></i></div><div><span>Kolam Aktif</span><strong>{{ active_pond_count }}</strong><small>{{ completed_pond_count }} kolam selesai panen</small></div></div>
+</div>
+<section class="panel real-harvest-panel" style="margin-bottom:20px;">
+  <div class="panel-head">
+    <div><h2>Realisasi Panen Riil</h2><span>{% if selected_cycle %}Siklus {{ selected_cycle.name }}{% else %}Belum ada siklus terpilih{% endif %}</span></div>
+    <a href="/operations/harvests/">Lihat Data Panen <i class="fa-solid fa-arrow-right"></i></a>
+  </div>
+  <div class="kpi-grid" style="margin-bottom:16px;">
+    <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-shrimp"></i></div><div><span>Total Panen Riil</span><strong>{{ harvest_total_kg|angka:2 }} kg</strong><small>{{ harvest_total_ton|floatformat:2 }} ton · {{ harvest_count }} kali panen</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-layer-group"></i></div><div><span>Total Panen Parsial</span><strong>{{ partial_harvest_total_kg|angka:2 }} kg</strong><small>{{ partial_harvest_total_ton|floatformat:2 }} ton · {{ partial_harvest_count }} kali pada {{ partial_harvest_pond_count }} kolam</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-water"></i></div><div><span>Estimasi Sisa Udang di Kolam (FR)</span><strong>{{ production_total_kg|angka:2 }} kg</strong><small>{{ production_total_ton|floatformat:2 }} ton · biomassa FR setelah panen parsial dan mortalitas</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-calculator"></i></div><div><span>Estimasi Sisa Udang (Index)</span><strong>{{ production_index_total_kg|angka:2 }} kg</strong><small>{{ production_index_total_ton|floatformat:2 }} ton · biomassa index setelah panen parsial dan mortalitas</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-bullseye"></i></div><div><span>Target Produksi</span><strong>{{ target_harvest_ton|floatformat:2 }} ton</strong><small>Sisa target {{ harvest_remaining_kg|angka:2 }} kg</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-tag"></i></div><div><span>Harga Jual Rata-rata</span><strong>{{ average_sale_price|rupiah }}</strong><small>Omzet ÷ berat penjualan</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-ruler-combined"></i></div><div><span>Size Panen Riil Terbaru</span><strong>{{ latest_harvest_size }}</strong><small>Berdasarkan detail penjualan/panen terbaru</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-money-bill-trend-up"></i></div><div><span>Harga Panen Terbaru</span><strong>{% if latest_harvest_price > 0 %}{{ latest_harvest_price|rupiah }}{% else %}—{% endif %}</strong><small>Harga rata-rata tertimbang per kg</small></div></div>
+  </div>
+  {% if partial_harvest_by_pond %}
+  <div class="table-responsive" style="margin:4px 0 18px;">
+    <table class="table app-table align-middle">
+      <thead><tr><th>Kolam Panen Parsial</th><th class="text-end">Frekuensi</th><th class="text-end">Total Parsial</th><th>Parsial Terakhir</th><th>Size Terakhir</th></tr></thead>
+      <tbody>
+        {% for row in partial_harvest_by_pond %}
+        <tr>
+          <td><b>{{ row.pond.name }}</b></td>
+          <td class="text-end">{{ row.count }} kali</td>
+          <td class="text-end"><b>{{ row.total_kg|angka:2 }} kg</b><br><small class="text-muted">{{ row.total_ton|floatformat:2 }} ton</small></td>
+          <td>{{ row.latest_date|date:"d M Y" }}</td>
+          <td><b>{{ row.latest_size }}</b></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-muted" style="margin:4px 0 18px;">Belum ada panen parsial pada siklus yang dipilih.</div>
+  {% endif %}
+  <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:7px;font-weight:700;"><span>Progres Target Panen</span><span>{{ harvest_progress_percent|floatformat:1 }}%</span></div>
+  <div style="height:14px;border-radius:999px;background:#e8eef7;overflow:hidden;"><div style="height:100%;width:{{ harvest_progress_percent|stringformat:'s' }}%;max-width:100%;border-radius:999px;background:linear-gradient(90deg,#16a34a,#22c55e);"></div></div>
+</section>
+<section id="weather-card" class="weather-card-pro {% if live_weather.status == 'offline' %}is-offline{% elif live_weather.status == 'cache' %}is-cache{% endif %}" data-weather-updated="{% if live_weather.updated_at %}{{ live_weather.updated_at|date:'c' }}{% endif %}">
+  <div class="weather-main">
+    <div class="weather-icon-wrap"><i id="weather-icon" class="fa-solid {{ live_weather.icon|default:'fa-cloud' }}"></i></div>
+    <div class="weather-current">
+      <div class="weather-eyebrow"><i class="fa-solid fa-location-dot"></i> <span id="weather-location">{{ live_weather.location|default:'Muara Gembong' }}</span></div>
+      <div class="weather-temp-row">
+        <strong id="weather-temperature">{% if live_weather.temperature is not None %}{{ live_weather.temperature|floatformat:1 }}°C{% else %}—{% endif %}</strong>
+        <div><b id="weather-condition">{{ live_weather.condition|default:'Data cuaca tidak tersedia' }}</b><span>Terasa seperti <span id="weather-apparent">{% if live_weather.apparent_temperature is not None %}{{ live_weather.apparent_temperature|floatformat:1 }}°C{% else %}—{% endif %}</span></span></div>
+      </div>
+      <small id="weather-source-line" class="weather-source-line">
+        {% if live_weather.status == 'live' %}<i class="fa-solid fa-circle-check"></i> Data API terbaru
+        {% elif live_weather.status == 'cache' %}<i class="fa-solid fa-clock-rotate-left"></i> Data terakhir tersimpan
+        {% else %}<i class="fa-solid fa-triangle-exclamation"></i> API tidak tersedia{% endif %}
+        {% if live_weather.updated_at %} · {{ live_weather.updated_at|date:"d M Y H:i" }} WIB{% endif %}
+        · Sumber: <a href="{{ live_weather.source_url|default:'https://open-meteo.com/' }}" target="_blank" rel="noopener">{{ live_weather.source|default:'Open-Meteo' }}</a>
+      </small>
+    </div>
+  </div>
+  <div class="weather-metrics">
+    <div><i class="fa-solid fa-droplet"></i><span>Kelembapan</span><b id="weather-humidity">{% if live_weather.humidity is not None %}{{ live_weather.humidity|floatformat:0 }}%{% else %}—{% endif %}</b></div>
+    <div><i class="fa-solid fa-cloud-rain"></i><span>Peluang Hujan</span><b id="weather-rain">{% if live_weather.rain_chance is not None %}{{ live_weather.rain_chance|floatformat:0 }}%{% else %}—{% endif %}</b></div>
+    <div id="weather-wind-card" title="{% if live_weather.wind_direction_degrees is not None %}Arah angin {{ live_weather.wind_direction }} ({{ live_weather.wind_direction_degrees|floatformat:0 }}°){% else %}Arah angin tidak tersedia{% endif %}"><i class="fa-solid fa-wind"></i><span>Angin</span><b id="weather-wind-speed">{% if live_weather.wind_speed is not None %}{{ live_weather.wind_speed|floatformat:1 }} km/j{% else %}—{% endif %}</b><small id="weather-wind-direction">{% if live_weather.wind_direction and live_weather.wind_direction != '—' %}{{ live_weather.wind_direction }}{% else %}Arah tidak tersedia{% endif %}</small></div>
+    <div><i class="fa-solid fa-gauge-high"></i><span>Tekanan</span><b id="weather-pressure">{% if live_weather.pressure is not None %}{{ live_weather.pressure|floatformat:0 }} hPa{% else %}—{% endif %}</b></div>
+    <div><i class="fa-solid fa-temperature-arrow-up"></i><span>Hari Ini</span><b id="weather-today-range">{% if live_weather.today_min is not None %}{{ live_weather.today_min|floatformat:0 }}–{{ live_weather.today_max|floatformat:0 }}°C{% else %}—{% endif %}</b></div>
+  </div>
+  <div class="weather-advice">
+    <div class="weather-advice-title"><i class="fa-solid fa-shrimp"></i><span>Catatan operasional tambak</span></div>
+    {% for advice in live_weather.farm_advice %}
+    <div class="weather-advice-item {{ advice.level }}"><i class="fa-solid {{ advice.icon }}"></i><span>{{ advice.text }}</span></div>
+    {% empty %}<div class="weather-advice-item info"><i class="fa-solid fa-circle-info"></i><span>Gunakan hasil pengukuran air kolam sebagai dasar keputusan utama.</span></div>{% endfor %}
+    <small>Cuaca berasal dari model/API pada koordinat tambak, bukan sensor suhu air kolam.</small>
+  </div>
+</section>
+<div class="dashboard-grid dashboard-balanced">
+  <section class="panel pond-summary">
+    <div class="panel-head"><h2>Ringkasan Kolam</h2><a href="/ponds/">Lihat Semua Kolam <i class="fa-solid fa-arrow-right"></i></a></div>
+    <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>Luas</th><th>Status</th><th>Padat Tebar</th><th>DOC</th><th>Estimasi Panen Size 30</th><th>Estimasi DOC 120</th></tr></thead><tbody>{% for p in ponds %}<tr><td><b>{{p.name}}</b></td><td>{{p.area_m2|ribuan}} m²</td><td><span class="status status-{{p.status|lower}}">{{p.status}}</span></td><td>{% if p.dashboard_stocking_density is not None %}{{ p.dashboard_stocking_density|floatformat:2 }} ekor/m²{% else %}<span class="text-muted">Belum ada data</span>{% endif %}</td><td>{% if p.dashboard_doc is not None %}{{ p.dashboard_doc }}{% else %}<span class="text-muted">—</span>{% endif %}</td><td>{% if p.dashboard_is_completed %}<span class="status status-panen">Selesai Panen</span><br><small class="text-muted">Tidak masuk estimasi aktif</small>{% elif p.dashboard_size30_date %}<b>{{ p.dashboard_size30_date|date:"d M Y" }}</b><br><small class="text-muted">{% if p.dashboard_size30_days == 0 %}Target tercapai{% else %}± {{ p.dashboard_size30_days }} hari lagi · ABW target 33,33 g{% endif %}</small>{% else %}<span class="text-muted">{{ p.dashboard_size30_status }}</span>{% endif %}</td><td>{% if p.dashboard_is_completed %}<b>{{ p.dashboard_real_harvest_ton|floatformat:2 }} ton</b><br><small class="text-muted">Hasil riil total yang telah dipanen</small>{% elif p.dashboard_doc120_biomass_ton is not None %}<b>{{ p.dashboard_doc120_biomass_ton|floatformat:2 }} ton</b><br><small class="text-muted">ABW {{ p.dashboard_doc120_abw|floatformat:2 }} g · size {{ p.dashboard_doc120_size|floatformat:0 }} · {{ p.dashboard_doc120_days }} hari{% if p.dashboard_partial_harvest_kg > 0 %} · setelah parsial {{ p.dashboard_partial_harvest_kg|floatformat:2 }} kg{% endif %}</small>{% else %}<span class="text-muted">{{ p.dashboard_doc120_status }}</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+  <section class="panel parameters-panel">
+    <div class="panel-head"><h2>Parameter Terbaru {% if latest %}<span>({{ latest.pond.name }} · {{ latest.date|date:"d M Y" }})</span>{% endif %}</h2><a href="/operations/parameters/">Lihat Detail</a></div>
+    <div class="param-grid">
+      <div class="param-card"><i class="fa-solid fa-temperature-half"></i><span>Suhu Air</span><strong>{% if latest_temperature is not None %}{{ latest_temperature|floatformat:2 }} <small>°C</small>{% else %}—{% endif %}</strong><em>{% if latest_temperature is not None %}Data aktual{% else %}Belum ada data{% endif %}</em><div class="spark"></div></div>
+      <div class="param-card"><i class="fa-solid fa-droplet"></i><span>pH</span><strong>{% if latest_ph is not None %}{{ latest_ph|floatformat:2 }}{% else %}—{% endif %}</strong><em>{% if latest_ph is not None %}Data aktual{% else %}Belum ada data{% endif %}</em><div class="spark"></div></div>
+      <div class="param-card"><i class="fa-solid fa-o"></i><span>DO (Oksigen)</span><strong>{% if latest_do is not None %}{{ latest_do|floatformat:2 }} <small>mg/L</small>{% else %}—{% endif %}</strong><em>{% if latest_do is not None %}Data aktual{% else %}Belum ada data{% endif %}</em><div class="spark"></div></div>
+      <div class="param-card"><i class="fa-solid fa-grip"></i><span>Salinitas</span><strong>{% if latest_salinity is not None %}{{ latest_salinity|floatformat:2 }} <small>ppt</small>{% else %}—{% endif %}</strong><em>{% if latest_salinity is not None %}Data aktual{% else %}Belum ada data{% endif %}</em><div class="spark"></div></div>
+      <div class="param-card"><i class="fa-solid fa-flask"></i><span>Amonia (NH₃)</span><strong>—</strong><em>Belum tersedia</em><div class="spark"></div></div>
+      <div class="param-card"><i class="fa-solid fa-water"></i><span>Kecerahan</span><strong>{% if latest_transparency is not None %}{{ latest_transparency|floatformat:2 }} <small>cm</small>{% else %}—{% endif %}</strong><em>{% if latest_transparency is not None %}Data aktual{% else %}Belum ada data{% endif %}</em><div class="spark"></div></div>
+    </div>
+  </section>
+  <section class="panel chart-panel">
+    <div class="panel-head"><h2>Grafik Suhu Air <span>(maks. 7 pencatatan terakhir)</span></h2>{% if latest %}<span>{{ latest.pond.name }}</span>{% endif %}</div>
+    <div class="fake-chart">
+      {% if temperature_points %}
+      <svg viewBox="0 0 600 180" preserveAspectRatio="none" aria-label="Grafik suhu air aktual">
+        <g stroke="#e7eef8">{% for i in '123456' %}<line x1="{{ forloop.counter }}00" y1="0" x2="{{ forloop.counter }}00" y2="180"/>{% endfor %}</g>
+        <polyline points="{{ temperature_points }}" fill="none" stroke="#0d6efd" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      {% else %}
+      <div style="height:100%;display:flex;align-items:center;justify-content:center;text-align:center;color:#64748b;font-weight:700;">Belum ada data suhu air yang pernah diinput.</div>
+      {% endif %}
+    </div>
+  </section>
+  <section class="panel production-panel">
+    <h2>Biomassa Aktif Tersisa — FR <span>(Ton){% if latest_sampling_date %} · Sampling {{ latest_sampling_date|date:"d M Y" }}{% endif %}</span></h2>
+    <div class="donut" style="background:conic-gradient({{ production_gradient }});"><span>Total FR<br><b>{{ production_total_ton|floatformat:2 }}</b><br>Ton</span></div>
+    <ul>
+      {% for item in production_items %}
+      <li><b style="--c:{{ item.color }}"></b> {{ item.pond.name }} <span>{{ item.biomass_ton|floatformat:2 }} Ton · CC {{ item.cc|floatformat:2 }} kg/m²</span></li>
+      {% empty %}
+      <li>Belum ada data biomassa FR.</li>
+      {% endfor %}
+    </ul>
+    <small class="text-muted">Biomassa FR sampling terakhir dikurangi panen parsial dan mortalitas setelah sampling. CC = biomassa tersisa ÷ luas kolam.</small>
+  </section>
+  <section class="panel production-panel">
+    <h2>Biomassa Aktif Tersisa — Index <span>(Ton){% if latest_sampling_date %} · Sampling {{ latest_sampling_date|date:"d M Y" }}{% endif %}</span></h2>
+    <div class="donut" style="background:conic-gradient({{ production_index_gradient }});"><span>Total Index<br><b>{{ production_index_total_ton|floatformat:2 }}</b><br>Ton</span></div>
+    <ul>
+      {% for item in production_index_items %}
+      <li><b style="--c:{{ item.color }}"></b> {{ item.pond.name }} <span>{{ item.biomass_ton|floatformat:2 }} Ton · CC {{ item.cc|floatformat:2 }} kg/m²</span></li>
+      {% empty %}
+      <li>Belum ada data biomassa Index.</li>
+      {% endfor %}
+    </ul>
+    <small class="text-muted">Biomassa Index sampling terakhir dikurangi panen parsial dan mortalitas setelah sampling. CC = biomassa tersisa ÷ luas kolam.</small>
+  </section>
+  <section class="panel doc120-panel" style="grid-column:1 / -1;">
+    <div class="panel-head"><h2>Estimasi Produksi Aktif DOC 120 <span>{% if latest_sampling_date %}berdasarkan sampling {{ latest_sampling_date|date:"d M Y" }}{% endif %}</span></h2></div>
+    <div class="kpi-grid" style="margin-bottom:0;">
+      <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-water"></i></div><div><span>Estimasi Produksi Aktif</span><strong>{{ doc120_total_ton|floatformat:2 }} ton</strong><small>Hanya kolam budidaya · setelah panen parsial</small></div></div>
+      <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-truck-ramp-box"></i></div><div><span>Panen Riil</span><strong>{{ harvest_total_ton|floatformat:2 }} ton</strong><small>Akumulasi panen parsial dan total</small></div></div>
+      <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-chart-line"></i></div><div><span>Total Potensi Siklus</span><strong>{{ total_cycle_potential_ton|floatformat:2 }} ton</strong><small>Panen riil + estimasi produksi aktif</small></div></div>
+    </div>
+    <p class="text-muted" style="margin:12px 0 0;">Perhitungan mengecualikan kolam panen total/selesai. Panen parsial mengurangi biomassa dan populasi tersisa sebelum proyeksi DOC 120 dihitung.</p>
+  </section>
+  <section class="panel harvest-chart-panel">
+    <div class="panel-head"><h2>Grafik Panen Riil <span>10 tanggal panen terakhir</span></h2></div>
+    {% if harvest_chart %}
+    <div style="display:grid;gap:10px;">
+      {% for row in harvest_chart %}
+      <div style="display:grid;grid-template-columns:95px minmax(120px,1fr) 130px;gap:12px;align-items:center;">
+        <small style="font-weight:700;">{{ row.date|date:"d M Y" }}</small>
+        <div style="height:18px;background:#edf2f7;border-radius:999px;overflow:hidden;"><div style="height:100%;width:{{ row.width_percent|stringformat:'s' }}%;background:linear-gradient(90deg,#0d6efd,#22c55e);border-radius:999px;"></div></div>
+        <strong style="text-align:right;">{{ row.total_kg|angka:2 }} kg</strong>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="text-muted mb-0">Belum ada data panen riil pada siklus ini.</p>{% endif %}
+  </section>
+  <section class="panel harvest-history-panel">
+    <div class="panel-head"><h2>Riwayat Panen Terbaru</h2><a href="/operations/harvests/">Lihat Semua</a></div>
+    <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Tanggal</th><th>Kolam</th><th>Jenis Panen</th><th>Size Riil</th><th class="text-end">Berat Panen</th><th class="text-end">Berat Terjual</th><th class="text-end">Harga/kg</th><th class="text-end">Nilai Penjualan</th></tr></thead><tbody>
+      {% for row in latest_harvest_rows %}<tr><td>{{ row.harvest.date|date:"d M Y" }}</td><td><b>{{ row.harvest.pond.name }}</b></td><td>{{ row.harvest.harvest_type }}</td><td><b>{{ row.actual_size }}</b></td><td class="text-end"><b>{{ row.harvest.total_kg|angka:2 }} kg</b></td><td class="text-end">{% if row.has_sale %}{{ row.sold_kg|angka:2 }} kg{% else %}<span class="text-muted">Belum dijual</span>{% endif %}</td><td class="text-end">{% if row.has_sale %}<b>{{ row.price_per_kg|rupiah }}</b>{% else %}—{% endif %}</td><td class="text-end">{% if row.has_sale %}{{ row.subtotal|rupiah }}{% else %}—{% endif %}</td></tr>
+      {% empty %}<tr><td colspan="8" class="text-center text-muted">Belum ada data panen riil pada siklus ini.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </section>
+  <section class="panel activity-panel"><div class="panel-head"><h2>Aktivitas Terbaru</h2></div><div class="activity-list"><div><i class="fa-solid fa-circle-info"></i><p><b>Data panen riil telah terintegrasi</b><small>Ringkasan di atas diperbarui otomatis dari menu Panen dan Penjualan.</small></p></div></div></section>
+</div>
+
+{% if live_weather.temperature is None %}
+<script>
+(function () {
+  // Render awal dapat terjadi ketika worker baru hidup dan cache belum terisi.
+  // Minta data sekali dari endpoint proses web, lalu reload setelah cache tersimpan.
+  const key = 'ssf-weather-recovery-v1';
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, '1');
+  fetch('{% url "weather_status_api" %}?refresh=1', {
+    credentials: 'same-origin',
+    headers: {'X-Requested-With': 'XMLHttpRequest'}
+  })
+    .then(function (response) { return response.ok ? response.json() : null; })
+    .then(function (data) {
+      if (data && data.temperature !== null && data.temperature !== undefined) {
+        window.location.reload();
+      }
+    })
+    .catch(function () {});
+})();
+</script>
+{% endif %}
+<script>
+(function () {
+  const endpoint = '{% url "weather_status_api" %}';
+  const pollMs = 5 * 60 * 1000;
+  let requestInFlight = false;
+
+  function numberText(value, decimals, suffix) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '—';
+    return number.toLocaleString('id-ID', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    }) + suffix;
+  }
+
+  function dateText(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return new Intl.DateTimeFormat('id-ID', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+      timeZone: 'Asia/Jakarta', hour12: false
+    }).format(date).replace('.', ':');
+  }
+
+  function setText(id, value) {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+  }
+
+  function applyWeather(data) {
+    const card = document.getElementById('weather-card');
+    if (!card || !data) return;
+    card.classList.toggle('is-offline', data.status === 'offline');
+    card.classList.toggle('is-cache', data.status === 'cache');
+    card.dataset.weatherUpdated = data.updated_at || '';
+
+    const icon = document.getElementById('weather-icon');
+    if (icon) icon.className = 'fa-solid ' + (data.icon || 'fa-cloud');
+    setText('weather-location', data.location || 'Muara Gembong');
+    setText('weather-temperature', numberText(data.temperature, 1, '°C'));
+    setText('weather-condition', data.condition || 'Data cuaca tidak tersedia');
+    setText('weather-apparent', numberText(data.apparent_temperature, 1, '°C'));
+    setText('weather-humidity', numberText(data.humidity, 0, '%'));
+    setText('weather-rain', numberText(data.rain_chance, 0, '%'));
+    setText('weather-wind-speed', numberText(data.wind_speed, 1, ' km/j'));
+    setText('weather-wind-direction', data.wind_direction && data.wind_direction !== '—' ? data.wind_direction : 'Arah tidak tersedia');
+    setText('weather-pressure', numberText(data.pressure, 0, ' hPa'));
+    const range = Number.isFinite(Number(data.today_min)) && Number.isFinite(Number(data.today_max))
+      ? numberText(data.today_min, 0, '') + '–' + numberText(data.today_max, 0, '°C')
+      : '—';
+    setText('weather-today-range', range);
+
+    const windCard = document.getElementById('weather-wind-card');
+    if (windCard) {
+      windCard.title = data.wind_direction_degrees !== null && data.wind_direction_degrees !== undefined
+        ? `Arah angin ${data.wind_direction || ''} (${Math.round(Number(data.wind_direction_degrees))}°)`
+        : 'Arah angin tidak tersedia';
+    }
+
+    const sourceLine = document.getElementById('weather-source-line');
+    if (sourceLine) {
+      const statusLabel = data.status === 'live'
+        ? '<i class="fa-solid fa-circle-check"></i> Data API terbaru'
+        : data.status === 'cache'
+          ? '<i class="fa-solid fa-clock-rotate-left"></i> Data terakhir tersimpan'
+          : '<i class="fa-solid fa-triangle-exclamation"></i> API tidak tersedia';
+      const updated = dateText(data.updated_at);
+      const checked = dateText(data.checked_at);
+      sourceLine.innerHTML = `${statusLabel}${updated ? ' · Waktu data ' + updated + ' WIB' : ''}${checked ? ' · Diperiksa ' + checked + ' WIB' : ''} · Sumber: <a href="${data.source_url || 'https://open-meteo.com/'}" target="_blank" rel="noopener">${data.source || 'Open-Meteo'}</a>`;
+    }
+  }
+
+  async function refreshWeather(force) {
+    if (requestInFlight || document.hidden) return;
+    requestInFlight = true;
+    try {
+      const separator = endpoint.includes('?') ? '&' : '?';
+      const url = endpoint + separator + (force ? 'refresh=1&' : '') + '_=' + Date.now();
+      const response = await fetch(url, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+      });
+      if (!response.ok) return;
+      applyWeather(await response.json());
+    } catch (error) {
+      console.warn('Pembaruan cuaca gagal:', error);
+    } finally {
+      requestInFlight = false;
+    }
+  }
+
+  // Periksa sesaat setelah halaman dibuka dan kemudian setiap 5 menit.
+  window.setTimeout(function () { refreshWeather(true); }, 3000);
+  window.setInterval(function () { refreshWeather(true); }, pollMs);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) refreshWeather(true);
+  });
+})();
+</script>
+<script>
+(function () {
+  const badge = document.getElementById('ollama-status-badge');
+  const detail = document.getElementById('ollama-status-detail');
+  const button = document.getElementById('ollama-recheck');
+  if (!badge || !detail || !button) return;
+
+  function applyStatus(data) {
+    badge.classList.remove('online', 'offline', 'warning');
+    if (data.status === 'online') {
+      badge.textContent = 'Online';
+      badge.classList.add('online');
+      detail.textContent = `${data.model} · ${data.latency_ms} ms`;
+    } else if (data.status === 'model_missing') {
+      badge.textContent = 'Model belum tersedia';
+      badge.classList.add('warning');
+      detail.textContent = data.message;
+    } else if (data.status === 'timeout') {
+      badge.textContent = 'Timeout';
+      badge.classList.add('warning');
+      detail.textContent = data.message;
+    } else {
+      badge.textContent = 'Offline';
+      badge.classList.add('offline');
+      detail.textContent = data.message || 'Ollama tidak dapat dihubungi';
+    }
+  }
+
+  async function checkOllama() {
+    button.disabled = true;
+    button.disabled = true;
+    button.classList.add('is-checking');
+    try {
+      const response = await fetch('/ollama/status/', {headers: {'X-Requested-With': 'XMLHttpRequest'}});
+      applyStatus(await response.json());
+    } catch (error) {
+      applyStatus({status: 'offline', message: 'Gagal memeriksa status Ollama'});
+    } finally {
+      button.disabled = false;
+      button.classList.remove('is-checking');
+    }
+  }
+
+  button.addEventListener('click', checkOllama);
+  window.setInterval(checkOllama, 30000);
+})();
+</script>
+{% endblock %}
