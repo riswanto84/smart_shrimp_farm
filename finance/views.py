@@ -1601,6 +1601,41 @@ def _trade_summary(rows):
     return original, paid, outstanding, overdue
 
 
+
+def _set_payable_payment_status(obj, status, paid_amount, payment_date):
+    """Set status utang secara eksplisit tanpa menghubungkannya ke pengeluaran operasional.
+
+    Riwayat pembayaran lama dikonsolidasikan menjadi satu pembayaran penyesuaian.
+    Dokumen pembayaran lama dipertahankan sebagai dokumen transaksi.
+    """
+    if obj.account_type != TradeAccount.PAYABLE:
+        return
+
+    status = (status or '').strip().lower()
+    total = obj.original_amount or Decimal('0')
+    if status == 'paid':
+        target_paid = total
+    elif status == 'partial':
+        target_paid = paid_amount or Decimal('0')
+        if target_paid <= 0 or target_paid >= total:
+            raise ValueError('Untuk status Lunas Sebagian, jumlah dibayar harus lebih dari Rp0 dan lebih kecil dari nilai awal.')
+    else:
+        target_paid = Decimal('0')
+
+    # Pertahankan file bukti lama dengan memindahkannya menjadi dokumen transaksi.
+    TradeDocument.objects.filter(trade_account=obj, payment__isnull=False).update(payment=None)
+    obj.payments.all().delete()
+
+    if target_paid > 0:
+        TradePayment.objects.create(
+            trade_account=obj,
+            payment_date=payment_date or timezone.localdate(),
+            amount=target_paid,
+            payment_method='Lainnya',
+            document_number='PENYESUAIAN-STATUS',
+            notes='Pembayaran hasil perubahan status utang melalui menu Edit Utang Usaha.',
+        )
+
 def _sale_from_trade_account(obj):
     """Ambil nota sumber dari penanda kartu piutang otomatis."""
     from .receivable_sync import AUTO_NOTE_PREFIX
@@ -1706,7 +1741,7 @@ def edit_trade_account(request, pk):
             customer = Customer.objects.filter(pk=request.POST.get('customer_id')).first()
         if obj.account_type == TradeAccount.RECEIVABLE and customer is None:
             messages.error(request, 'Pilih pelanggan dari Master Pelanggan.')
-        elif amount < obj.paid_amount:
+        elif obj.account_type != TradeAccount.PAYABLE and amount < obj.paid_amount:
             messages.error(request, 'Nilai awal tidak boleh lebih kecil dari total pembayaran yang sudah dicatat.')
         elif not transaction_date or not due_date or due_date < transaction_date:
             messages.error(request, 'Periksa kembali tanggal transaksi dan jatuh tempo.')
@@ -1717,6 +1752,22 @@ def edit_trade_account(request, pk):
             obj.partner_name = customer.name if customer else request.POST.get('partner_name','').strip()
             obj.description=request.POST.get('description','').strip()
             obj.original_amount=amount; obj.notes=request.POST.get('notes','').strip(); obj.save()
+            if obj.account_type == TradeAccount.PAYABLE:
+                try:
+                    _set_payable_payment_status(
+                        obj,
+                        request.POST.get('payment_status'),
+                        parse_rupiah(request.POST.get('paid_amount')),
+                        parse_date(request.POST.get('status_payment_date') or ''),
+                    )
+                except ValueError as exc:
+                    messages.error(request, str(exc))
+                    return render(request, 'finance/trade_account_form.html', {
+                        'obj':obj, 'account_type':obj.account_type,
+                        'title':'Edit '+obj.get_account_type_display(),
+                        'partner_label':'Supplier/Pemasok',
+                        'current_paid': obj.paid_amount,
+                    })
             document_count = _save_trade_documents(request, obj)
             messages.success(request, 'Data berhasil diperbarui' + (f' dan {document_count} dokumen ditambahkan.' if document_count else '.'))
             return redirect('finance:trade_detail', pk=obj.pk)
@@ -1725,6 +1776,7 @@ def edit_trade_account(request, pk):
         'title':'Edit '+obj.get_account_type_display(),
         'partner_label':'Pelanggan' if obj.account_type == TradeAccount.RECEIVABLE else 'Supplier/Pemasok',
         'customers': Customer.objects.order_by('name') if obj.account_type == TradeAccount.RECEIVABLE else None,
+        'current_paid': obj.paid_amount,
     })
 
 

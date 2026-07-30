@@ -157,7 +157,7 @@ class TradeAccount(models.Model):
         if self.outstanding_amount <= 0:
             return 'Lunas'
         if self.paid_amount > 0:
-            return 'Sebagian'
+            return 'Lunas Sebagian'
         return 'Belum Dibayar'
 
     @property

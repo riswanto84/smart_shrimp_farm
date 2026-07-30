@@ -14,6 +14,62 @@
 </div>
 {% endblock %}
 {% block content %}
+<style>
+/* Dashboard proporsional: panel data utama memanfaatkan seluruh lebar area konten. */
+.dashboard-grid.dashboard-balanced{
+  grid-template-columns:minmax(0,1.35fr) minmax(360px,.85fr);
+  align-items:start;
+}
+.dashboard-balanced .pond-summary,
+.dashboard-balanced .production-panel,
+.dashboard-balanced .doc120-panel,
+.dashboard-balanced .harvest-chart-panel,
+.dashboard-balanced .harvest-history-panel,
+.dashboard-balanced .activity-panel{grid-column:1 / -1;}
+.dashboard-balanced .parameters-panel{grid-column:1;}
+.dashboard-balanced .chart-panel{grid-column:2;}
+.dashboard-balanced .production-panel{
+  display:grid;
+  grid-template-columns:190px minmax(0,1fr);
+  column-gap:28px;
+  row-gap:12px;
+  align-items:center;
+}
+.dashboard-balanced .production-panel h2,
+.dashboard-balanced .production-panel > small{grid-column:1 / -1;}
+.dashboard-balanced .production-panel .donut{justify-self:center;}
+.dashboard-balanced .production-panel ul{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(240px,1fr));
+  gap:4px 28px;
+  width:100%;
+}
+.dashboard-balanced .production-panel li{
+  min-height:32px;
+  margin:2px 0;
+  padding:5px 0;
+  border-bottom:1px dashed #e5edf7;
+}
+.dashboard-balanced .production-panel li span{white-space:nowrap;}
+.dashboard-balanced .doc120-panel .kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr));}
+.dashboard-balanced .activity-panel{min-height:auto;}
+@media(max-width:1280px){
+  .dashboard-grid.dashboard-balanced{grid-template-columns:1fr;}
+  .dashboard-balanced .parameters-panel,
+  .dashboard-balanced .chart-panel{grid-column:1 / -1;}
+}
+@media(max-width:900px){
+  .dashboard-balanced .production-panel{grid-template-columns:1fr;}
+  .dashboard-balanced .production-panel h2,
+  .dashboard-balanced .production-panel > small{grid-column:1;}
+  .dashboard-balanced .production-panel ul{grid-template-columns:1fr;}
+  .dashboard-balanced .doc120-panel .kpi-grid{grid-template-columns:1fr;}
+}
+@media(max-width:560px){
+  .dashboard-balanced .production-panel li{align-items:flex-start;flex-wrap:wrap;}
+  .dashboard-balanced .production-panel li span{width:100%;margin-left:18px;white-space:normal;}
+}
+</style>
 <div class="page-head">
   <div>
     <h1>Dashboard</h1>
@@ -104,7 +160,7 @@
     <small>Cuaca berasal dari model/API pada koordinat tambak, bukan sensor suhu air kolam.</small>
   </div>
 </section>
-<div class="dashboard-grid">
+<div class="dashboard-grid dashboard-balanced">
   <section class="panel pond-summary">
     <div class="panel-head"><h2>Ringkasan Kolam</h2><a href="/ponds/">Lihat Semua Kolam <i class="fa-solid fa-arrow-right"></i></a></div>
     <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Kolam</th><th>Luas</th><th>Status</th><th>Padat Tebar</th><th>DOC</th><th>Estimasi Panen Size 30</th><th>Estimasi DOC 120</th></tr></thead><tbody>{% for p in ponds %}<tr><td><b>{{p.name}}</b></td><td>{{p.area_m2|ribuan}} m²</td><td><span class="status status-{{p.status|lower}}">{{p.status}}</span></td><td>{% if p.dashboard_stocking_density is not None %}{{ p.dashboard_stocking_density|floatformat:2 }} ekor/m²{% else %}<span class="text-muted">Belum ada data</span>{% endif %}</td><td>{% if p.dashboard_doc is not None %}{{ p.dashboard_doc }}{% else %}<span class="text-muted">—</span>{% endif %}</td><td>{% if p.dashboard_is_completed %}<span class="status status-panen">Selesai Panen</span><br><small class="text-muted">Tidak masuk estimasi aktif</small>{% elif p.dashboard_size30_date %}<b>{{ p.dashboard_size30_date|date:"d M Y" }}</b><br><small class="text-muted">{% if p.dashboard_size30_days == 0 %}Target tercapai{% else %}± {{ p.dashboard_size30_days }} hari lagi · ABW target 33,33 g{% endif %}</small>{% else %}<span class="text-muted">{{ p.dashboard_size30_status }}</span>{% endif %}</td><td>{% if p.dashboard_is_completed %}<b>{{ p.dashboard_real_harvest_ton|floatformat:2 }} ton</b><br><small class="text-muted">Hasil riil total yang telah dipanen</small>{% elif p.dashboard_doc120_biomass_ton is not None %}<b>{{ p.dashboard_doc120_biomass_ton|floatformat:2 }} ton</b><br><small class="text-muted">ABW {{ p.dashboard_doc120_abw|floatformat:2 }} g · size {{ p.dashboard_doc120_size|floatformat:0 }} · {{ p.dashboard_doc120_days }} hari{% if p.dashboard_partial_harvest_kg > 0 %} · setelah parsial {{ p.dashboard_partial_harvest_kg|floatformat:2 }} kg{% endif %}</small>{% else %}<span class="text-muted">{{ p.dashboard_doc120_status }}</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
@@ -166,7 +222,7 @@
     </div>
     <p class="text-muted" style="margin:12px 0 0;">Perhitungan mengecualikan kolam panen total/selesai. Panen parsial mengurangi biomassa dan populasi tersisa sebelum proyeksi DOC 120 dihitung.</p>
   </section>
-  <section class="panel" style="grid-column:1 / -1;">
+  <section class="panel harvest-chart-panel">
     <div class="panel-head"><h2>Grafik Panen Riil <span>10 tanggal panen terakhir</span></h2></div>
     {% if harvest_chart %}
     <div style="display:grid;gap:10px;">
@@ -180,7 +236,7 @@
     </div>
     {% else %}<p class="text-muted mb-0">Belum ada data panen riil pada siklus ini.</p>{% endif %}
   </section>
-  <section class="panel" style="grid-column:1 / -1;">
+  <section class="panel harvest-history-panel">
     <div class="panel-head"><h2>Riwayat Panen Terbaru</h2><a href="/operations/harvests/">Lihat Semua</a></div>
     <div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Tanggal</th><th>Kolam</th><th>Jenis Panen</th><th>Size Riil</th><th class="text-end">Berat Panen</th><th class="text-end">Berat Terjual</th><th class="text-end">Harga/kg</th><th class="text-end">Nilai Penjualan</th></tr></thead><tbody>
       {% for row in latest_harvest_rows %}<tr><td>{{ row.harvest.date|date:"d M Y" }}</td><td><b>{{ row.harvest.pond.name }}</b></td><td>{{ row.harvest.harvest_type }}</td><td><b>{{ row.actual_size }}</b></td><td class="text-end"><b>{{ row.harvest.total_kg|angka:2 }} kg</b></td><td class="text-end">{% if row.has_sale %}{{ row.sold_kg|angka:2 }} kg{% else %}<span class="text-muted">Belum dijual</span>{% endif %}</td><td class="text-end">{% if row.has_sale %}<b>{{ row.price_per_kg|rupiah }}</b>{% else %}—{% endif %}</td><td class="text-end">{% if row.has_sale %}{{ row.subtotal|rupiah }}{% else %}—{% endif %}</td></tr>
