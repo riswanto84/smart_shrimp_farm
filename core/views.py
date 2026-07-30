@@ -295,6 +295,8 @@ def dashboard(request):
 
     production_total_kg = 0.0
     production_index_total_kg = Decimal('0')
+    carrying_capacity_items = []
+    carrying_capacity_total_ton = Decimal('0')
     active_projection_records = []
 
     # Target panen size 30 = ABW 33,33 gram/ekor.
@@ -337,6 +339,19 @@ def dashboard(request):
         population_fr = int(record.population or 0)
         sampling_biomass = Decimal(str(record.biomass_kg or 0))
         sampling_biomass_index = Decimal(str(record.biomass_index_kg or 0))
+        index_score = Decimal(str(record.index_score or 0))
+        pond_area_m2 = Decimal(str(pond.area_m2 or 0))
+
+        # Carrying Capacity (CC) mengikuti rumus lapangan:
+        # CC (ton) = Index (kg/m2) x luas kolam (m2) / 1.000.
+        # Nilai memakai Index pada sampling terbaru dan tidak dikurangi panen,
+        # karena CC menunjukkan kapasitas kolam, bukan biomassa aktual tersisa.
+        carrying_capacity_ton = (
+            (index_score * pond_area_m2 / Decimal('1000')).quantize(Decimal('0.01'))
+            if index_score > 0 and pond_area_m2 > 0 else Decimal('0')
+        )
+        pond.dashboard_index_score = index_score
+        pond.dashboard_carrying_capacity_ton = carrying_capacity_ton
 
         # Hanya panen setelah sampling yang mengurangi snapshot biomassa terbaru.
         partial_harvests = [
@@ -388,6 +403,14 @@ def dashboard(request):
             'biomass_kg': float(remaining_biomass_index),
             'biomass_ton': float(remaining_biomass_index / Decimal('1000')),
         })
+        carrying_capacity_items.append({
+            'pond': pond,
+            'index_score': index_score,
+            'area_m2': pond_area_m2,
+            'cc_ton': carrying_capacity_ton,
+            'cc_kg': carrying_capacity_ton * Decimal('1000'),
+        })
+        carrying_capacity_total_ton += carrying_capacity_ton
         production_total_kg += float(remaining_biomass)
         production_index_total_kg += remaining_biomass_index
         active_projection_records.append(record)
@@ -519,6 +542,9 @@ def dashboard(request):
         'production_total_ton': production_total_ton,
         'production_index_total_kg': production_index_total_kg,
         'production_index_total_ton': production_index_total_ton,
+        'carrying_capacity_items': carrying_capacity_items,
+        'carrying_capacity_total_ton': carrying_capacity_total_ton,
+        'carrying_capacity_total_kg': carrying_capacity_total_ton * Decimal('1000'),
         'production_gradient': production_gradient,
         'production_index_gradient': production_index_gradient,
         'active_pond_count': active_pond_count,

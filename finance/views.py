@@ -18,9 +18,7 @@ from pathlib import Path
 import json
 import mimetypes
 from ponds.models import Pond
-from operations.models import SamplingRecord, Harvest
-from cultivation.models import CultivationCycle
-from sales.models import Sale, SaleItem, Customer
+from sales.models import Sale, Customer
 from .models import OperationalExpense, ExpenseDocument, TradeAccount, TradePayment, TradeDocument, BalanceEntry, FixedAsset, OtherRevenue
 from core.reporting import get_date_range, filter_by_date_range, format_date_range, export_excel, export_pdf, rupiah
 from core.utils import parse_rupiah
@@ -1332,125 +1330,6 @@ def opening_balance(request):
     return render(request, 'finance/opening_balance.html', context)
 
 
-
-def _biological_asset_valuation(as_of):
-    """Nilai biomassa indeks yang masih tersisa di kolam per tanggal neraca.
-
-    Prinsip perhitungan:
-    1. Ambil sampling terakhir setiap kolam pada siklus yang masih berjalan.
-    2. Gunakan ``biomass_index_kg`` (fallback populasi indeks × ABW).
-    3. Kurangi panen yang terjadi *setelah* tanggal sampling terakhir supaya
-       panen parsial/total terbaru tidak masih tercatat sebagai biomassa.
-    4. Nilai sisa biomassa memakai harga jual rata-rata tertimbang per kg.
-       Harga aktual siklus aktif diprioritaskan, lalu seluruh penjualan, lalu
-       harga estimasi pada master siklus.
-    """
-    zero = Decimal('0')
-    open_cycles = list(
-        CultivationCycle.objects.filter(
-            status__in=(CultivationCycle.STATUS_ACTIVE, CultivationCycle.STATUS_HARVEST),
-            start_date__lte=as_of,
-        ).order_by('id')
-    )
-    if not open_cycles:
-        return {
-            'biomass_index_kg': zero,
-            'average_price_per_kg': zero,
-            'biological_asset_value': zero,
-            'biomass_details': [],
-            'price_source': 'Belum ada siklus aktif',
-        }
-
-    cycle_ids = [cycle.id for cycle in open_cycles]
-
-    def weighted_average_price(items):
-        totals = items.aggregate(
-            total_weight=Sum('weight_kg'),
-            total_value=Sum('subtotal'),
-        )
-        weight = totals['total_weight'] or zero
-        value = totals['total_value'] or zero
-        return (value / weight) if weight > 0 else zero
-
-    actual_items = SaleItem.objects.filter(
-        sale__date__date__lte=as_of,
-        sale__cycle_id__in=cycle_ids,
-        weight_kg__gt=0,
-        subtotal__gt=0,
-    )
-    average_price = weighted_average_price(actual_items)
-    price_source = 'Rata-rata tertimbang harga penjualan siklus aktif'
-
-    if average_price <= 0:
-        actual_items = SaleItem.objects.filter(
-            sale__date__date__lte=as_of,
-            weight_kg__gt=0,
-            subtotal__gt=0,
-        )
-        average_price = weighted_average_price(actual_items)
-        price_source = 'Rata-rata tertimbang seluruh harga penjualan'
-
-    if average_price <= 0:
-        estimated_prices = [
-            Decimal(str(cycle.estimated_price_per_kg or 0))
-            for cycle in open_cycles
-            if Decimal(str(cycle.estimated_price_per_kg or 0)) > 0
-        ]
-        if estimated_prices:
-            average_price = sum(estimated_prices, zero) / Decimal(len(estimated_prices))
-            price_source = 'Rata-rata harga estimasi siklus aktif'
-        else:
-            price_source = 'Harga belum tersedia'
-
-    details = []
-    total_remaining = zero
-    samples = SamplingRecord.objects.filter(
-        cycle_id__in=cycle_ids,
-        date__lte=as_of,
-    ).select_related('pond', 'cycle').order_by('cycle_id', 'pond_id', '-date', '-id')
-
-    latest_by_pond_cycle = {}
-    for sample in samples:
-        latest_by_pond_cycle.setdefault((sample.cycle_id, sample.pond_id), sample)
-
-    for sample in latest_by_pond_cycle.values():
-        index_biomass = Decimal(str(sample.biomass_index_kg or 0))
-        if index_biomass <= 0:
-            population = Decimal(str(sample.population_index or 0))
-            abw = Decimal(str(sample.abw_g or 0))
-            if population > 0 and abw > 0:
-                index_biomass = population * abw / Decimal('1000')
-
-        harvests_after_sample = Harvest.objects.filter(
-            cycle_id=sample.cycle_id,
-            pond_id=sample.pond_id,
-            date__gt=sample.date,
-            date__lte=as_of,
-        )
-        has_total_harvest = harvests_after_sample.filter(harvest_type__iexact='Total').exists()
-        harvested_after_sample = harvests_after_sample.aggregate(s=Sum('total_kg'))['s'] or zero
-        remaining = zero if has_total_harvest else max(index_biomass - harvested_after_sample, zero)
-        value = remaining * average_price
-        total_remaining += remaining
-        details.append({
-            'cycle': sample.cycle.name if sample.cycle else '-',
-            'pond': sample.pond.name,
-            'sampling_date': sample.date,
-            'biomass_index_kg': index_biomass,
-            'harvest_after_sampling_kg': harvested_after_sample,
-            'remaining_biomass_kg': remaining,
-            'value': value,
-        })
-
-    details.sort(key=lambda row: (row['cycle'], row['pond']))
-    return {
-        'biomass_index_kg': total_remaining,
-        'average_price_per_kg': average_price,
-        'biological_asset_value': total_remaining * average_price,
-        'biomass_details': details,
-        'price_source': price_source,
-    }
-
 def _balance_sheet_data(request):
     """Susun neraca dengan sumber data operasional yang transparan.
 
@@ -1494,18 +1373,10 @@ def _balance_sheet_data(request):
     other_revenue = profit_loss['other_revenue']
     operating_cost = profit_loss['operating_cost']
     current_year_depreciation = profit_loss['depreciation_total']
-    operating_profit = profit_loss['profit']
-
-    # Biomassa indeks tersisa di kolam diakui sebagai aset biologis. Karena
-    # biaya budidaya telah dibebankan ke laba rugi, kenaikan nilai persediaan
-    # akhir ini juga menjadi penyesuaian laba berjalan agar tidak menimbulkan
-    # selisih rekonsiliasi semu.
-    biological = _biological_asset_valuation(as_of)
-    biological_asset_value = biological['biological_asset_value']
-    current_profit = operating_profit + biological_asset_value
+    current_profit = profit_loss['profit']
 
     manual_asset_total = sum((e.amount for e in assets), Decimal('0'))
-    total_assets_before = manual_asset_total + receivable_total + biological_asset_value + fixed_cost - accumulated
+    total_assets_before = manual_asset_total + receivable_total + fixed_cost - accumulated
     total_liabilities = sum((e.amount for e in liabilities), Decimal('0')) + payable_total
     total_equity = sum((e.amount for e in equities), Decimal('0'))
     total_equity_before = total_equity + current_profit
@@ -1529,7 +1400,7 @@ def _balance_sheet_data(request):
     # Ringkasan analitis untuk dashboard neraca.
     cash_bank_total = sum((e.amount for e in assets if e.group == 'Kas dan Bank'), Decimal('0'))
     other_current_assets = sum((e.amount for e in assets if e.group != 'Kas dan Bank'), Decimal('0'))
-    current_assets = cash_bank_total + other_current_assets + receivable_total + biological_asset_value
+    current_assets = cash_bank_total + other_current_assets + receivable_total
     net_fixed_assets = fixed_cost - accumulated
 
     def safe_ratio(numerator, denominator):
@@ -1546,7 +1417,6 @@ def _balance_sheet_data(request):
     asset_composition = [
         {'label': 'Kas & Bank', 'amount': cash_bank_total, 'percent': percentage(cash_bank_total, total_assets)},
         {'label': 'Piutang Usaha', 'amount': receivable_total, 'percent': percentage(receivable_total, total_assets)},
-        {'label': 'Aset Biologis Udang', 'amount': biological_asset_value, 'percent': percentage(biological_asset_value, total_assets)},
         {'label': 'Aset Lancar Lain', 'amount': other_current_assets, 'percent': percentage(other_current_assets, total_assets)},
         {'label': 'Aset Tetap Bersih', 'amount': net_fixed_assets, 'percent': percentage(net_fixed_assets, total_assets)},
     ]
@@ -1556,7 +1426,6 @@ def _balance_sheet_data(request):
         {'label': 'Saldo awal/modal telah direkonsiliasi', 'ok': reconciliation_equity == 0},
         {'label': 'Tidak ada pengeluaran kapital tanpa aset', 'ok': unlinked_capital_expenses == 0},
         {'label': 'Piutang dan nota penjualan tersinkron', 'ok': True},
-        {'label': 'Biomassa indeks tersisa dihitung dari sampling dan panen', 'ok': True},
     ]
 
     return {
@@ -1566,12 +1435,7 @@ def _balance_sheet_data(request):
         'cash_bank_total': cash_bank_total, 'other_current_assets': other_current_assets,
         'current_assets': current_assets, 'total_assets': total_assets,
         'total_liabilities': total_liabilities, 'total_equity': total_equity,
-        'operating_profit': operating_profit, 'current_profit': current_profit, 'total_equity_before': total_equity_before,
-        'biomass_index_kg': biological['biomass_index_kg'],
-        'average_shrimp_price': biological['average_price_per_kg'],
-        'biological_asset_value': biological_asset_value,
-        'biomass_details': biological['biomass_details'],
-        'biomass_price_source': biological['price_source'],
+        'current_profit': current_profit, 'total_equity_before': total_equity_before,
         'reconciliation_equity': reconciliation_equity,
         'total_equity_with_profit': total_equity_with_profit,
         'preliminary_difference': preliminary_difference, 'difference': difference,
@@ -1604,7 +1468,6 @@ def export_balance_sheet_pdf(request):
     rows=[]
     for e in d['assets']: rows.append([f"ASET - {e.account_name}",rupiah(e.amount)])
     rows.append(['ASET - Piutang Usaha',rupiah(d['receivable_total'])])
-    rows.append(['ASET - Biomassa Udang Tersisa (Indeks)',rupiah(d['biological_asset_value'])])
     rows += [['Aset Tetap - Harga Perolehan',rupiah(d['fixed_cost'])],['Akumulasi Penyusutan',f"({rupiah(d['accumulated'])})"],['TOTAL ASET',rupiah(d['total_assets'])]]
     for e in d['liabilities']: rows.append([f"KEWAJIBAN - {e.account_name}",rupiah(e.amount)])
     rows.append(['KEWAJIBAN - Utang Usaha',rupiah(d['payable_total'])])
