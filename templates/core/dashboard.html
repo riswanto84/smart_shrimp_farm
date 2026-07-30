@@ -43,7 +43,6 @@
     <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-layer-group"></i></div><div><span>Total Panen Parsial</span><strong>{{ partial_harvest_total_kg|angka:2 }} kg</strong><small>{{ partial_harvest_total_ton|floatformat:2 }} ton · {{ partial_harvest_count }} kali pada {{ partial_harvest_pond_count }} kolam</small></div></div>
     <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-water"></i></div><div><span>Estimasi Sisa Udang di Kolam (FR)</span><strong>{{ production_total_kg|angka:2 }} kg</strong><small>{{ production_total_ton|floatformat:2 }} ton · biomassa FR setelah panen parsial dan mortalitas</small></div></div>
     <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-calculator"></i></div><div><span>Estimasi Sisa Udang (Index)</span><strong>{{ production_index_total_kg|angka:2 }} kg</strong><small>{{ production_index_total_ton|floatformat:2 }} ton · biomassa index setelah panen parsial dan mortalitas</small></div></div>
-    <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-gauge-high"></i></div><div><span>CC Rata-rata</span><strong>{{ carrying_capacity_average_cc|floatformat:2 }} kg/m²</strong><small>Total biomassa tersisa metode Index ÷ total luas kolam aktif</small></div></div>
     <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-bullseye"></i></div><div><span>Target Produksi</span><strong>{{ target_harvest_ton|floatformat:2 }} ton</strong><small>Sisa target {{ harvest_remaining_kg|angka:2 }} kg</small></div></div>
     <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-tag"></i></div><div><span>Harga Jual Rata-rata</span><strong>{{ average_sale_price|rupiah }}</strong><small>Omzet ÷ berat penjualan</small></div></div>
     <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-ruler-combined"></i></div><div><span>Size Panen Riil Terbaru</span><strong>{{ latest_harvest_size }}</strong><small>Berdasarkan detail penjualan/panen terbaru</small></div></div>
@@ -157,23 +156,6 @@
       {% endfor %}
     </ul>
     <small class="text-muted">Biomassa Index sampling terakhir dikurangi panen parsial dan mortalitas setelah sampling.</small>
-  </section>
-  <section class="panel" style="grid-column:1 / -1;">
-    <div class="panel-head"><h2>Carrying Capacity (CC) per Kolam <span>berdasarkan biomassa tersisa metode Index</span></h2></div>
-    <div class="table-responsive">
-      <table class="table app-table align-middle">
-        <thead><tr><th>Kolam</th><th class="text-end">Biomassa Index Tersisa</th><th class="text-end">Luas</th><th class="text-end">CC</th></tr></thead>
-        <tbody>
-          {% for item in carrying_capacity_items %}
-          <tr><td><b>{{ item.pond.name }}</b></td><td class="text-end">{{ item.biomass_index_kg|angka:2 }} kg</td><td class="text-end">{{ item.area_m2|angka:2 }} m²</td><td class="text-end"><b>{{ item.cc|floatformat:2 }} kg/m²</b></td></tr>
-          {% empty %}
-          <tr><td colspan="4" class="text-center text-muted">Belum ada biomassa Index tersisa dan luas kolam untuk menghitung CC.</td></tr>
-          {% endfor %}
-        </tbody>
-        {% if carrying_capacity_items %}<tfoot><tr><th class="text-end">Gabungan Kolam Aktif</th><th class="text-end">{{ carrying_capacity_total_biomass_kg|angka:2 }} kg</th><th class="text-end">{{ carrying_capacity_total_area_m2|angka:2 }} m²</th><th class="text-end">{{ carrying_capacity_average_cc|floatformat:2 }} kg/m²</th></tr></tfoot>{% endif %}
-      </table>
-    </div>
-    <p class="text-muted" style="margin:10px 0 0;">Rumus: CC (kg/m²) = biomassa tersisa metode Index (kg) ÷ luas kolam (m²). Biomassa otomatis dikurangi panen parsial dan mortalitas setelah sampling terakhir; kolam selesai panen tidak dihitung.</p>
   </section>
   <section class="panel doc120-panel" style="grid-column:1 / -1;">
     <div class="panel-head"><h2>Estimasi Produksi Aktif DOC 120 <span>{% if latest_sampling_date %}berdasarkan sampling {{ latest_sampling_date|date:"d M Y" }}{% endif %}</span></h2></div>
