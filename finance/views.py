@@ -18,12 +18,14 @@ from pathlib import Path
 import json
 import mimetypes
 from ponds.models import Pond
-from sales.models import Sale, Customer
+from sales.models import Sale, SaleItem, Customer
 from .models import OperationalExpense, ExpenseDocument, TradeAccount, TradePayment, TradeDocument, BalanceEntry, FixedAsset, OtherRevenue
 from core.reporting import get_date_range, filter_by_date_range, format_date_range, export_excel, export_pdf, rupiah
 from core.utils import parse_rupiah
 from core.pagination import paginate_queryset
 from cultivation.utils import get_selected_cycle, filter_selected_cycle
+from cultivation.models import CultivationCycle
+from operations.models import SamplingRecord, Harvest
 
 
 EXPENSE_DOCUMENT_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.webp', '.doc', '.docx', '.xls', '.xlsx'}
@@ -1411,6 +1413,54 @@ def _balance_sheet_data(request):
     debt_to_equity = safe_ratio(total_liabilities, total_equity_with_profit) if total_equity_with_profit > 0 else None
     debt_ratio = safe_ratio(total_liabilities, total_assets)
 
+    # Likuiditas operasional tambak: biomassa hidup ditampilkan terpisah dari
+    # rasio akuntansi agar tidak disalahartikan sebagai kas yang siap digunakan.
+    active_cycles = CultivationCycle.objects.filter(
+        status__in=[CultivationCycle.STATUS_ACTIVE, CultivationCycle.STATUS_HARVEST],
+        start_date__lte=as_of,
+    )
+    latest_samples = {}
+    for sample in SamplingRecord.objects.filter(
+        cycle__in=active_cycles, date__lte=as_of
+    ).select_related('pond', 'cycle').order_by('pond_id', '-date', '-id'):
+        latest_samples.setdefault(sample.pond_id, sample)
+
+    biomass_details = []
+    biomass_active_kg = Decimal('0')
+    total_words = {'total', 'final', 'panen total', 'panen final', 'selesai'}
+    for pond_id, sample in latest_samples.items():
+        harvests_after = Harvest.objects.filter(
+            pond_id=pond_id, cycle=sample.cycle, date__gt=sample.date, date__lte=as_of
+        )
+        has_total_harvest = any((h.harvest_type or '').strip().lower() in total_words for h in harvests_after)
+        harvested_kg = harvests_after.aggregate(s=Sum('total_kg'))['s'] or Decimal('0')
+        remaining_kg = Decimal('0') if has_total_harvest else max(
+            Decimal('0'), (sample.biomass_index_kg or Decimal('0')) - harvested_kg
+        )
+        if remaining_kg > 0:
+            biomass_active_kg += remaining_kg
+            biomass_details.append({
+                'pond': sample.pond, 'cycle': sample.cycle, 'sample_date': sample.date,
+                'biomass_kg': remaining_kg,
+            })
+
+    sale_price = SaleItem.objects.filter(
+        sale__date__date__lte=as_of, weight_kg__gt=0, price_per_kg__gt=0
+    ).aggregate(weight=Sum('weight_kg'), value=Sum('subtotal'))
+    sale_weight = sale_price['weight'] or Decimal('0')
+    sale_value = sale_price['value'] or Decimal('0')
+    average_shrimp_price = safe_ratio(sale_value, sale_weight) or Decimal('0')
+    if average_shrimp_price <= 0:
+        price_values = list(active_cycles.filter(estimated_price_per_kg__gt=0).values_list('estimated_price_per_kg', flat=True))
+        average_shrimp_price = (sum(price_values, Decimal('0')) / len(price_values)) if price_values else Decimal('0')
+
+    biomass_active_value = biomass_active_kg * average_shrimp_price
+    operational_current_assets = current_assets + biomass_active_value
+    operational_current_ratio = safe_ratio(operational_current_assets, total_liabilities)
+    biomass_coverage_ratio = safe_ratio(biomass_active_value, total_liabilities)
+    operational_working_capital = operational_current_assets - total_liabilities
+    biomass_asset_percent = ((biomass_active_value / (total_assets + biomass_active_value)) * Decimal('100')) if (total_assets + biomass_active_value) else Decimal('0')
+
     def percentage(part, whole):
         return (part / whole * Decimal('100')) if whole else Decimal('0')
 
@@ -1444,6 +1494,13 @@ def _balance_sheet_data(request):
         'capital_expenses': capital_expenses, 'warnings': warnings,
         'current_ratio': current_ratio, 'cash_ratio': cash_ratio,
         'debt_to_equity': debt_to_equity, 'debt_ratio': debt_ratio,
+        'biomass_active_kg': biomass_active_kg, 'average_shrimp_price': average_shrimp_price,
+        'biomass_active_value': biomass_active_value, 'biomass_details': biomass_details,
+        'operational_current_assets': operational_current_assets,
+        'operational_current_ratio': operational_current_ratio,
+        'biomass_coverage_ratio': biomass_coverage_ratio,
+        'operational_working_capital': operational_working_capital,
+        'biomass_asset_percent': biomass_asset_percent,
         'asset_composition': asset_composition, 'validation_checks': validation_checks,
         'is_balanced': difference == 0,
         'is_reconciled': reconciliation_equity == 0,
