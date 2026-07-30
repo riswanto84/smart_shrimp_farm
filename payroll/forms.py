@@ -2,6 +2,13 @@ from django import forms
 from .models import Employee, PayrollPeriod, PayrollRecord
 
 
+class EmployeeChoiceField(forms.ModelChoiceField):
+    """Pilihan karyawan dengan label informatif untuk pencarian."""
+    def label_from_instance(self, obj):
+        position = f" · {obj.position}" if obj.position else ""
+        return f"{obj.employee_code} - {obj.name}{position}"
+
+
 class DateInput(forms.DateInput):
     input_type = 'date'
 
@@ -27,6 +34,12 @@ class PayrollPeriodForm(forms.ModelForm):
 
 
 class PayrollRecordForm(forms.ModelForm):
+    employee = EmployeeChoiceField(
+        queryset=Employee.objects.none(),
+        label='Karyawan',
+        empty_label='Pilih karyawan',
+    )
+
     class Meta:
         model = PayrollRecord
         fields = ['employee', 'work_days', 'base_salary', 'overtime_pay', 'meal_allowance', 'transport_allowance', 'other_allowance', 'bonus', 'bpjs_deduction', 'tax_deduction', 'loan_deduction', 'other_deduction', 'amount_paid', 'payment_method', 'payment_date', 'notes']
@@ -46,8 +59,13 @@ class PayrollRecordForm(forms.ModelForm):
         if period:
             used = period.records.exclude(pk=self.instance.pk).values_list('employee_id', flat=True)
             qs = qs.exclude(pk__in=used)
-        self.fields['employee'].queryset = qs
+        self.fields['employee'].queryset = qs.order_by('name', 'employee_code')
+        self.fields['employee'].label = 'Karyawan'
+        self.fields['employee'].widget.attrs.update({
+            'class': 'form-select employee-search-source',
+            'data-searchable': 'true',
+            'autocomplete': 'off',
+        })
         for field in self.fields.values():
             field.widget.attrs.setdefault('class', 'form-control')
-        self.fields['employee'].widget.attrs['class'] = 'form-select'
         self.fields['payment_method'].widget.attrs['class'] = 'form-select'
