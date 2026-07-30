@@ -382,15 +382,32 @@ def dashboard(request):
             continue
 
         # Biomassa produksi hanya menunjukkan yang masih berada di kolam.
+        # Carrying Capacity (CC) mengikuti rumus teknisi tambak:
+        # CC (kg/m²) = estimasi biomassa tersisa (kg) / luas kolam (m²).
+        # Luas yang digunakan adalah Pond.area_m2. Jika luas belum diisi, CC = 0.
+        pond_area = Decimal(str(pond.area_m2 or 0))
+        cc_fr = (
+            remaining_biomass / pond_area
+            if pond_area > 0 else Decimal('0')
+        )
+        cc_index = (
+            remaining_biomass_index / pond_area
+            if pond_area > 0 else Decimal('0')
+        )
+        pond.dashboard_cc_fr = cc_fr.quantize(Decimal('0.01'))
+        pond.dashboard_cc_index = cc_index.quantize(Decimal('0.01'))
+
         production_items.append({
             'pond': pond,
             'biomass_kg': float(remaining_biomass),
             'biomass_ton': float(remaining_biomass / Decimal('1000')),
+            'cc': float(cc_fr),
         })
         production_index_items.append({
             'pond': pond,
             'biomass_kg': float(remaining_biomass_index),
             'biomass_ton': float(remaining_biomass_index / Decimal('1000')),
+            'cc': float(cc_index),
         })
         production_total_kg += float(remaining_biomass)
         production_index_total_kg += remaining_biomass_index
