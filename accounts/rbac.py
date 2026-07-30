@@ -18,7 +18,7 @@ ROLE_PERMISSIONS = {
         'dashboard', 'sales.dashboard', 'sales.cashier', 'sales.invoices', 'sales.customers'
     },
     'akuntan': {
-        'dashboard', 'sales.dashboard', 'sales.invoices', 'finance.expenses', 'finance.profit_loss', 'finance.periodic_report', 'finance.tax_reports'
+        'dashboard', 'sales.dashboard', 'sales.invoices', 'finance.expenses', 'finance.profit_loss', 'finance.periodic_report', 'finance.tax_reports', 'payroll.view', 'payroll.manage'
     },
     'investor': {
         'dashboard', 'investor.dashboard'
@@ -54,6 +54,10 @@ MENU_DEFINITIONS = [
     {'type': 'item', 'label': 'Pengeluaran Operasional', 'url': '/finance/expenses/', 'icon': 'fa-solid fa-wallet', 'perm': 'finance.expenses'},
     {'type': 'item', 'label': 'Laba Rugi', 'url': '/finance/profit-loss/', 'icon': 'fa-solid fa-chart-line', 'perm': 'finance.profit_loss'},
     {'type': 'item', 'label': 'Laporan Keuangan Periodik', 'url': '/finance/periodic-report/', 'icon': 'fa-solid fa-chart-column', 'perm': 'finance.periodic_report'},
+    {'type': 'group', 'label': 'SDM & PENGGAJIAN'},
+    {'type': 'item', 'label': 'Penggajian Karyawan', 'url': '/payroll/', 'icon': 'fa-solid fa-money-check-dollar', 'perm': 'payroll.view'},
+    {'type': 'item', 'label': 'Data Karyawan', 'url': '/payroll/employees/', 'icon': 'fa-solid fa-users-gear', 'perm': 'payroll.manage'},
+    {'type': 'item', 'label': 'Laporan Penggajian', 'url': '/payroll/reports/', 'icon': 'fa-solid fa-file-invoice', 'perm': 'payroll.view'},
     {'type': 'group', 'label': 'LAINNYA'},
     {'type': 'item', 'label': 'Dashboard Investor', 'url': '/investor/dashboard/', 'icon': 'fa-solid fa-building-columns', 'perm': 'investor.dashboard'},
     {'type': 'item', 'label': 'Prakiraan Cuaca', 'url': '/weather/', 'icon': 'fa-solid fa-cloud-sun', 'perm': 'weather.view'},
