@@ -51,6 +51,7 @@
         <tr><td colspan="2" class="section-title">Aset Lancar</td></tr>
         {% for e in assets %}{% if e.group == 'Kas dan Bank' %}<tr><td>{{ e.account_name }}</td><td>{{ e.amount|rupiah }}</td></tr>{% endif %}{% endfor %}
         <tr><td>Piutang Usaha</td><td>{{ receivable_total|rupiah }}</td></tr>
+        <tr><td><strong>Biomassa Udang Tersisa (Indeks)</strong><div class="small text-muted">{{ biomass_index_kg|angka:2 }} kg × {{ average_shrimp_price|rupiah }}/kg</div></td><td><strong>{{ biological_asset_value|rupiah }}</strong></td></tr>
         {% for e in assets %}{% if e.group != 'Kas dan Bank' %}<tr><td>{{ e.account_name }}</td><td>{{ e.amount|rupiah }}</td></tr>{% endif %}{% endfor %}
         <tr class="subtotal"><th>Subtotal Aset Lancar</th><th>{{ current_assets|rupiah }}</th></tr>
         <tr><td colspan="2" class="section-title">Aset Tetap</td></tr>
@@ -91,6 +92,16 @@
     </div>
   </div>
 
+  <div class="panel" style="margin-top:16px">
+    <h2><i class="fa-solid fa-water"></i> Rincian Biomassa Udang Tersisa</h2>
+    <div class="small text-muted mb-3">Harga: {{ average_shrimp_price|rupiah }}/kg · {{ biomass_price_source }}</div>
+    <div class="table-responsive"><table class="balance-table">
+      <thead><tr><th>Siklus</th><th>Kolam</th><th>Sampling</th><th class="text-end">Biomassa Indeks</th><th class="text-end">Panen Setelah Sampling</th><th class="text-end">Sisa Biomassa</th><th class="text-end">Nilai</th></tr></thead>
+      <tbody>{% for row in biomass_details %}<tr><td>{{ row.cycle }}</td><td>{{ row.pond }}</td><td>{{ row.sampling_date|date:'d/m/Y' }}</td><td class="text-end">{{ row.biomass_index_kg|angka:2 }} kg</td><td class="text-end">{{ row.harvest_after_sampling_kg|angka:2 }} kg</td><td class="text-end"><strong>{{ row.remaining_biomass_kg|angka:2 }} kg</strong></td><td class="text-end"><strong>{{ row.value|rupiah }}</strong></td></tr>{% empty %}<tr><td colspan="7" class="text-center text-muted">Belum ada biomassa indeks pada siklus aktif.</td></tr>{% endfor %}</tbody>
+      <tfoot><tr class="grand"><th colspan="5">Total</th><th class="text-end">{{ biomass_index_kg|angka:2 }} kg</th><th class="text-end">{{ biological_asset_value|rupiah }}</th></tr></tfoot>
+    </table></div>
+  </div>
+
   <div class="status-banner {% if balance_status == 'balanced' %}ok{% elif balance_status == 'balanced_with_note' %}note{% else %}bad{% endif %}">
     <div><strong>{% if balance_status == 'balanced' %}<i class="fa-solid fa-circle-check"></i> Neraca Seimbang dan Terekonsiliasi{% elif balance_status == 'balanced_with_note' %}<i class="fa-solid fa-circle-exclamation"></i> Neraca Seimbang dengan Catatan{% else %}<i class="fa-solid fa-triangle-exclamation"></i> Neraca Belum Seimbang{% endif %}</strong><div class="small">{% if balance_status == 'balanced_with_note' %}Persamaan neraca terpenuhi, tetapi saldo awal/modal masih memakai akun rekonsiliasi sementara.{% else %}Persamaan Aset = Kewajiban + Ekuitas{% if is_balanced %} telah terpenuhi{% else %} belum terpenuhi{% endif %}.{% endif %}</div></div>
     <div class="badge-status">Selisih {{ difference|rupiah }}</div>
@@ -113,6 +124,8 @@
     <div class="neraca-recon-item"><span>Pendapatan Lain</span><strong>{{ other_revenue|rupiah }}</strong></div>
     <div class="neraca-recon-item"><span>Beban Operasional</span><strong>{{ operating_cost|rupiah }}</strong></div>
     <div class="neraca-recon-item"><span>Penyusutan Tahun Berjalan</span><strong>{{ current_year_depreciation|rupiah }}</strong></div>
+    <div class="neraca-recon-item"><span>Laba Operasional Sebelum Biomassa</span><strong>{{ operating_profit|rupiah }}</strong></div>
+    <div class="neraca-recon-item"><span>Penyesuaian Biomassa Akhir</span><strong>{{ biological_asset_value|rupiah }}</strong></div>
   </div>{% if warnings %}<div class="warnings">{% for warning in warnings %}<div class="alert alert-warning py-2"><i class="fa-solid fa-triangle-exclamation"></i> {{ warning }}</div>{% endfor %}</div>{% endif %}</div>
 </div>
 {% endblock %}
