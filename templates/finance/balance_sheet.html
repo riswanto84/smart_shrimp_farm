@@ -133,8 +133,10 @@
           <tr class="subtotal"><th>Total Kewajiban</th><th>{{ total_liabilities|rupiah }}</th></tr>
           <tr><td colspan="2" class="section-title">Ekuitas</td></tr>
           {% for e in equities %}<tr><td>{{ e.account_name }}</td><td>{{ e.amount|rupiah }}</td></tr>{% endfor %}
-          <tr><td>Laba/Rugi Tahun Berjalan</td><td class="{% if current_profit < 0 %}negative{% endif %}">{{ current_profit|rupiah }}</td></tr>
-          {% if reconciliation_equity != 0 %}<tr class="warning-row"><td><strong>Saldo awal/modal belum direkonsiliasi</strong><div class="small">Akun sementara sampai saldo pembukaan lengkap.</div></td><td><strong>{{ reconciliation_equity|rupiah }}</strong></td></tr>{% endif %}
+          <tr><td>Laba/Rugi Operasional Tahun Berjalan</td><td class="{% if operating_profit < 0 %}negative{% endif %}">{{ operating_profit|rupiah }}</td></tr>
+          <tr><td>Cadangan Pengakuan Awal Aset Biologis<div class="small">Baseline {{ biological_baseline_date|date:"d/m/Y" }}{% if biological_valuation_is_provisional %} · sementara{% endif %}</div></td><td>{{ biological_opening_reserve|rupiah }}</td></tr>
+          <tr><td>Perubahan Nilai Wajar Aset Biologis<div class="small">Kenaikan/penurunan kumulatif dibanding baseline</div></td><td class="{% if biological_fair_value_change_cumulative < 0 %}negative{% endif %}">{{ biological_fair_value_change_cumulative|rupiah }}</td></tr>
+          <tr><td><strong>Laba/Rugi Setelah Penilaian Biologis</strong></td><td class="{% if current_profit < 0 %}negative{% endif %}"><strong>{{ current_profit|rupiah }}</strong></td></tr>
           <tr class="grand"><th>Total Ekuitas</th><th>{{ total_equity_with_profit|rupiah }}</th></tr>
         </table>
       </div>
@@ -142,7 +144,7 @@
   </div>
 
   <div class="status-banner {% if balance_status == 'balanced' %}ok{% elif balance_status == 'balanced_with_note' %}note{% else %}bad{% endif %}">
-    <div><strong>{% if balance_status == 'balanced' %}<i class="fa-solid fa-circle-check"></i> Neraca Seimbang dan Terekonsiliasi{% elif balance_status == 'balanced_with_note' %}<i class="fa-solid fa-circle-exclamation"></i> Neraca Seimbang dengan Catatan{% else %}<i class="fa-solid fa-triangle-exclamation"></i> Neraca Belum Seimbang{% endif %}</strong><div class="small">{% if balance_status == 'balanced_with_note' %}Persamaan neraca terpenuhi, tetapi saldo awal/modal masih memakai akun rekonsiliasi sementara.{% else %}Persamaan Aset = Kewajiban + Ekuitas{% if is_balanced %} telah terpenuhi{% else %} belum terpenuhi{% endif %}.{% endif %}</div></div>
+    <div><strong>{% if balance_status == 'balanced' %}<i class="fa-solid fa-circle-check"></i> Neraca Seimbang dan Terekonsiliasi{% elif balance_status == 'balanced_with_note' %}<i class="fa-solid fa-circle-exclamation"></i> Neraca Seimbang dengan Catatan{% else %}<i class="fa-solid fa-triangle-exclamation"></i> Neraca Belum Seimbang{% endif %}</strong><div class="small">{% if balance_status == 'balanced_with_note' %}Persamaan neraca terpenuhi, tetapi baseline aset biologis masih bersifat sementara dan perlu dikunci melalui snapshot.{% else %}Persamaan Aset = Kewajiban + Ekuitas{% if is_balanced %} telah terpenuhi{% else %} belum terpenuhi{% endif %}.{% endif %}</div></div>
     <div class="badge-status">Selisih {{ difference|rupiah }}</div>
   </div>
 
@@ -166,6 +168,17 @@
       </div>
       <div class="health-note"><i class="fa-solid fa-circle-info"></i> Biomassa merupakan estimasi aset biologis aktif. Sistem memproyeksikan pertumbuhan ABW sampai tanggal neraca, mengurangi populasi karena panen parsial dan mortalitas, serta memilih harga berdasarkan size penjualan aktual terdekat. Kolam panen total/siklus selesai otomatis dikeluarkan.</div>
     </div>
+  </div>
+
+  <div class="panel" style="margin-top:16px">
+    <h2><i class="fa-solid fa-arrows-rotate"></i> Rekonsiliasi Nilai Aset Biologis</h2>
+    <div class="health-grid">
+      <div class="health-card"><div class="health-name"><span>Nilai Baseline</span></div><strong class="health-value">{{ biological_opening_reserve|rupiah }}</strong><span class="health-desc">Pengakuan awal per {{ biological_baseline_date|date:"d/m/Y" }}{% if biological_valuation_is_provisional %} · sementara{% endif %}</span></div>
+      <div class="health-card"><div class="health-name"><span>Perubahan Periode</span></div><strong class="health-value {% if biological_fair_value_change_period < 0 %}negative{% endif %}">{{ biological_fair_value_change_period|rupiah }}</strong><span class="health-desc">Dibanding snapshot penilaian sebelumnya.</span></div>
+      <div class="health-card"><div class="health-name"><span>Perubahan Kumulatif</span></div><strong class="health-value {% if biological_fair_value_change_cumulative < 0 %}negative{% endif %}">{{ biological_fair_value_change_cumulative|rupiah }}</strong><span class="health-desc">Kenaikan/penurunan dibanding baseline.</span></div>
+      <div class="health-card"><div class="health-name"><span>Nilai Akhir</span></div><strong class="health-value">{{ biological_assets_total|rupiah }}</strong><span class="health-desc">Nilai aset biologis per {{ as_of|date:"d/m/Y" }}.</span></div>
+    </div>
+    {% if biological_valuation_is_provisional %}<div class="health-note"><i class="fa-solid fa-circle-exclamation"></i> Baseline belum dikunci. Setelah deployment jalankan <code>python manage.py initialize_biological_valuation --date {{ as_of|date:"Y-m-d" }}</code>.</div>{% endif %}
   </div>
 
   <div class="panel" style="margin-top:16px"><h2><i class="fa-solid fa-list-check"></i> Validasi Otomatis</h2><div class="validation-list">

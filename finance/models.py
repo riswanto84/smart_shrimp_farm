@@ -207,3 +207,26 @@ class TradeDocument(models.Model):
     def file_extension(self):
         from pathlib import Path
         return Path(self.original_name or self.file.name).suffix.lower().lstrip('.')
+
+
+class BiologicalAssetValuation(models.Model):
+    """Baseline/snapshot nilai aset biologis untuk rekonsiliasi nilai wajar.
+
+    Snapshot tidak menggantikan data operasional kolam. Nilai penutupan tetap
+    dihitung dari sampling, pertumbuhan, panen, mortalitas, dan harga. Model ini
+    menyimpan nilai pembanding agar perubahan nilai wajar tidak lagi dicatat
+    sebagai akun penyeimbang modal yang tidak teridentifikasi.
+    """
+    valuation_date = models.DateField(unique=True, verbose_name='Tanggal penilaian')
+    closing_value = models.DecimalField(max_digits=20, decimal_places=2, default=0, verbose_name='Nilai aset biologis')
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='biological_valuations')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['valuation_date', 'id']
+        verbose_name = 'Penilaian Aset Biologis'
+        verbose_name_plural = 'Penilaian Aset Biologis'
+
+    def __str__(self):
+        return f"Penilaian biologis {self.valuation_date}: {self.closing_value}"

@@ -1603,27 +1603,56 @@ def _balance_sheet_data(request):
     other_revenue = profit_loss['other_revenue']
     operating_cost = profit_loss['operating_cost']
     current_year_depreciation = profit_loss['depreciation_total']
-    current_profit = profit_loss['profit']
+    operating_profit = profit_loss['profit']
+
+    # Rekonsiliasi aset biologis menggunakan baseline/snapshot yang jelas.
+    # Tidak lagi memakai seluruh nilai biomassa sebagai akun penyeimbang
+    # ``saldo awal/modal belum direkonsiliasi``. Baseline pertama merupakan
+    # cadangan pengakuan awal aset biologis; perubahan setelah baseline
+    # diakui sebagai kenaikan/penurunan nilai wajar pada laba/rugi berjalan.
+    from .models import BiologicalAssetValuation
+    valuation_snapshots = BiologicalAssetValuation.objects.filter(valuation_date__lte=as_of).order_by('valuation_date', 'id')
+    first_snapshot = valuation_snapshots.first()
+    previous_snapshot = valuation_snapshots.filter(valuation_date__lt=as_of).order_by('-valuation_date', '-id').first()
+
+    if first_snapshot:
+        biological_opening_reserve = decimal_value(first_snapshot.closing_value)
+        biological_baseline_date = first_snapshot.valuation_date
+        biological_fair_value_change_cumulative = biological_assets_total - biological_opening_reserve
+        biological_fair_value_change_period = biological_assets_total - decimal_value(
+            previous_snapshot.closing_value if previous_snapshot else first_snapshot.closing_value
+        )
+        biological_valuation_is_provisional = False
+    else:
+        # Fallback aman untuk instalasi lama: nilai saat ini diperlakukan sebagai
+        # pengakuan awal, bukan laba periode berjalan. Jalankan perintah
+        # ``initialize_biological_valuation`` untuk mengunci baseline tersebut.
+        biological_opening_reserve = biological_assets_total
+        biological_baseline_date = as_of
+        biological_fair_value_change_cumulative = Decimal('0')
+        biological_fair_value_change_period = Decimal('0')
+        biological_valuation_is_provisional = biological_assets_total != 0
+
+    current_profit = operating_profit + biological_fair_value_change_cumulative
 
     manual_asset_total = sum((e.amount for e in assets), Decimal('0'))
     total_assets_before = manual_asset_total + receivable_total + biological_assets_total + fixed_cost - accumulated
     total_liabilities = sum((e.amount for e in liabilities), Decimal('0')) + payable_total
     total_equity = sum((e.amount for e in equities), Decimal('0'))
-    total_equity_before = total_equity + current_profit
-    preliminary_difference = total_assets_before - total_liabilities - total_equity_before
-
-    # Akun rekonsiliasi sementara: bukan laba dan bukan transaksi baru.
-    # Nilainya menunjukkan saldo awal/modal/kas yang belum dicatat lengkap.
-    reconciliation_equity = preliminary_difference
-    total_equity_with_profit = total_equity_before + reconciliation_equity
+    total_equity_before = total_equity + current_profit + biological_opening_reserve
     total_assets = total_assets_before
-    difference = total_assets - total_liabilities - total_equity_with_profit
+    difference = total_assets - total_liabilities - total_equity_before
+    preliminary_difference = difference
+    reconciliation_equity = Decimal('0')
+    total_equity_with_profit = total_equity_before
 
     capital_expenses = OperationalExpense.objects.filter(date__lte=as_of, is_capital_expenditure=True).aggregate(s=Sum('amount'))['s'] or Decimal('0')
     unlinked_capital_expenses = OperationalExpense.objects.filter(date__lte=as_of, is_capital_expenditure=True, fixed_asset__isnull=True).count()
     warnings = []
-    if reconciliation_equity != 0:
-        warnings.append('Masih terdapat saldo awal/modal/kas yang belum direkonsiliasi. Periksa Pos Neraca dan lengkapi saldo Kas dan Bank serta Modal Pemilik.')
+    if biological_valuation_is_provisional:
+        warnings.append('Baseline aset biologis masih bersifat sementara. Jalankan python manage.py initialize_biological_valuation untuk mengunci nilai pengakuan awal.')
+    if abs(difference) > Decimal('0.01'):
+        warnings.append('Neraca masih memiliki selisih yang tidak dapat dijelaskan oleh aset biologis. Periksa saldo Kas/Bank, Modal Pemilik, Utang, dan saldo pembukaan.')
     if unlinked_capital_expenses:
         warnings.append(f'{unlinked_capital_expenses} pengeluaran kapital belum ditautkan ke Daftar Aset.')
 
@@ -1691,7 +1720,7 @@ def _balance_sheet_data(request):
 
     validation_checks = [
         {'label': 'Persamaan neraca seimbang', 'ok': difference == 0},
-        {'label': 'Saldo awal/modal telah direkonsiliasi', 'ok': reconciliation_equity == 0},
+        {'label': 'Baseline aset biologis telah ditetapkan', 'ok': not biological_valuation_is_provisional},
         {'label': 'Tidak ada pengeluaran kapital tanpa aset', 'ok': unlinked_capital_expenses == 0},
         {'label': 'Piutang dan nota penjualan tersinkron', 'ok': True},
         {'label': 'Seluruh kolam aktif memiliki data biomassa dan harga', 'ok': all(x['indicator'] != 'red' for x in pond_assets if x['is_active_pond'])},
@@ -1709,7 +1738,12 @@ def _balance_sheet_data(request):
         'operational_current_assets': operational_current_assets,
         'current_assets': current_assets, 'total_assets': total_assets,
         'total_liabilities': total_liabilities, 'total_equity': total_equity,
-        'current_profit': current_profit, 'total_equity_before': total_equity_before,
+        'operating_profit': operating_profit, 'current_profit': current_profit, 'total_equity_before': total_equity_before,
+        'biological_opening_reserve': biological_opening_reserve,
+        'biological_baseline_date': biological_baseline_date,
+        'biological_fair_value_change_cumulative': biological_fair_value_change_cumulative,
+        'biological_fair_value_change_period': biological_fair_value_change_period,
+        'biological_valuation_is_provisional': biological_valuation_is_provisional,
         'reconciliation_equity': reconciliation_equity,
         'total_equity_with_profit': total_equity_with_profit,
         'preliminary_difference': preliminary_difference, 'difference': difference,
@@ -1731,10 +1765,10 @@ def _balance_sheet_data(request):
         'working_capital_health': working_capital_health,
         'asset_composition': asset_composition, 'validation_checks': validation_checks,
         'is_balanced': difference == 0,
-        'is_reconciled': reconciliation_equity == 0,
+        'is_reconciled': abs(difference) <= Decimal('0.01') and not biological_valuation_is_provisional,
         'balance_status': (
-            'balanced' if difference == 0 and reconciliation_equity == 0
-            else 'balanced_with_note' if difference == 0
+            'balanced' if abs(difference) <= Decimal('0.01') and not biological_valuation_is_provisional
+            else 'balanced_with_note' if abs(difference) <= Decimal('0.01')
             else 'unbalanced'
         ),
     }
@@ -1762,7 +1796,7 @@ def export_balance_sheet_pdf(request):
     rows.append(['KEWAJIBAN - Utang Usaha',rupiah(d['payable_total'])])
     rows.append(['TOTAL KEWAJIBAN',rupiah(d['total_liabilities'])])
     for e in d['equities']: rows.append([f"EKUITAS - {e.account_name}",rupiah(e.amount)])
-    rows += [['Laba/Rugi Tahun Berjalan',rupiah(d['current_profit'])],['Saldo awal/modal belum direkonsiliasi',rupiah(d['reconciliation_equity'])],['TOTAL EKUITAS',rupiah(d['total_equity_with_profit'])],['SELISIH NERACA',rupiah(d['difference'])]]
+    rows += [['Laba/Rugi Operasional Tahun Berjalan',rupiah(d['operating_profit'])],['Cadangan Pengakuan Awal Aset Biologis',rupiah(d['biological_opening_reserve'])],['Perubahan Nilai Wajar Aset Biologis',rupiah(d['biological_fair_value_change_cumulative'])],['Laba/Rugi Tahun Berjalan Setelah Penilaian Biologis',rupiah(d['current_profit'])],['TOTAL EKUITAS',rupiah(d['total_equity_with_profit'])],['SELISIH NERACA',rupiah(d['difference'])]]
     return export_pdf('neraca','Laporan Neraca',f"Posisi per {d['as_of'].strftime('%d/%m/%Y')}",['Uraian','Jumlah'],rows)
 
 

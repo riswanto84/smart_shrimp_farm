@@ -51,3 +51,14 @@ class TradeDocumentAdmin(admin.ModelAdmin):
     list_display=('original_name','trade_account','payment','uploaded_by','uploaded_at')
     list_filter=('uploaded_at',)
     search_fields=('original_name','description','trade_account__partner_name','trade_account__document_number')
+
+try:
+    from .models import BiologicalAssetValuation
+
+    @admin.register(BiologicalAssetValuation)
+    class BiologicalAssetValuationAdmin(admin.ModelAdmin):
+        list_display = ('valuation_date', 'closing_value', 'created_at', 'created_by')
+        ordering = ('-valuation_date',)
+        search_fields = ('notes',)
+except admin.sites.AlreadyRegistered:
+    pass
