@@ -21,6 +21,9 @@
 .neraca-recon-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.neraca-recon-item{padding:12px;border-radius:13px;background:#f7f9fc}.neraca-recon-item span{display:block;font-size:12px;color:#6f8197}.neraca-recon-item strong{display:block;margin-top:4px;color:#102443}.warnings{margin-top:12px}.warnings .alert{margin-bottom:8px}
 
 .pond-assets-panel{margin-bottom:16px}.pond-assets-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.pond-assets-summary{font-size:20px;font-weight:850;color:#102443}.pond-assets-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.pond-asset-card{border:1px solid var(--line);border-radius:15px;padding:14px;background:#fff;position:relative;overflow:hidden}.pond-asset-card:before{content:'';position:absolute;left:0;top:0;bottom:0;width:5px}.pond-asset-card.ind-green:before{background:#16a36a}.pond-asset-card.ind-amber:before{background:#e5a315}.pond-asset-card.ind-red:before{background:#dc3545}.pond-asset-card.ind-gray:before{background:#95a1b2}.pond-asset-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.pond-asset-name{font-weight:850;color:#102443}.pond-indicator{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;padding:5px 8px;border-radius:999px;white-space:nowrap}.pond-indicator.green{background:#dcf7eb;color:#08794d}.pond-indicator.amber{background:#fff2ce;color:#946000}.pond-indicator.red{background:#ffe1e4;color:#b4232f}.pond-indicator.gray{background:#edf0f4;color:#687386}.pond-asset-value{font-size:20px;font-weight:900;color:#0b2f5b;margin:12px 0 6px}.pond-asset-meta{font-size:12px;color:#64758b;line-height:1.55}.pond-asset-meta strong{color:#293d59}.pond-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:#64758b;margin-top:12px}.pond-legend span{display:inline-flex;align-items:center;gap:5px}.pond-dot{width:9px;height:9px;border-radius:50%;display:inline-block}.pond-dot.green{background:#16a36a}.pond-dot.amber{background:#e5a315}.pond-dot.red{background:#dc3545}.pond-dot.gray{background:#95a1b2}
+.health-panels{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}.health-panel{border-width:1.5px}.health-panel.operational{border-color:#bfe4d0}.health-panel h2{font-size:22px}.health-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.health-card{border:1px solid var(--line);border-radius:16px;padding:16px;background:#f8fbff;position:relative;overflow:hidden}.health-card.green{background:#f2fbf6;border-color:#bfe4d0}.health-card.amber{background:#fffaf0;border-color:#efd596}.health-card.red{background:#fff5f5;border-color:#efb7bd}.health-card.gray{background:#f5f6f8;border-color:#d9dee6}.health-name{display:flex;justify-content:space-between;gap:8px;align-items:center;color:#6c7e94;font-size:14px}.health-badge{font-size:11px;font-weight:850;padding:4px 8px;border-radius:999px}.health-card.green .health-badge{background:#d9f4e7;color:#08794d}.health-card.amber .health-badge{background:#fff0c5;color:#946000}.health-card.red .health-badge{background:#ffe0e3;color:#b4232f}.health-card.gray .health-badge{background:#e7eaf0;color:#687386}.health-value{display:block;font-size:25px;color:#102443;margin-top:10px;font-weight:900}.health-card.green .health-value{color:#08794d}.health-card.amber .health-value{color:#946000}.health-card.red .health-value{color:#b4232f}.health-desc{display:block;color:#6f8197;font-size:12px;margin-top:8px;line-height:1.4}.health-note{margin-top:14px;padding:12px 14px;border-radius:13px;background:#eaf7f0;color:#326b54;font-size:13px}.excluded-note{margin-top:10px;color:#6f8197;font-size:12px}.excluded-note strong{color:#40536d}
+@media(max-width:980px){.health-panels{grid-template-columns:1fr}}
+@media(max-width:650px){.health-grid{grid-template-columns:1fr}.health-panel h2{font-size:18px}}
 @media(max-width:1050px){.pond-assets-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.pond-assets-grid{grid-template-columns:1fr}.pond-assets-head{display:block}.pond-assets-summary{margin-top:6px}}
 @media(max-width:1180px){.neraca-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.balance-main{grid-template-columns:1fr}.neraca-recon-grid{grid-template-columns:repeat(2,1fr)}}
@@ -62,7 +65,8 @@
         </div>
         <div class="pond-asset-value">{{ item.asset_value|rupiah }}</div>
         <div class="pond-asset-meta">
-          Biomassa: <strong>{{ item.biomass_kg|floatformat:2 }} kg</strong><br>
+          Biomassa tersisa: <strong>{{ item.biomass_kg|floatformat:2 }} kg</strong><br>
+          {% if item.partial_harvest_kg > 0 %}<span class="text-muted">Sampling awal {{ item.raw_biomass_kg|floatformat:2 }} kg − panen parsial {{ item.partial_harvest_kg|floatformat:2 }} kg</span><br>{% endif %}
           Harga: <strong>{{ item.price_per_kg|rupiah }}/kg</strong> · {{ item.price_source }}<br>
           ABW: <strong>{{ item.abw|floatformat:2 }} g</strong> · SR: <strong>{{ item.sr|floatformat:2 }}%</strong><br>
           {% if item.sampling %}Sampling: <strong>{{ item.sampling.date|date:'d/m/Y' }}</strong>{% if item.sampling_age != None %} ({{ item.sampling_age }} hari){% endif %}{% else %}Sampling: <strong>Belum ada</strong>{% endif %}
@@ -70,7 +74,8 @@
       </div>
       {% empty %}<div class="text-muted">Belum ada data kolam.</div>{% endfor %}
     </div>
-    <div class="pond-legend"><span><i class="pond-dot green"></i> Data ≤14 hari</span><span><i class="pond-dot amber"></i> Data 15–30 hari</span><span><i class="pond-dot red"></i> Data/harga perlu diperbarui</span><span><i class="pond-dot gray"></i> Kolam tidak aktif</span></div>
+    <div class="pond-legend"><span><i class="pond-dot green"></i> Sehat/data ≤14 hari</span><span><i class="pond-dot amber"></i> Waspada/data 15–30 hari</span><span><i class="pond-dot red"></i> Kritis/data atau harga perlu diperbarui</span></div>
+    {% if excluded_pond_assets %}<div class="excluded-note"><strong>{{ excluded_pond_assets|length }} kolam tidak ditampilkan</strong> karena sudah panen total, siklus selesai, atau tidak aktif. Data sampling historisnya tidak diakui sebagai aset biologis.</div>{% endif %}
   </div>
 
   <div class="balance-main">
@@ -126,17 +131,31 @@
     <div class="badge-status">Selisih {{ difference|rupiah }}</div>
   </div>
 
-  <div class="row g-3">
-    <div class="col-lg-5"><div class="panel h-100"><h2><i class="fa-solid fa-gauge-high"></i> Rasio Keuangan</h2><div class="neraca-ratio-grid">
-      <div class="neraca-ratio-card"><span>Current Ratio</span><strong>{% if current_ratio != None %}{{ current_ratio|floatformat:2 }}x{% else %}-{% endif %}</strong></div>
-      <div class="neraca-ratio-card"><span>Cash Ratio</span><strong>{% if cash_ratio != None %}{{ cash_ratio|floatformat:2 }}x{% else %}-{% endif %}</strong></div>
-      <div class="neraca-ratio-card"><span>Debt to Equity</span><strong>{% if debt_to_equity != None %}{{ debt_to_equity|floatformat:2 }}x{% else %}-{% endif %}</strong></div>
-      <div class="neraca-ratio-card"><span>Debt Ratio</span><strong>{% if debt_ratio != None %}{{ debt_ratio|floatformat:2 }}{% else %}-{% endif %}</strong></div>
-    </div></div></div>
-    <div class="col-lg-7"><div class="panel h-100"><h2><i class="fa-solid fa-list-check"></i> Validasi Otomatis</h2><div class="validation-list">
-      {% for check in validation_checks %}<div class="validation-item {% if check.ok %}ok{% else %}bad{% endif %}"><i class="fa-solid {% if check.ok %}fa-circle-check{% else %}fa-circle-exclamation{% endif %}"></i><span>{{ check.label }}</span></div>{% endfor %}
-    </div></div></div>
+  <div class="health-panels">
+    <div class="panel health-panel">
+      <h2><i class="fa-solid fa-scale-balanced"></i> Likuiditas Akuntansi</h2>
+      <div class="health-grid">
+        <div class="health-card {{ current_ratio_health.class }}"><div class="health-name"><span>Current Ratio</span><span class="health-badge">{{ current_ratio_health.label }}</span></div><strong class="health-value">{% if current_ratio != None %}{{ current_ratio|floatformat:2 }}x{% else %}-{% endif %}</strong><span class="health-desc">Aset lancar akuntansi ÷ kewajiban. Biomassa tidak dianggap kas siap pakai.</span></div>
+        <div class="health-card {{ cash_ratio_health.class }}"><div class="health-name"><span>Cash Ratio</span><span class="health-badge">{{ cash_ratio_health.label }}</span></div><strong class="health-value">{% if cash_ratio != None %}{{ cash_ratio|floatformat:2 }}x{% else %}-{% endif %}</strong><span class="health-desc">Kas & bank ÷ kewajiban.</span></div>
+        <div class="health-card {{ debt_to_equity_health.class }}"><div class="health-name"><span>Debt to Equity</span><span class="health-badge">{{ debt_to_equity_health.label }}</span></div><strong class="health-value">{% if debt_to_equity != None %}{{ debt_to_equity|floatformat:2 }}x{% else %}-{% endif %}</strong><span class="health-desc">Utang dibandingkan dengan ekuitas.</span></div>
+        <div class="health-card {{ debt_ratio_health.class }}"><div class="health-name"><span>Debt Ratio</span><span class="health-badge">{{ debt_ratio_health.label }}</span></div><strong class="health-value">{% if debt_ratio != None %}{{ debt_ratio|floatformat:2 }}{% else %}-{% endif %}</strong><span class="health-desc">Porsi aset yang dibiayai utang.</span></div>
+      </div>
+    </div>
+    <div class="panel health-panel operational">
+      <h2><i class="fa-solid fa-shrimp"></i> Likuiditas Operasional Tambak</h2>
+      <div class="health-grid">
+        <div class="health-card {{ operational_current_health.class }}"><div class="health-name"><span>Current Ratio Operasional</span><span class="health-badge">{{ operational_current_health.label }}</span></div><strong class="health-value">{% if operational_current_ratio != None %}{{ operational_current_ratio|floatformat:2 }}x{% else %}-{% endif %}</strong><span class="health-desc">Aset lancar akuntansi + biomassa aktif ÷ kewajiban.</span></div>
+        <div class="health-card {{ biomass_coverage_health.class }}"><div class="health-name"><span>Coverage Biomassa</span><span class="health-badge">{{ biomass_coverage_health.label }}</span></div><strong class="health-value">{% if biomass_coverage != None %}{{ biomass_coverage|floatformat:2 }}x{% else %}-{% endif %}</strong><span class="health-desc">Nilai biomassa aktif ÷ kewajiban.</span></div>
+        <div class="health-card {{ biomass_value_health.class }}"><div class="health-name"><span>Nilai Biomassa Aktif</span><span class="health-badge">{{ biomass_value_health.label }}</span></div><strong class="health-value">{{ biological_assets_total|rupiah }}</strong><span class="health-desc">Hanya kolam aktif yang belum panen total; nilai berdasarkan biomassa tersisa.</span></div>
+        <div class="health-card {{ working_capital_health.class }}"><div class="health-name"><span>Modal Kerja Operasional</span><span class="health-badge">{{ working_capital_health.label }}</span></div><strong class="health-value">{{ operational_working_capital|rupiah }}</strong><span class="health-desc">Aset lancar akuntansi + biomassa aktif − kewajiban.</span></div>
+      </div>
+      <div class="health-note"><i class="fa-solid fa-circle-info"></i> Biomassa merupakan estimasi aset biologis yang masih berada di kolam. Kolam panen total/siklus selesai otomatis dikeluarkan, dan panen parsial setelah sampling mengurangi biomassa.</div>
+    </div>
   </div>
+
+  <div class="panel" style="margin-top:16px"><h2><i class="fa-solid fa-list-check"></i> Validasi Otomatis</h2><div class="validation-list">
+    {% for check in validation_checks %}<div class="validation-item {% if check.ok %}ok{% else %}bad{% endif %}"><i class="fa-solid {% if check.ok %}fa-circle-check{% else %}fa-circle-exclamation{% endif %}"></i><span>{{ check.label }}</span></div>{% endfor %}
+  </div></div>
 
   <div class="panel" style="margin-top:16px"><h2><i class="fa-solid fa-rotate"></i> Rekonsiliasi Otomatis</h2><div class="neraca-recon-grid">
     <div class="neraca-recon-item"><span>Pendapatan Penjualan</span><strong>{{ sales_revenue|rupiah }}</strong></div>

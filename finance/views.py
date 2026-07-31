@@ -1375,7 +1375,7 @@ def _balance_sheet_data(request):
     # biomassa index pada sampling terakhir per kolam agar konsisten dengan
     # dashboard produksi. Harga memakai estimasi siklus; jika kosong, gunakan
     # rata-rata tertimbang harga penjualan aktual sampai tanggal neraca.
-    from operations.models import SamplingRecord
+    from operations.models import SamplingRecord, Harvest
     from ponds.models import Pond
     from sales.models import SaleItem
 
@@ -1386,66 +1386,87 @@ def _balance_sheet_data(request):
     sold_weight = sold['weight'] or Decimal('0')
     average_sale_price = (sold_amount / sold_weight) if sold_weight else Decimal('0')
 
+    def is_total_harvest(value):
+        text = str(value or '').strip().lower().replace('_', ' ').replace('-', ' ')
+        return text in {'total', 'final', 'panen total', 'panen final', 'selesai'}
+
     pond_assets = []
+    excluded_pond_assets = []
     biological_assets_total = Decimal('0')
-    today = timezone.localdate()
     for pond in Pond.objects.all().order_by('code', 'name'):
         latest_sampling = (
             SamplingRecord.objects.filter(pond=pond, date__lte=as_of)
             .select_related('cycle').order_by('-date', '-id').first()
         )
-        biomass = Decimal('0')
+        if not latest_sampling:
+            continue
+
+        cycle = latest_sampling.cycle
+        harvests = Harvest.objects.filter(pond=pond, date__lte=as_of)
+        if cycle:
+            harvests = harvests.filter(cycle=cycle)
+        else:
+            harvests = harvests.filter(date__gte=latest_sampling.date)
+        harvest_rows = list(harvests.order_by('date', 'id'))
+        total_harvest = next((row for row in harvest_rows if is_total_harvest(row.harvest_type)), None)
+        cycle_completed = bool(cycle and (
+            cycle.status == getattr(cycle, 'STATUS_COMPLETED', 'completed')
+            or (cycle.actual_end_date and cycle.actual_end_date <= as_of)
+        ))
+        pond_operational = pond.status in ('Budidaya', 'Panen')
+
+        # Kolam yang sudah panen total, siklusnya selesai, atau tidak lagi
+        # berstatus budidaya/panen tidak boleh diakui maupun ditampilkan sebagai
+        # aset biologis. Ini mencegah sampling historis lama (mis. Kolam 7)
+        # muncul kembali setelah panen total.
+        if total_harvest or cycle_completed or not pond_operational:
+            excluded_pond_assets.append({
+                'pond': pond,
+                'reason': 'Panen total' if total_harvest else ('Siklus selesai' if cycle_completed else 'Kolam tidak aktif'),
+            })
+            continue
+
+        raw_biomass = latest_sampling.biomass_index_kg or latest_sampling.biomass_kg or Decimal('0')
+        partial_harvest_kg = sum((
+            row.total_kg or Decimal('0') for row in harvest_rows
+            if row.date >= latest_sampling.date and not is_total_harvest(row.harvest_type)
+        ), Decimal('0'))
+        biomass = max(raw_biomass - partial_harvest_kg, Decimal('0'))
         price = Decimal('0')
-        value = Decimal('0')
-        sampling_age = None
         price_source = 'Belum tersedia'
-        cycle_name = '-'
-        doc = 0
-        abw = Decimal('0')
-        sr = Decimal('0')
+        if cycle and (cycle.estimated_price_per_kg or 0) > 0:
+            price = cycle.estimated_price_per_kg
+            price_source = 'Estimasi siklus'
+        elif average_sale_price > 0:
+            price = average_sale_price
+            price_source = 'Rata-rata penjualan'
+        value = (biomass * price).quantize(Decimal('0.01'))
+        sampling_age = max((as_of - latest_sampling.date).days, 0)
+        cycle_name = cycle.name if cycle else '-'
+        doc = latest_sampling.doc or 0
+        abw = latest_sampling.abw_g or Decimal('0')
+        sr = latest_sampling.sr_index_percent or latest_sampling.estimated_sr or Decimal('0')
 
-        if latest_sampling:
-            biomass = latest_sampling.biomass_index_kg or latest_sampling.biomass_kg or Decimal('0')
-            cycle = latest_sampling.cycle
-            cycle_name = cycle.name if cycle else '-'
-            doc = latest_sampling.doc or 0
-            abw = latest_sampling.abw_g or Decimal('0')
-            sr = latest_sampling.sr_index_percent or latest_sampling.estimated_sr or Decimal('0')
-            sampling_age = max((as_of - latest_sampling.date).days, 0)
-            if cycle and (cycle.estimated_price_per_kg or 0) > 0:
-                price = cycle.estimated_price_per_kg
-                price_source = 'Estimasi siklus'
-            elif average_sale_price > 0:
-                price = average_sale_price
-                price_source = 'Rata-rata penjualan'
-            value = (biomass * price).quantize(Decimal('0.01'))
-
-        # Kolam selesai/kosong tidak diakui sebagai aset biologis berjalan.
-        is_active_pond = pond.status in ('Budidaya', 'Panen')
-        if not is_active_pond:
-            value = Decimal('0')
-
-        if not is_active_pond:
-            indicator, indicator_label = 'gray', 'Tidak aktif'
-        elif not latest_sampling or biomass <= 0:
-            indicator, indicator_label = 'red', 'Data biomassa belum tersedia'
+        if biomass <= 0:
+            indicator, indicator_label = 'red', 'Biomassa nol/perlu diperiksa'
         elif price <= 0:
             indicator, indicator_label = 'red', 'Harga belum tersedia'
-        elif sampling_age is not None and sampling_age <= 14:
-            indicator, indicator_label = 'green', 'Data terkini'
-        elif sampling_age is not None and sampling_age <= 30:
-            indicator, indicator_label = 'amber', 'Perlu sampling baru'
+        elif sampling_age <= 14:
+            indicator, indicator_label = 'green', 'Sehat · data terkini'
+        elif sampling_age <= 30:
+            indicator, indicator_label = 'amber', 'Waspada · sampling lama'
         else:
-            indicator, indicator_label = 'red', 'Data sampling kedaluwarsa'
+            indicator, indicator_label = 'red', 'Kritis · data kedaluwarsa'
 
         biological_assets_total += value
         pond_assets.append({
             'pond': pond, 'sampling': latest_sampling, 'cycle_name': cycle_name,
-            'doc': doc, 'abw': abw, 'sr': sr, 'biomass_kg': biomass,
+            'doc': doc, 'abw': abw, 'sr': sr, 'raw_biomass_kg': raw_biomass,
+            'partial_harvest_kg': partial_harvest_kg, 'biomass_kg': biomass,
             'price_per_kg': price, 'price_source': price_source,
             'asset_value': value, 'sampling_age': sampling_age,
             'indicator': indicator, 'indicator_label': indicator_label,
-            'is_active_pond': is_active_pond,
+            'is_active_pond': True,
         })
 
     start = timezone.datetime(as_of.year, 1, 1).date()
@@ -1481,16 +1502,53 @@ def _balance_sheet_data(request):
     # Ringkasan analitis untuk dashboard neraca.
     cash_bank_total = sum((e.amount for e in assets if e.group == 'Kas dan Bank'), Decimal('0'))
     other_current_assets = sum((e.amount for e in assets if e.group != 'Kas dan Bank'), Decimal('0'))
-    current_assets = cash_bank_total + other_current_assets + receivable_total + biological_assets_total
+    accounting_current_assets = cash_bank_total + other_current_assets + receivable_total
+    operational_current_assets = accounting_current_assets + biological_assets_total
+    current_assets = operational_current_assets
     net_fixed_assets = fixed_cost - accumulated
 
     def safe_ratio(numerator, denominator):
         return (numerator / denominator) if denominator else None
 
-    current_ratio = safe_ratio(current_assets, total_liabilities)
+    current_ratio = safe_ratio(accounting_current_assets, total_liabilities)
     cash_ratio = safe_ratio(cash_bank_total, total_liabilities)
+    operational_current_ratio = safe_ratio(operational_current_assets, total_liabilities)
+    biomass_coverage = safe_ratio(biological_assets_total, total_liabilities)
+    operational_working_capital = operational_current_assets - total_liabilities
     debt_to_equity = safe_ratio(total_liabilities, total_equity_with_profit) if total_equity_with_profit > 0 else None
     debt_ratio = safe_ratio(total_liabilities, total_assets)
+
+    def ratio_health(value, green_min=None, amber_min=None, green_max=None, amber_max=None):
+        if value is None:
+            return {'class': 'gray', 'label': 'Belum dapat dinilai'}
+        if green_min is not None:
+            if value >= Decimal(str(green_min)):
+                return {'class': 'green', 'label': 'Sehat'}
+            if value >= Decimal(str(amber_min)):
+                return {'class': 'amber', 'label': 'Waspada'}
+            return {'class': 'red', 'label': 'Kritis'}
+        if value <= Decimal(str(green_max)):
+            return {'class': 'green', 'label': 'Sehat'}
+        if value <= Decimal(str(amber_max)):
+            return {'class': 'amber', 'label': 'Waspada'}
+        return {'class': 'red', 'label': 'Kritis'}
+
+    current_ratio_health = ratio_health(current_ratio, green_min=1.5, amber_min=1.0)
+    cash_ratio_health = ratio_health(cash_ratio, green_min=1.0, amber_min=0.5)
+    debt_to_equity_health = ratio_health(debt_to_equity, green_max=1.0, amber_max=2.0)
+    debt_ratio_health = ratio_health(debt_ratio, green_max=0.5, amber_max=0.7)
+    operational_current_health = ratio_health(operational_current_ratio, green_min=1.5, amber_min=1.0)
+    biomass_coverage_health = ratio_health(biomass_coverage, green_min=1.0, amber_min=0.5)
+    biomass_value_health = (
+        {'class': 'red', 'label': 'Kritis'} if not pond_assets or any(x['indicator'] == 'red' for x in pond_assets)
+        else {'class': 'amber', 'label': 'Waspada'} if any(x['indicator'] == 'amber' for x in pond_assets)
+        else {'class': 'green', 'label': 'Sehat'}
+    )
+    working_capital_health = (
+        {'class': 'green', 'label': 'Sehat'} if operational_working_capital > 0
+        else {'class': 'amber', 'label': 'Waspada'} if operational_working_capital == 0
+        else {'class': 'red', 'label': 'Kritis'}
+    )
 
     def percentage(part, whole):
         return (part / whole * Decimal('100')) if whole else Decimal('0')
@@ -1517,7 +1575,10 @@ def _balance_sheet_data(request):
         'fixed_cost': fixed_cost, 'accumulated': accumulated, 'net_fixed_assets': net_fixed_assets,
         'cash_bank_total': cash_bank_total, 'other_current_assets': other_current_assets,
         'biological_assets_total': biological_assets_total, 'pond_assets': pond_assets,
+        'excluded_pond_assets': excluded_pond_assets,
         'average_sale_price': average_sale_price,
+        'accounting_current_assets': accounting_current_assets,
+        'operational_current_assets': operational_current_assets,
         'current_assets': current_assets, 'total_assets': total_assets,
         'total_liabilities': total_liabilities, 'total_equity': total_equity,
         'current_profit': current_profit, 'total_equity_before': total_equity_before,
@@ -1529,6 +1590,17 @@ def _balance_sheet_data(request):
         'capital_expenses': capital_expenses, 'warnings': warnings,
         'current_ratio': current_ratio, 'cash_ratio': cash_ratio,
         'debt_to_equity': debt_to_equity, 'debt_ratio': debt_ratio,
+        'operational_current_ratio': operational_current_ratio,
+        'biomass_coverage': biomass_coverage,
+        'operational_working_capital': operational_working_capital,
+        'current_ratio_health': current_ratio_health,
+        'cash_ratio_health': cash_ratio_health,
+        'debt_to_equity_health': debt_to_equity_health,
+        'debt_ratio_health': debt_ratio_health,
+        'operational_current_health': operational_current_health,
+        'biomass_coverage_health': biomass_coverage_health,
+        'biomass_value_health': biomass_value_health,
+        'working_capital_health': working_capital_health,
         'asset_composition': asset_composition, 'validation_checks': validation_checks,
         'is_balanced': difference == 0,
         'is_reconciled': reconciliation_equity == 0,
