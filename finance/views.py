@@ -1371,6 +1371,83 @@ def _balance_sheet_data(request):
     fixed_cost = sum((x['asset'].total_cost for x in fixed_assets), Decimal('0'))
     accumulated = sum((x['accumulated'] for x in fixed_assets), Decimal('0'))
 
+    # Aset biologis udang yang masih berada di kolam. Nilai menggunakan
+    # biomassa index pada sampling terakhir per kolam agar konsisten dengan
+    # dashboard produksi. Harga memakai estimasi siklus; jika kosong, gunakan
+    # rata-rata tertimbang harga penjualan aktual sampai tanggal neraca.
+    from operations.models import SamplingRecord
+    from ponds.models import Pond
+    from sales.models import SaleItem
+
+    sold = SaleItem.objects.filter(sale__date__date__lte=as_of).aggregate(
+        amount=Sum('subtotal'), weight=Sum('weight_kg')
+    )
+    sold_amount = sold['amount'] or Decimal('0')
+    sold_weight = sold['weight'] or Decimal('0')
+    average_sale_price = (sold_amount / sold_weight) if sold_weight else Decimal('0')
+
+    pond_assets = []
+    biological_assets_total = Decimal('0')
+    today = timezone.localdate()
+    for pond in Pond.objects.all().order_by('code', 'name'):
+        latest_sampling = (
+            SamplingRecord.objects.filter(pond=pond, date__lte=as_of)
+            .select_related('cycle').order_by('-date', '-id').first()
+        )
+        biomass = Decimal('0')
+        price = Decimal('0')
+        value = Decimal('0')
+        sampling_age = None
+        price_source = 'Belum tersedia'
+        cycle_name = '-'
+        doc = 0
+        abw = Decimal('0')
+        sr = Decimal('0')
+
+        if latest_sampling:
+            biomass = latest_sampling.biomass_index_kg or latest_sampling.biomass_kg or Decimal('0')
+            cycle = latest_sampling.cycle
+            cycle_name = cycle.name if cycle else '-'
+            doc = latest_sampling.doc or 0
+            abw = latest_sampling.abw_g or Decimal('0')
+            sr = latest_sampling.sr_index_percent or latest_sampling.estimated_sr or Decimal('0')
+            sampling_age = max((as_of - latest_sampling.date).days, 0)
+            if cycle and (cycle.estimated_price_per_kg or 0) > 0:
+                price = cycle.estimated_price_per_kg
+                price_source = 'Estimasi siklus'
+            elif average_sale_price > 0:
+                price = average_sale_price
+                price_source = 'Rata-rata penjualan'
+            value = (biomass * price).quantize(Decimal('0.01'))
+
+        # Kolam selesai/kosong tidak diakui sebagai aset biologis berjalan.
+        is_active_pond = pond.status in ('Budidaya', 'Panen')
+        if not is_active_pond:
+            value = Decimal('0')
+
+        if not is_active_pond:
+            indicator, indicator_label = 'gray', 'Tidak aktif'
+        elif not latest_sampling or biomass <= 0:
+            indicator, indicator_label = 'red', 'Data biomassa belum tersedia'
+        elif price <= 0:
+            indicator, indicator_label = 'red', 'Harga belum tersedia'
+        elif sampling_age is not None and sampling_age <= 14:
+            indicator, indicator_label = 'green', 'Data terkini'
+        elif sampling_age is not None and sampling_age <= 30:
+            indicator, indicator_label = 'amber', 'Perlu sampling baru'
+        else:
+            indicator, indicator_label = 'red', 'Data sampling kedaluwarsa'
+
+        biological_assets_total += value
+        pond_assets.append({
+            'pond': pond, 'sampling': latest_sampling, 'cycle_name': cycle_name,
+            'doc': doc, 'abw': abw, 'sr': sr, 'biomass_kg': biomass,
+            'price_per_kg': price, 'price_source': price_source,
+            'asset_value': value, 'sampling_age': sampling_age,
+            'indicator': indicator, 'indicator_label': indicator_label,
+            'is_active_pond': is_active_pond,
+        })
+
     start = timezone.datetime(as_of.year, 1, 1).date()
     profit_loss = _calculate_profit_loss_period(start, as_of)
     sales_revenue = profit_loss['sales_revenue']
@@ -1380,7 +1457,7 @@ def _balance_sheet_data(request):
     current_profit = profit_loss['profit']
 
     manual_asset_total = sum((e.amount for e in assets), Decimal('0'))
-    total_assets_before = manual_asset_total + receivable_total + fixed_cost - accumulated
+    total_assets_before = manual_asset_total + receivable_total + biological_assets_total + fixed_cost - accumulated
     total_liabilities = sum((e.amount for e in liabilities), Decimal('0')) + payable_total
     total_equity = sum((e.amount for e in equities), Decimal('0'))
     total_equity_before = total_equity + current_profit
@@ -1404,7 +1481,7 @@ def _balance_sheet_data(request):
     # Ringkasan analitis untuk dashboard neraca.
     cash_bank_total = sum((e.amount for e in assets if e.group == 'Kas dan Bank'), Decimal('0'))
     other_current_assets = sum((e.amount for e in assets if e.group != 'Kas dan Bank'), Decimal('0'))
-    current_assets = cash_bank_total + other_current_assets + receivable_total
+    current_assets = cash_bank_total + other_current_assets + receivable_total + biological_assets_total
     net_fixed_assets = fixed_cost - accumulated
 
     def safe_ratio(numerator, denominator):
@@ -1421,6 +1498,7 @@ def _balance_sheet_data(request):
     asset_composition = [
         {'label': 'Kas & Bank', 'amount': cash_bank_total, 'percent': percentage(cash_bank_total, total_assets)},
         {'label': 'Piutang Usaha', 'amount': receivable_total, 'percent': percentage(receivable_total, total_assets)},
+        {'label': 'Biomassa di Kolam', 'amount': biological_assets_total, 'percent': percentage(biological_assets_total, total_assets)},
         {'label': 'Aset Lancar Lain', 'amount': other_current_assets, 'percent': percentage(other_current_assets, total_assets)},
         {'label': 'Aset Tetap Bersih', 'amount': net_fixed_assets, 'percent': percentage(net_fixed_assets, total_assets)},
     ]
@@ -1430,6 +1508,7 @@ def _balance_sheet_data(request):
         {'label': 'Saldo awal/modal telah direkonsiliasi', 'ok': reconciliation_equity == 0},
         {'label': 'Tidak ada pengeluaran kapital tanpa aset', 'ok': unlinked_capital_expenses == 0},
         {'label': 'Piutang dan nota penjualan tersinkron', 'ok': True},
+        {'label': 'Seluruh kolam aktif memiliki data biomassa dan harga', 'ok': all(x['indicator'] != 'red' for x in pond_assets if x['is_active_pond'])},
     ]
 
     return {
@@ -1437,6 +1516,8 @@ def _balance_sheet_data(request):
         'fixed_assets': fixed_assets, 'receivable_total': receivable_total, 'payable_total': payable_total,
         'fixed_cost': fixed_cost, 'accumulated': accumulated, 'net_fixed_assets': net_fixed_assets,
         'cash_bank_total': cash_bank_total, 'other_current_assets': other_current_assets,
+        'biological_assets_total': biological_assets_total, 'pond_assets': pond_assets,
+        'average_sale_price': average_sale_price,
         'current_assets': current_assets, 'total_assets': total_assets,
         'total_liabilities': total_liabilities, 'total_equity': total_equity,
         'current_profit': current_profit, 'total_equity_before': total_equity_before,
@@ -1472,6 +1553,10 @@ def export_balance_sheet_pdf(request):
     rows=[]
     for e in d['assets']: rows.append([f"ASET - {e.account_name}",rupiah(e.amount)])
     rows.append(['ASET - Piutang Usaha',rupiah(d['receivable_total'])])
+    rows.append(['ASET - Biomassa Udang di Kolam', rupiah(d['biological_assets_total'])])
+    for item in d['pond_assets']:
+        if item['asset_value'] > 0:
+            rows.append([f"  {item['pond'].name} - {item['biomass_kg']:,.2f} kg".replace(',', '.'), rupiah(item['asset_value'])])
     rows += [['Aset Tetap - Harga Perolehan',rupiah(d['fixed_cost'])],['Akumulasi Penyusutan',f"({rupiah(d['accumulated'])})"],['TOTAL ASET',rupiah(d['total_assets'])]]
     for e in d['liabilities']: rows.append([f"KEWAJIBAN - {e.account_name}",rupiah(e.amount)])
     rows.append(['KEWAJIBAN - Utang Usaha',rupiah(d['payable_total'])])

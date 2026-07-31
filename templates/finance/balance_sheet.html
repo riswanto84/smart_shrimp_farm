@@ -19,6 +19,10 @@
 .validation-list{display:grid;gap:8px}.validation-item{display:flex;gap:9px;align-items:center;padding:9px 10px;border-radius:12px;background:#f7f9fc;font-size:13px}.validation-item.ok i{color:var(--green)}.validation-item.bad i{color:var(--red)}
 .status-banner{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:15px 17px;border-radius:16px;margin:16px 0}.status-banner.ok{background:#e8f7f0;color:#0a6844;border:1px solid #b8e4d2}.status-banner.note{background:#fff7d9;color:#765400;border:1px solid #eed58a}.status-banner.bad{background:#fdecec;color:#a51d2d;border:1px solid #f4bfc5}.status-banner strong{font-size:16px}.badge-status{font-weight:800;background:rgba(255,255,255,.7);padding:6px 10px;border-radius:99px}
 .neraca-recon-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.neraca-recon-item{padding:12px;border-radius:13px;background:#f7f9fc}.neraca-recon-item span{display:block;font-size:12px;color:#6f8197}.neraca-recon-item strong{display:block;margin-top:4px;color:#102443}.warnings{margin-top:12px}.warnings .alert{margin-bottom:8px}
+
+.pond-assets-panel{margin-bottom:16px}.pond-assets-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.pond-assets-summary{font-size:20px;font-weight:850;color:#102443}.pond-assets-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.pond-asset-card{border:1px solid var(--line);border-radius:15px;padding:14px;background:#fff;position:relative;overflow:hidden}.pond-asset-card:before{content:'';position:absolute;left:0;top:0;bottom:0;width:5px}.pond-asset-card.ind-green:before{background:#16a36a}.pond-asset-card.ind-amber:before{background:#e5a315}.pond-asset-card.ind-red:before{background:#dc3545}.pond-asset-card.ind-gray:before{background:#95a1b2}.pond-asset-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.pond-asset-name{font-weight:850;color:#102443}.pond-indicator{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;padding:5px 8px;border-radius:999px;white-space:nowrap}.pond-indicator.green{background:#dcf7eb;color:#08794d}.pond-indicator.amber{background:#fff2ce;color:#946000}.pond-indicator.red{background:#ffe1e4;color:#b4232f}.pond-indicator.gray{background:#edf0f4;color:#687386}.pond-asset-value{font-size:20px;font-weight:900;color:#0b2f5b;margin:12px 0 6px}.pond-asset-meta{font-size:12px;color:#64758b;line-height:1.55}.pond-asset-meta strong{color:#293d59}.pond-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:#64758b;margin-top:12px}.pond-legend span{display:inline-flex;align-items:center;gap:5px}.pond-dot{width:9px;height:9px;border-radius:50%;display:inline-block}.pond-dot.green{background:#16a36a}.pond-dot.amber{background:#e5a315}.pond-dot.red{background:#dc3545}.pond-dot.gray{background:#95a1b2}
+@media(max-width:1050px){.pond-assets-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.pond-assets-grid{grid-template-columns:1fr}.pond-assets-head{display:block}.pond-assets-summary{margin-top:6px}}
 @media(max-width:1180px){.neraca-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.balance-main{grid-template-columns:1fr}.neraca-recon-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:650px){.balance-head{display:block}.balance-actions{margin-top:12px}.neraca-kpi-grid,.neraca-recon-grid{grid-template-columns:1fr!important}.balance-filter{display:block}.balance-filter button{margin-top:10px}.neraca-composition-row{grid-template-columns:110px 1fr}.neraca-composition-value{grid-column:2}.neraca-ratio-grid{grid-template-columns:1fr}}
 </style>
@@ -44,6 +48,31 @@
     <div class="neraca-kpi-card"><div class="neraca-kpi-label">STATUS NERACA</div><div class="neraca-kpi-value {% if balance_status == 'balanced' %}status-ok{% elif balance_status == 'balanced_with_note' %}status-note{% else %}status-bad{% endif %}">{% if balance_status == 'balanced' %}<i class="fa-solid fa-circle-check"></i> Seimbang{% elif balance_status == 'balanced_with_note' %}<i class="fa-solid fa-circle-exclamation"></i> Seimbang dengan Catatan{% else %}<i class="fa-solid fa-triangle-exclamation"></i> Belum Seimbang{% endif %}</div><div class="neraca-kpi-sub">Selisih {{ difference|rupiah }}{% if not is_reconciled %} · saldo awal belum direkonsiliasi{% endif %}</div></div>
   </div>
 
+  <div class="panel pond-assets-panel">
+    <div class="pond-assets-head">
+      <div><h2 style="margin-bottom:4px"><i class="fa-solid fa-shrimp"></i> Aset Biologis di Kolam</h2><div class="small text-muted">Biomassa index sampling terakhir × harga estimasi per kilogram</div></div>
+      <div class="pond-assets-summary">{{ biological_assets_total|rupiah }}</div>
+    </div>
+    <div class="pond-assets-grid">
+      {% for item in pond_assets %}
+      <div class="pond-asset-card ind-{{ item.indicator }}">
+        <div class="pond-asset-top">
+          <div><div class="pond-asset-name">{{ item.pond.code }} · {{ item.pond.name }}</div><div class="small text-muted">{{ item.cycle_name }} · DOC {{ item.doc }}</div></div>
+          <span class="pond-indicator {{ item.indicator }}"><i class="fa-solid fa-circle"></i> {{ item.indicator_label }}</span>
+        </div>
+        <div class="pond-asset-value">{{ item.asset_value|rupiah }}</div>
+        <div class="pond-asset-meta">
+          Biomassa: <strong>{{ item.biomass_kg|floatformat:2 }} kg</strong><br>
+          Harga: <strong>{{ item.price_per_kg|rupiah }}/kg</strong> · {{ item.price_source }}<br>
+          ABW: <strong>{{ item.abw|floatformat:2 }} g</strong> · SR: <strong>{{ item.sr|floatformat:2 }}%</strong><br>
+          {% if item.sampling %}Sampling: <strong>{{ item.sampling.date|date:'d/m/Y' }}</strong>{% if item.sampling_age != None %} ({{ item.sampling_age }} hari){% endif %}{% else %}Sampling: <strong>Belum ada</strong>{% endif %}
+        </div>
+      </div>
+      {% empty %}<div class="text-muted">Belum ada data kolam.</div>{% endfor %}
+    </div>
+    <div class="pond-legend"><span><i class="pond-dot green"></i> Data ≤14 hari</span><span><i class="pond-dot amber"></i> Data 15–30 hari</span><span><i class="pond-dot red"></i> Data/harga perlu diperbarui</span><span><i class="pond-dot gray"></i> Kolam tidak aktif</span></div>
+  </div>
+
   <div class="balance-main">
     <div class="panel">
       <h2><i class="fa-solid fa-wallet"></i> Aset</h2>
@@ -51,6 +80,7 @@
         <tr><td colspan="2" class="section-title">Aset Lancar</td></tr>
         {% for e in assets %}{% if e.group == 'Kas dan Bank' %}<tr><td>{{ e.account_name }}</td><td>{{ e.amount|rupiah }}</td></tr>{% endif %}{% endfor %}
         <tr><td>Piutang Usaha</td><td>{{ receivable_total|rupiah }}</td></tr>
+        <tr><td><strong>Biomassa Udang di Kolam</strong><div class="small text-muted">Rincian berdasarkan sampling terakhir per kolam</div></td><td><strong>{{ biological_assets_total|rupiah }}</strong></td></tr>
         {% for e in assets %}{% if e.group != 'Kas dan Bank' %}<tr><td>{{ e.account_name }}</td><td>{{ e.amount|rupiah }}</td></tr>{% endif %}{% endfor %}
         <tr class="subtotal"><th>Subtotal Aset Lancar</th><th>{{ current_assets|rupiah }}</th></tr>
         <tr><td colspan="2" class="section-title">Aset Tetap</td></tr>
