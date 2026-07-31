@@ -1,5 +1,6 @@
 from decimal import Decimal
 from io import BytesIO
+from pathlib import Path
 from django.contrib import messages
 from django.db.models import Sum, Q
 from django.http import HttpResponse
@@ -8,14 +9,16 @@ from django.core import signing
 from django.utils.http import urlencode
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.conf import settings
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, KeepTogether
+from reportlab.lib.utils import ImageReader
 from accounts.rbac import permission_required
 from finance.models import OperationalExpense
 from .forms import EmployeeForm, PayrollPeriodForm, PayrollRecordForm
@@ -164,44 +167,269 @@ def _rupiah_pdf(value):
 
 
 def _salary_slip_pdf_response(request, record):
+    """Membuat slip gaji PDF dengan identitas visual Udang Emas Nusantara."""
     response = HttpResponse(content_type='application/pdf')
     safe_code = ''.join(c for c in record.employee.employee_code if c.isalnum() or c in ('-', '_'))
     filename = f"slip_gaji_{safe_code}_{record.period.start_date:%Y%m}.pdf"
     disposition = 'attachment' if request.GET.get('download') == '1' else 'inline'
     response['Content-Disposition'] = f'{disposition}; filename="{filename}"'
 
-    doc = SimpleDocTemplate(response, pagesize=A4, rightMargin=18*mm, leftMargin=18*mm, topMargin=16*mm, bottomMargin=16*mm)
-    styles = getSampleStyleSheet()
-    title = ParagraphStyle('SlipTitle', parent=styles['Title'], fontName='Helvetica-Bold', fontSize=18, leading=22, alignment=TA_CENTER, textColor=colors.HexColor('#0b2d52'))
-    center = ParagraphStyle('Center', parent=styles['Normal'], alignment=TA_CENTER, fontSize=9, textColor=colors.HexColor('#667085'))
-    right = ParagraphStyle('Right', parent=styles['Normal'], alignment=TA_RIGHT)
-    normal = ParagraphStyle('NormalSlip', parent=styles['Normal'], fontSize=9.5, leading=13)
-    section = ParagraphStyle('Section', parent=styles['Heading3'], fontName='Helvetica-Bold', fontSize=11, textColor=colors.HexColor('#0b2d52'), spaceBefore=8, spaceAfter=5)
+    navy = colors.HexColor('#082B5A')
+    navy_dark = colors.HexColor('#041D3B')
+    gold = colors.HexColor('#D5A928')
+    light_blue = colors.HexColor('#F2F6FB')
+    line_color = colors.HexColor('#D9E2EC')
+    green = colors.HexColor('#0F8A4B')
+    muted = colors.HexColor('#52637A')
 
-    story = [Paragraph('SLIP GAJI KARYAWAN', title), Paragraph('Smart Shrimp Farm · Udang Emas Nusantara', center), Spacer(1, 7*mm)]
-    info = [
-        ['Nama Karyawan', record.employee.name, 'Periode', record.period.name],
-        ['NIK/Kode', record.employee.employee_code, 'Tanggal', f"{record.period.start_date:%d/%m/%Y} s.d. {record.period.end_date:%d/%m/%Y}"],
-        ['Jabatan', record.employee.position or '-', 'Status', record.get_payment_status_display()],
-        ['Metode', record.get_payment_method_display(), 'Tanggal Bayar', record.payment_date.strftime('%d/%m/%Y') if record.payment_date else '-'],
+    doc = SimpleDocTemplate(
+        response,
+        pagesize=A4,
+        rightMargin=18 * mm,
+        leftMargin=18 * mm,
+        topMargin=42 * mm,
+        bottomMargin=23 * mm,
+        title=f'Slip Gaji {record.employee.name} - {record.period.name}',
+        author='Udang Emas Nusantara',
+        subject='Slip Gaji Karyawan',
+    )
+
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle(
+        'SlipTitle', parent=styles['Title'], fontName='Helvetica-Bold',
+        fontSize=18, leading=22, alignment=TA_CENTER, textColor=navy,
+        spaceAfter=2,
+    )
+    subtitle = ParagraphStyle(
+        'SlipSubtitle', parent=styles['Normal'], alignment=TA_CENTER,
+        fontSize=9, leading=12, textColor=muted, spaceAfter=10,
+    )
+    normal = ParagraphStyle(
+        'NormalSlip', parent=styles['Normal'], fontSize=9, leading=13,
+        textColor=colors.HexColor('#1E293B'),
+    )
+    small = ParagraphStyle(
+        'SmallSlip', parent=styles['Normal'], fontSize=7.6, leading=10,
+        textColor=muted,
+    )
+    section = ParagraphStyle(
+        'SectionSlip', parent=styles['Heading3'], fontName='Helvetica-Bold',
+        fontSize=10.5, leading=14, textColor=navy, spaceBefore=8, spaceAfter=5,
+    )
+    amount_big = ParagraphStyle(
+        'AmountBig', parent=styles['Normal'], fontName='Helvetica-Bold',
+        fontSize=18, leading=21, textColor=green, alignment=TA_RIGHT,
+    )
+
+    logo_path = Path(settings.BASE_DIR) / 'static' / 'img' / 'logo_uen_report_black.png'
+    if not logo_path.exists():
+        logo_path = Path(settings.BASE_DIR) / 'static' / 'img' / 'logo_uen.png'
+
+    printed_at = timezone.localtime(timezone.now())
+    printed_by = 'Sistem'
+    user = getattr(request, 'user', None)
+    if user is not None and getattr(user, 'is_authenticated', False):
+        printed_by = user.get_full_name() or user.get_username()
+
+    def draw_brand(canvas, doc_obj):
+        canvas.saveState()
+        width, height = A4
+
+        # Header utama biru dan aksen emas seperti laporan UEN lainnya.
+        canvas.setFillColor(navy_dark)
+        canvas.rect(0, height - 31 * mm, width, 31 * mm, stroke=0, fill=1)
+        canvas.setFillColor(gold)
+        canvas.rect(0, height - 32.5 * mm, width, 1.5 * mm, stroke=0, fill=1)
+
+        if logo_path.exists():
+            try:
+                canvas.drawImage(
+                    ImageReader(str(logo_path)), 16 * mm, height - 28 * mm,
+                    width=23 * mm, height=19 * mm, preserveAspectRatio=True,
+                    anchor='c', mask='auto',
+                )
+            except Exception:
+                pass
+
+        canvas.setFillColor(colors.white)
+        canvas.setFont('Helvetica-Bold', 14)
+        canvas.drawString(43 * mm, height - 14 * mm, 'UDANG EMAS NUSANTARA')
+        canvas.setFont('Helvetica', 8.5)
+        canvas.drawString(43 * mm, height - 20 * mm, 'SMART SHRIMP FARM · Sistem Manajemen Tambak Terintegrasi')
+        canvas.setFillColor(colors.HexColor('#E8C85A'))
+        canvas.setFont('Helvetica-Bold', 7.5)
+        canvas.drawRightString(width - 16 * mm, height - 15 * mm, 'DOKUMEN PENGGAJIAN')
+        canvas.setFillColor(colors.white)
+        canvas.setFont('Helvetica', 7.5)
+        canvas.drawRightString(width - 16 * mm, height - 21 * mm, f'Periode {record.period.name}')
+
+        # Watermark logo transparan.
+        if logo_path.exists():
+            try:
+                canvas.saveState()
+                if hasattr(canvas, 'setFillAlpha'):
+                    canvas.setFillAlpha(0.045)
+                canvas.drawImage(
+                    ImageReader(str(logo_path)), width / 2 - 38 * mm, height / 2 - 31 * mm,
+                    width=76 * mm, height=63 * mm, preserveAspectRatio=True,
+                    anchor='c', mask='auto',
+                )
+                canvas.restoreState()
+            except Exception:
+                pass
+
+        # Footer dan nomor halaman.
+        canvas.setStrokeColor(line_color)
+        canvas.setLineWidth(0.6)
+        canvas.line(18 * mm, 17 * mm, width - 18 * mm, 17 * mm)
+        canvas.setFillColor(muted)
+        canvas.setFont('Helvetica', 7)
+        canvas.drawString(18 * mm, 11.5 * mm, f'Dicetak {printed_at:%d/%m/%Y %H:%M} WIB · Oleh: {printed_by}')
+        canvas.drawCentredString(width / 2, 11.5 * mm, 'Dokumen ini dihasilkan oleh Smart Shrimp Farm')
+        canvas.drawRightString(width - 18 * mm, 11.5 * mm, f'Halaman {doc_obj.page}')
+        canvas.restoreState()
+
+    story = [
+        Paragraph('SLIP GAJI KARYAWAN', title),
+        Paragraph(
+            f'Periode <b>{record.period.name}</b> &nbsp;·&nbsp; '
+            f'{record.period.start_date:%d/%m/%Y} s.d. {record.period.end_date:%d/%m/%Y}',
+            subtitle,
+        ),
     ]
-    t=Table(info, colWidths=[28*mm, 58*mm, 28*mm, 58*mm])
-    t.setStyle(TableStyle([('FONTNAME',(0,0),(-1,-1),'Helvetica'),('FONTSIZE',(0,0),(-1,-1),9),('FONTNAME',(0,0),(0,-1),'Helvetica-Bold'),('FONTNAME',(2,0),(2,-1),'Helvetica-Bold'),('VALIGN',(0,0),(-1,-1),'TOP'),('BOTTOMPADDING',(0,0),(-1,-1),5),('LINEBELOW',(0,-1),(-1,-1),0.8,colors.HexColor('#d7a823'))]))
-    story += [t, Spacer(1, 4*mm), Paragraph('Pendapatan', section)]
-    income=[['Gaji Pokok/Upah',_rupiah_pdf(record.base_salary)],['Lembur',_rupiah_pdf(record.overtime_pay)],['Uang Makan',_rupiah_pdf(record.meal_allowance)],['Transportasi',_rupiah_pdf(record.transport_allowance)],['Tunjangan Lain',_rupiah_pdf(record.other_allowance)],['Bonus',_rupiah_pdf(record.bonus)],['GAJI BRUTO',_rupiah_pdf(record.gross_salary)]]
-    ti=Table(income,colWidths=[120*mm,52*mm])
-    ti.setStyle(TableStyle([('FONTSIZE',(0,0),(-1,-1),9.5),('ALIGN',(1,0),(1,-1),'RIGHT'),('GRID',(0,0),(-1,-2),0.35,colors.HexColor('#e5e7eb')),('BACKGROUND',(0,-1),(-1,-1),colors.HexColor('#eef4fb')),('FONTNAME',(0,-1),(-1,-1),'Helvetica-Bold'),('BOX',(0,0),(-1,-1),0.6,colors.HexColor('#cfd8e3')),('PADDING',(0,0),(-1,-1),6)]))
-    story += [ti, Paragraph('Potongan', section)]
-    deductions=[['Potongan BPJS',_rupiah_pdf(record.bpjs_deduction)],['Potongan Pajak',_rupiah_pdf(record.tax_deduction)],['Potongan Kasbon',_rupiah_pdf(record.loan_deduction)],['Potongan Lain',_rupiah_pdf(record.other_deduction)],['TOTAL POTONGAN',_rupiah_pdf(record.total_deduction)],['GAJI BERSIH',_rupiah_pdf(record.net_salary)],['JUMLAH DIBAYAR',_rupiah_pdf(record.amount_paid)]]
-    td=Table(deductions,colWidths=[120*mm,52*mm])
-    td.setStyle(TableStyle([('FONTSIZE',(0,0),(-1,-1),9.5),('ALIGN',(1,0),(1,-1),'RIGHT'),('GRID',(0,0),(-1,-1),0.35,colors.HexColor('#e5e7eb')),('BACKGROUND',(0,-3),(-1,-3),colors.HexColor('#fff7e0')),('FONTNAME',(0,-3),(-1,-1),'Helvetica-Bold'),('BACKGROUND',(0,-2),(-1,-2),colors.HexColor('#dff4e7')),('BOX',(0,0),(-1,-1),0.6,colors.HexColor('#cfd8e3')),('PADDING',(0,0),(-1,-1),6)]))
-    story.append(td)
-    if record.notes or record.catatan:
-        story.append(Spacer(1,4*mm))
-        if record.notes: story += [Paragraph('<b>Keterangan</b>', normal), Paragraph(record.notes.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;').replace('\n','<br/>'), normal)]
-        if record.catatan: story += [Spacer(1,2*mm), Paragraph('<b>Catatan</b>', normal), Paragraph(record.catatan.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;').replace('\n','<br/>'), normal)]
-    story += [Spacer(1,15*mm), Table([['Penerima','Penanggung Jawab'],['',''],[record.employee.name,'____________________']], colWidths=[86*mm,86*mm], rowHeights=[6*mm,18*mm,7*mm], style=TableStyle([('ALIGN',(0,0),(-1,-1),'CENTER'),('FONTNAME',(0,2),(-1,2),'Helvetica-Bold'),('LINEABOVE',(0,2),(-1,2),0.5,colors.black)]))]
-    doc.build(story)
+
+    employee_info = [
+        [Paragraph('<b>Nama Karyawan</b>', small), Paragraph(record.employee.name or '-', normal),
+         Paragraph('<b>NIK/Kode</b>', small), Paragraph(record.employee.employee_code or '-', normal)],
+        [Paragraph('<b>Jabatan</b>', small), Paragraph(record.employee.position or '-', normal),
+         Paragraph('<b>Hari Kerja</b>', small), Paragraph(str(record.work_days or 0), normal)],
+        [Paragraph('<b>Metode Pembayaran</b>', small), Paragraph(record.get_payment_method_display() or '-', normal),
+         Paragraph('<b>Tanggal Pembayaran</b>', small), Paragraph(record.payment_date.strftime('%d/%m/%Y') if record.payment_date else '-', normal)],
+        [Paragraph('<b>Status Pembayaran</b>', small), Paragraph(record.get_payment_status_display() or '-', normal),
+         Paragraph('<b>Nomor Slip</b>', small), Paragraph(f'PAY-{record.pk:06d}', normal)],
+    ]
+    info_table = Table(employee_info, colWidths=[31*mm, 55*mm, 32*mm, 54*mm])
+    info_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), light_blue),
+        ('BOX', (0, 0), (-1, -1), 0.6, line_color),
+        ('INNERGRID', (0, 0), (-1, -1), 0.3, line_color),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 7),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 7),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    story += [info_table, Spacer(1, 4 * mm)]
+
+    income = [
+        ['Komponen Pendapatan', 'Nominal'],
+        ['Gaji Pokok/Upah', _rupiah_pdf(record.base_salary)],
+        ['Lembur', _rupiah_pdf(record.overtime_pay)],
+        ['Uang Makan', _rupiah_pdf(record.meal_allowance)],
+        ['Transportasi', _rupiah_pdf(record.transport_allowance)],
+        ['Tunjangan Lain', _rupiah_pdf(record.other_allowance)],
+        ['Bonus', _rupiah_pdf(record.bonus)],
+        ['TOTAL PENDAPATAN', _rupiah_pdf(record.gross_salary)],
+    ]
+    deductions = [
+        ['Komponen Potongan', 'Nominal'],
+        ['Potongan BPJS', _rupiah_pdf(record.bpjs_deduction)],
+        ['Potongan Pajak', _rupiah_pdf(record.tax_deduction)],
+        ['Potongan Kasbon', _rupiah_pdf(record.loan_deduction)],
+        ['Potongan Lain', _rupiah_pdf(record.other_deduction)],
+        ['', ''],
+        ['', ''],
+        ['TOTAL POTONGAN', _rupiah_pdf(record.total_deduction)],
+    ]
+
+    def component_table(data, total_background):
+        table = Table(data, colWidths=[56*mm, 30*mm], repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), navy),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('BACKGROUND', (0, -1), (-1, -1), total_background),
+            ('ALIGN', (1, 1), (1, -1), 'RIGHT'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+            ('GRID', (0, 0), (-1, -1), 0.35, line_color),
+            ('BOX', (0, 0), (-1, -1), 0.7, line_color),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ]))
+        return table
+
+    component_blocks = Table(
+        [[component_table(income, colors.HexColor('#E9F2FC')),
+          component_table(deductions, colors.HexColor('#FFF3D8'))]],
+        colWidths=[87*mm, 87*mm],
+    )
+    component_blocks.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (0, 0), 2),
+        ('LEFTPADDING', (1, 0), (1, 0), 2),
+        ('RIGHTPADDING', (1, 0), (1, 0), 0),
+    ]))
+    story += [component_blocks, Spacer(1, 4 * mm)]
+
+    total_box = Table([
+        [Paragraph('<b>TOTAL GAJI BERSIH</b><br/><font size="8" color="#52637A">Jumlah yang menjadi hak karyawan</font>', normal),
+         Paragraph(_rupiah_pdf(record.net_salary), amount_big)],
+        [Paragraph('<b>JUMLAH DIBAYAR</b>', normal), Paragraph(f'<b>{_rupiah_pdf(record.amount_paid)}</b>', normal)],
+    ], colWidths=[95*mm, 77*mm])
+    total_box.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E7F6ED')),
+        ('BACKGROUND', (0, 1), (-1, 1), light_blue),
+        ('BOX', (0, 0), (-1, -1), 0.9, green),
+        ('LINEBELOW', (0, 0), (-1, 0), 0.5, colors.HexColor('#B8DEC7')),
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 9),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 9),
+        ('TOPPADDING', (0, 0), (-1, -1), 7),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
+    ]))
+    story += [total_box]
+
+    notes_flow = []
+    if record.notes:
+        escaped = record.notes.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('\n', '<br/>')
+        notes_flow.append(Paragraph(f'<b>Keterangan</b><br/>{escaped}', normal))
+    if record.catatan:
+        escaped = record.catatan.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('\n', '<br/>')
+        notes_flow.append(Paragraph(f'<b>Catatan</b><br/>{escaped}', normal))
+    if notes_flow:
+        note_table = Table([[item] for item in notes_flow], colWidths=[172*mm])
+        note_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#FFF9E9')),
+            ('BOX', (0, 0), (-1, -1), 0.6, colors.HexColor('#E8D18A')),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 7),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
+        ]))
+        story += [Spacer(1, 4*mm), note_table]
+
+    signature = Table([
+        ['Karyawan/Penerima', 'Disetujui oleh'],
+        ['', ''],
+        [record.employee.name, 'Manajer/Penanggung Jawab'],
+    ], colWidths=[86*mm, 86*mm], rowHeights=[6*mm, 15*mm, 7*mm])
+    signature.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),
+        ('FONTNAME', (0, 2), (-1, 2), 'Helvetica-Bold'),
+        ('LINEABOVE', (0, 2), (-1, 2), 0.6, colors.HexColor('#334155')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), muted),
+        ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+    ]))
+    story += [Spacer(1, 9*mm), KeepTogether(signature)]
+
+    doc.build(story, onFirstPage=draw_brand, onLaterPages=draw_brand)
     return response
 
 
