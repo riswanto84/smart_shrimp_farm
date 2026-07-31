@@ -483,19 +483,23 @@ def _financial_report_context(request, period_type=None):
         'top_expense': top_expense,
         'top_sale': top_sale,
         'best_period': best_period,
-        'series_json': json.dumps(series),
-        'expense_chart_json': json.dumps({
+        # Kirim object Python langsung ke json_script. Jangan json.dumps di sini,
+        # karena json_script akan melakukan serialisasi sendiri. Serialisasi ganda
+        # membuat JavaScript menerima string JSON, bukan object, sehingga dataset
+        # Chart.js menjadi undefined/NaN dan grafik tidak tergambar.
+        'series_json': series,
+        'expense_chart_json': {
             'labels': [i['label'] for i in composition],
             'values': [_safe_float(i['amount']) for i in composition],
-        }),
-        'payment_chart_json': json.dumps({
+        },
+        'payment_chart_json': {
             'labels': [i['label'] for i in payment_rows],
             'values': [_safe_float(i['amount']) for i in payment_rows],
-        }),
-        'aging_chart_json': json.dumps({
+        },
+        'aging_chart_json': {
             'labels': [i['label'] for i in aging_rows],
             'values': [_safe_float(i['amount']) for i in aging_rows],
-        }),
+        },
     }
 
 

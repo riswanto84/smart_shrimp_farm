@@ -123,26 +123,176 @@
 {{ expense_chart_json|json_script:'expense-data' }}
 {{ payment_chart_json|json_script:'payment-data' }}
 {{ aging_chart_json|json_script:'aging-data' }}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 (function(){
-  function readJson(id){ const el=document.getElementById(id); return el ? JSON.parse(el.textContent) : {labels:[],values:[]}; }
-  const money = (v) => 'Rp ' + Math.round(v || 0).toLocaleString('id-ID');
-  const series = readJson('series-data');
-  const expense = readJson('expense-data');
-  const aging = readJson('aging-data');
-  const financeCanvas = document.getElementById('financeChart');
-  if(financeCanvas){
-    new Chart(financeCanvas, {type:'bar', data:{labels:series.labels, datasets:[{label:'Omzet', data:series.revenue, borderRadius:8},{label:'Pengeluaran', data:series.expense, type:'line', tension:.35, pointRadius:4},{label:'Laba', data:series.profit, type:'line', tension:.35, pointRadius:4}]}, options:{responsive:true, plugins:{legend:{position:'top'}, tooltip:{callbacks:{label:(ctx)=>ctx.dataset.label+': '+money(ctx.parsed.y)}}}, scales:{y:{ticks:{callback:money}}}}});
+  'use strict';
+
+  function readJson(id){
+    const el = document.getElementById(id);
+    if (!el) return {};
+    try {
+      let value = JSON.parse(el.textContent || '{}');
+      if (typeof value === 'string') value = JSON.parse(value);
+      return value || {};
+    } catch (error) {
+      console.error('Gagal membaca data grafik:', id, error);
+      return {};
+    }
   }
-  const expenseCanvas = document.getElementById('expenseChart');
-  if(expenseCanvas){
-    new Chart(expenseCanvas, {type:'doughnut', data:{labels:expense.labels, datasets:[{data:expense.values, borderWidth:2}]}, options:{plugins:{legend:{position:'bottom'}, tooltip:{callbacks:{label:(ctx)=>ctx.label+': '+money(ctx.parsed)}}}, cutout:'62%'}});
+
+  function numbers(values){
+    return (Array.isArray(values) ? values : []).map(function(value){
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    });
   }
-  const agingCanvas = document.getElementById('agingChart');
-  if(agingCanvas){
-    new Chart(agingCanvas, {type:'bar', data:{labels:aging.labels, datasets:[{label:'Piutang', data:aging.values, borderRadius:10}]}, options:{indexAxis:'y', plugins:{legend:{display:false}, tooltip:{callbacks:{label:(ctx)=>money(ctx.parsed.x)}}}, scales:{x:{ticks:{callback:money}}}}});
+
+  function rupiahCompact(value){
+    const n = Math.abs(Number(value) || 0);
+    const sign = Number(value) < 0 ? '-' : '';
+    if (n >= 1e9) return 'Rp ' + sign + (n / 1e9).toLocaleString('id-ID', {maximumFractionDigits:1}) + ' M';
+    if (n >= 1e6) return 'Rp ' + sign + (n / 1e6).toLocaleString('id-ID', {maximumFractionDigits:1}) + ' jt';
+    if (n >= 1e3) return 'Rp ' + sign + (n / 1e3).toLocaleString('id-ID', {maximumFractionDigits:0}) + ' rb';
+    return 'Rp ' + sign + Math.round(n).toLocaleString('id-ID');
   }
+
+  function prepareCanvas(canvas, height){
+    const ratio = window.devicePixelRatio || 1;
+    const width = Math.max(320, canvas.parentElement.clientWidth - 20);
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    canvas.width = Math.floor(width * ratio);
+    canvas.height = Math.floor(height * ratio);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    return {ctx, width, height};
+  }
+
+  function emptyState(ctx, width, height, text){
+    ctx.fillStyle = '#64748b';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(text || 'Belum ada data grafik.', width / 2, height / 2);
+  }
+
+  function drawFinanceChart(canvas, data){
+    const box = prepareCanvas(canvas, 330);
+    const ctx = box.ctx, width = box.width, height = box.height;
+    const labels = Array.isArray(data.labels) ? data.labels : [];
+    const revenue = numbers(data.revenue);
+    const expense = numbers(data.expense);
+    const profit = numbers(data.profit);
+    const count = Math.max(labels.length, revenue.length, expense.length, profit.length);
+    if (!count) return emptyState(ctx, width, height, 'Belum ada data omzet dan pengeluaran.');
+
+    const pad = {left:82, right:24, top:38, bottom:58};
+    const plotW = width - pad.left - pad.right;
+    const plotH = height - pad.top - pad.bottom;
+    const all = revenue.concat(expense, profit, [0]);
+    let min = Math.min.apply(null, all), max = Math.max.apply(null, all);
+    if (min === max) max = min + 1;
+    if (min > 0) min = 0;
+    const span = max - min;
+    const y = v => pad.top + (max - v) / span * plotH;
+    const step = plotW / Math.max(count, 1);
+
+    ctx.font = '12px sans-serif';
+    ctx.lineWidth = 1;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (let i=0; i<=5; i++) {
+      const val = min + span * (i/5);
+      const yy = y(val);
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.beginPath(); ctx.moveTo(pad.left, yy); ctx.lineTo(width-pad.right, yy); ctx.stroke();
+      ctx.fillStyle = '#64748b';
+      ctx.fillText(rupiahCompact(val), pad.left-10, yy);
+    }
+
+    const barWidth = Math.max(8, Math.min(32, step * .38));
+    revenue.forEach(function(v, i){
+      const x = pad.left + i*step + step/2 - barWidth/2;
+      const zeroY = y(0), valueY = y(v);
+      ctx.fillStyle = 'rgba(59,130,246,.48)';
+      ctx.strokeStyle = '#3b82f6';
+      ctx.fillRect(x, Math.min(valueY, zeroY), barWidth, Math.abs(zeroY-valueY));
+      ctx.strokeRect(x, Math.min(valueY, zeroY), barWidth, Math.abs(zeroY-valueY));
+    });
+
+    function line(values, stroke){
+      ctx.strokeStyle = stroke; ctx.fillStyle = stroke; ctx.lineWidth = 3;
+      ctx.beginPath();
+      values.forEach(function(v,i){
+        const x = pad.left + i*step + step/2, yy = y(v);
+        if (i===0) ctx.moveTo(x,yy); else ctx.lineTo(x,yy);
+      });
+      ctx.stroke();
+      values.forEach(function(v,i){
+        const x = pad.left + i*step + step/2, yy = y(v);
+        ctx.beginPath(); ctx.arc(x,yy,3.5,0,Math.PI*2); ctx.fill();
+      });
+    }
+    line(expense, '#f43f5e');
+    line(profit, '#f97316');
+
+    ctx.fillStyle = '#475569'; ctx.textAlign='center'; ctx.textBaseline='top'; ctx.font='11px sans-serif';
+    labels.forEach(function(label,i){
+      const x=pad.left+i*step+step/2;
+      const txt=String(label || '');
+      ctx.fillText(txt.length>14 ? txt.slice(0,13)+'…' : txt, x, height-pad.bottom+12);
+    });
+
+    const legends=[['Omzet','#3b82f6'],['Pengeluaran','#f43f5e'],['Laba','#f97316']];
+    let lx=Math.max(pad.left, width/2-145);
+    legends.forEach(function(item){
+      ctx.fillStyle=item[1]; ctx.fillRect(lx,pad.top-25,18,8);
+      ctx.fillStyle='#475569'; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.font='12px sans-serif';
+      ctx.fillText(item[0],lx+24,pad.top-21); lx+=95;
+    });
+  }
+
+  function drawDonut(canvas, data){
+    const box=prepareCanvas(canvas, 260);
+    const ctx=box.ctx, width=box.width, height=box.height;
+    const labels=Array.isArray(data.labels)?data.labels:[];
+    const values=numbers(data.values);
+    const total=values.reduce((a,b)=>a+b,0);
+    if (!labels.length || total<=0) return emptyState(ctx,width,height,'Belum ada komposisi biaya.');
+    const palette=['#2563eb','#f97316','#16a34a','#7c3aed','#dc2626','#0891b2','#ca8a04','#4f46e5','#db2777','#0f766e'];
+    const cx=width/2, cy=112, outer=Math.min(88,width*.24), inner=outer*.58;
+    let angle=-Math.PI/2;
+    values.forEach(function(v,i){
+      const next=angle+(v/total)*Math.PI*2;
+      ctx.beginPath(); ctx.arc(cx,cy,outer,angle,next); ctx.arc(cx,cy,inner,next,angle,true); ctx.closePath();
+      ctx.fillStyle=palette[i%palette.length]; ctx.fill(); angle=next;
+    });
+    ctx.fillStyle='#0f172a'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='bold 15px sans-serif';
+    ctx.fillText(rupiahCompact(total),cx,cy-3);
+    ctx.fillStyle='#64748b'; ctx.font='11px sans-serif'; ctx.fillText('Total biaya',cx,cy+17);
+    ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.font='11px sans-serif';
+    const cols=width>460?2:1, colW=width/cols, top=220;
+    labels.slice(0,8).forEach(function(label,i){
+      const col=i%cols, row=Math.floor(i/cols), x=18+col*colW, yy=top+row*20;
+      ctx.fillStyle=palette[i%palette.length]; ctx.fillRect(x,yy-5,10,10);
+      ctx.fillStyle='#475569';
+      const pct=values[i]/total*100;
+      ctx.fillText(String(label).slice(0,18)+' ('+pct.toLocaleString('id-ID',{maximumFractionDigits:1})+'%)',x+16,yy);
+    });
+  }
+
+  function renderAll(){
+    const series=readJson('series-data');
+    const expense=readJson('expense-data');
+    const financeCanvas=document.getElementById('financeChart');
+    const expenseCanvas=document.getElementById('expenseChart');
+    if (financeCanvas) drawFinanceChart(financeCanvas, series);
+    if (expenseCanvas) drawDonut(expenseCanvas, expense);
+  }
+
+  let resizeTimer;
+  window.addEventListener('resize', function(){ clearTimeout(resizeTimer); resizeTimer=setTimeout(renderAll,150); });
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', renderAll); else renderAll();
 })();
 </script>
 {% endblock %}
