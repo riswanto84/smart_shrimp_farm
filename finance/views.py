@@ -1371,24 +1371,110 @@ def _balance_sheet_data(request):
     fixed_cost = sum((x['asset'].total_cost for x in fixed_assets), Decimal('0'))
     accumulated = sum((x['accumulated'] for x in fixed_assets), Decimal('0'))
 
-    # Aset biologis udang yang masih berada di kolam. Nilai menggunakan
-    # biomassa index pada sampling terakhir per kolam agar konsisten dengan
-    # dashboard produksi. Harga memakai estimasi siklus; jika kosong, gunakan
-    # rata-rata tertimbang harga penjualan aktual sampai tanggal neraca.
-    from operations.models import SamplingRecord, Harvest
+    # Aset biologis udang yang masih berada di kolam. Nilai dihitung dari
+    # populasi sampling terbaru yang diproyeksikan dengan ADG sampai tanggal
+    # neraca, lalu dikurangi populasi panen parsial dan mortalitas setelah
+    # sampling. Harga dipilih berdasarkan size terdekat dari penjualan aktual.
+    from operations.models import SamplingRecord, Harvest, SiphonRecord
     from ponds.models import Pond
     from sales.models import SaleItem
+    import re
 
-    sold = SaleItem.objects.filter(sale__date__date__lte=as_of).aggregate(
-        amount=Sum('subtotal'), weight=Sum('weight_kg')
-    )
-    sold_amount = sold['amount'] or Decimal('0')
-    sold_weight = sold['weight'] or Decimal('0')
+    def decimal_value(value, default='0'):
+        try:
+            return Decimal(str(value if value is not None else default))
+        except Exception:
+            return Decimal(default)
+
+    def size_number(value):
+        numbers = re.findall(r'\d+(?:[.,]\d+)?', str(value or '').replace(',', '.'))
+        if not numbers:
+            return None
+        values = [Decimal(x) for x in numbers]
+        return sum(values, Decimal('0')) / Decimal(len(values))
+
+    # Peta harga rata-rata tertimbang per size. Ini membuat nilai tiap kolam
+    # mengikuti ukuran udang, bukan memakai satu harga rata-rata untuk semua.
+    sale_price_buckets = {}
+    sold_items = SaleItem.objects.filter(
+        sale__date__date__lte=as_of,
+        weight_kg__gt=0,
+        price_per_kg__gt=0,
+    ).values('size_text', 'weight_kg', 'price_per_kg')
+    sold_amount = Decimal('0')
+    sold_weight = Decimal('0')
+    for row in sold_items:
+        weight = decimal_value(row['weight_kg'])
+        price_row = decimal_value(row['price_per_kg'])
+        sold_weight += weight
+        sold_amount += weight * price_row
+        parsed_size = size_number(row['size_text'])
+        if parsed_size is None:
+            continue
+        key = int(parsed_size.quantize(Decimal('1')))
+        bucket = sale_price_buckets.setdefault(key, {'weight': Decimal('0'), 'amount': Decimal('0')})
+        bucket['weight'] += weight
+        bucket['amount'] += weight * price_row
     average_sale_price = (sold_amount / sold_weight) if sold_weight else Decimal('0')
+
+    def market_price_for_size(current_size, cycle):
+        if current_size and sale_price_buckets:
+            nearest = min(sale_price_buckets, key=lambda key: abs(Decimal(key) - current_size))
+            distance = abs(Decimal(nearest) - current_size)
+            bucket = sale_price_buckets[nearest]
+            if distance <= Decimal('15') and bucket['weight'] > 0:
+                return (
+                    bucket['amount'] / bucket['weight'],
+                    f'Penjualan aktual size {nearest}',
+                    {'class': 'green', 'label': 'Aktual sesuai size'},
+                )
+        if cycle and decimal_value(getattr(cycle, 'estimated_price_per_kg', 0)) > 0:
+            return (
+                decimal_value(cycle.estimated_price_per_kg),
+                'Estimasi siklus',
+                {'class': 'amber', 'label': 'Harga estimasi'},
+            )
+        if average_sale_price > 0:
+            return (
+                average_sale_price,
+                'Rata-rata seluruh penjualan',
+                {'class': 'amber', 'label': 'Harga rata-rata'},
+            )
+        return Decimal('0'), 'Belum tersedia', {'class': 'red', 'label': 'Harga belum ada'}
 
     def is_total_harvest(value):
         text = str(value or '').strip().lower().replace('_', ' ').replace('-', ' ')
         return text in {'total', 'final', 'panen total', 'panen final', 'selesai'}
+
+    def metric_health(kind, value, *, target=None):
+        value = decimal_value(value)
+        if kind == 'sampling':
+            days = int(value)
+            if days <= 14:
+                return {'class': 'green', 'label': 'Terkini'}
+            if days <= 30:
+                return {'class': 'amber', 'label': 'Perlu sampling'}
+            return {'class': 'red', 'label': 'Kedaluwarsa'}
+        if kind == 'adg':
+            target = decimal_value(target or '0.25')
+            if Decimal('0.03') <= value <= Decimal('0.60') and value >= target * Decimal('0.85'):
+                return {'class': 'green', 'label': 'Normal'}
+            if Decimal('0') < value <= Decimal('0.60'):
+                return {'class': 'amber', 'label': 'Di bawah target'}
+            return {'class': 'red', 'label': 'Tidak wajar'}
+        if kind == 'sr':
+            if Decimal('75') <= value <= Decimal('100'):
+                return {'class': 'green', 'label': 'Sehat'}
+            if Decimal('60') <= value <= Decimal('105'):
+                return {'class': 'amber', 'label': 'Waspada'}
+            return {'class': 'red', 'label': 'Perlu validasi'}
+        if kind == 'fcr':
+            if Decimal('0') < value <= Decimal('1.40'):
+                return {'class': 'green', 'label': 'Efisien'}
+            if Decimal('1.40') < value <= Decimal('1.70'):
+                return {'class': 'amber', 'label': 'Waspada'}
+            return {'class': 'red', 'label': 'Tidak efisien/data kosong'}
+        return {'class': 'gray', 'label': 'Belum dinilai'}
 
     pond_assets = []
     excluded_pond_assets = []
@@ -1414,11 +1500,6 @@ def _balance_sheet_data(request):
             or (cycle.actual_end_date and cycle.actual_end_date <= as_of)
         ))
         pond_operational = pond.status in ('Budidaya', 'Panen')
-
-        # Kolam yang sudah panen total, siklusnya selesai, atau tidak lagi
-        # berstatus budidaya/panen tidak boleh diakui maupun ditampilkan sebagai
-        # aset biologis. Ini mencegah sampling historis lama (mis. Kolam 7)
-        # muncul kembali setelah panen total.
         if total_harvest or cycle_completed or not pond_operational:
             excluded_pond_assets.append({
                 'pond': pond,
@@ -1426,47 +1507,94 @@ def _balance_sheet_data(request):
             })
             continue
 
-        raw_biomass = latest_sampling.biomass_index_kg or latest_sampling.biomass_kg or Decimal('0')
-        partial_harvest_kg = sum((
-            row.total_kg or Decimal('0') for row in harvest_rows
-            if row.date >= latest_sampling.date and not is_total_harvest(row.harvest_type)
-        ), Decimal('0'))
-        biomass = max(raw_biomass - partial_harvest_kg, Decimal('0'))
-        price = Decimal('0')
-        price_source = 'Belum tersedia'
-        if cycle and (cycle.estimated_price_per_kg or 0) > 0:
-            price = cycle.estimated_price_per_kg
-            price_source = 'Estimasi siklus'
-        elif average_sale_price > 0:
-            price = average_sale_price
-            price_source = 'Rata-rata penjualan'
-        value = (biomass * price).quantize(Decimal('0.01'))
+        raw_biomass = decimal_value(latest_sampling.biomass_index_kg or latest_sampling.biomass_kg)
+        sampling_abw = decimal_value(latest_sampling.abw_g)
         sampling_age = max((as_of - latest_sampling.date).days, 0)
-        cycle_name = cycle.name if cycle else '-'
-        doc = latest_sampling.doc or 0
-        abw = latest_sampling.abw_g or Decimal('0')
-        sr = latest_sampling.sr_index_percent or latest_sampling.estimated_sr or Decimal('0')
+        target_adg = decimal_value(getattr(cycle, 'target_adg', Decimal('0.25')) if cycle else Decimal('0.25'))
+        adg = decimal_value(latest_sampling.adg_weekly or latest_sampling.adg_cumulative or target_adg)
+        if adg <= 0 or adg > Decimal('0.60'):
+            adg = target_adg if Decimal('0') < target_adg <= Decimal('0.60') else Decimal('0.25')
+        projected_abw = sampling_abw + adg * Decimal(sampling_age)
+        current_size = (Decimal('1000') / projected_abw) if projected_abw > 0 else Decimal('0')
 
-        if biomass <= 0:
-            indicator, indicator_label = 'red', 'Biomassa nol/perlu diperiksa'
-        elif price <= 0:
-            indicator, indicator_label = 'red', 'Harga belum tersedia'
-        elif sampling_age <= 14:
-            indicator, indicator_label = 'green', 'Sehat · data terkini'
-        elif sampling_age <= 30:
-            indicator, indicator_label = 'amber', 'Waspada · sampling lama'
-        else:
-            indicator, indicator_label = 'red', 'Kritis · data kedaluwarsa'
+        base_population = int(latest_sampling.population_index or latest_sampling.population or 0)
+        if base_population <= 0 and raw_biomass > 0 and sampling_abw > 0:
+            base_population = int((raw_biomass * Decimal('1000') / sampling_abw).quantize(Decimal('1')))
 
+        partial_harvest_kg = Decimal('0')
+        partial_harvest_population = 0
+        for row in harvest_rows:
+            if row.date <= latest_sampling.date or is_total_harvest(row.harvest_type):
+                continue
+            harvest_kg = decimal_value(row.total_kg)
+            partial_harvest_kg += harvest_kg
+            harvest_size = size_number(row.size_text)
+            if not harvest_size or harvest_size <= 0:
+                days_to_harvest = max((row.date - latest_sampling.date).days, 0)
+                harvest_abw = sampling_abw + adg * Decimal(days_to_harvest)
+                harvest_size = Decimal('1000') / harvest_abw if harvest_abw > 0 else current_size
+            if harvest_kg > 0 and harvest_size > 0:
+                partial_harvest_population += int((harvest_kg * harvest_size).quantize(Decimal('1')))
+
+        siphons = SiphonRecord.objects.filter(pond=pond, date__gt=latest_sampling.date, date__lte=as_of)
+        if cycle:
+            siphons = siphons.filter(cycle=cycle)
+        mortality_population = int(siphons.aggregate(total=Sum('dead_count'))['total'] or 0)
+        remaining_population = max(base_population - partial_harvest_population - mortality_population, 0)
+
+        projected_biomass_before_deductions = (
+            Decimal(base_population) * projected_abw / Decimal('1000') if base_population and projected_abw else raw_biomass
+        )
+        biomass = (
+            Decimal(remaining_population) * projected_abw / Decimal('1000') if remaining_population and projected_abw else Decimal('0')
+        )
+        growth_kg = max(projected_biomass_before_deductions - raw_biomass, Decimal('0'))
+        mortality_kg = Decimal(mortality_population) * projected_abw / Decimal('1000') if projected_abw else Decimal('0')
+        net_change_kg = biomass - raw_biomass
+        current_sr = (
+            Decimal(remaining_population) / Decimal(latest_sampling.stocking_count) * Decimal('100')
+            if latest_sampling.stocking_count else decimal_value(latest_sampling.sr_index_percent or latest_sampling.estimated_sr)
+        )
+        fcr = decimal_value(latest_sampling.fcr)
+
+        price, price_source, price_health = market_price_for_size(current_size, cycle)
+        value = (biomass * price).quantize(Decimal('0.01'))
         biological_assets_total += value
+
+        sampling_health = metric_health('sampling', sampling_age)
+        adg_health = metric_health('adg', adg, target=target_adg)
+        sr_health = metric_health('sr', current_sr)
+        fcr_health = metric_health('fcr', fcr)
+        if biomass <= 0:
+            biomass_health = {'class': 'red', 'label': 'Biomassa nol'}
+        elif raw_biomass > 0 and net_change_kg < -(raw_biomass * Decimal('0.25')):
+            biomass_health = {'class': 'red', 'label': 'Turun tajam'}
+        elif net_change_kg < 0:
+            biomass_health = {'class': 'amber', 'label': 'Menurun'}
+        else:
+            biomass_health = {'class': 'green', 'label': 'Bertumbuh'}
+
+        healths = [sampling_health, adg_health, sr_health, fcr_health, price_health, biomass_health]
+        indicator = 'red' if any(x['class'] == 'red' for x in healths) else ('amber' if any(x['class'] == 'amber' for x in healths) else 'green')
+        indicator_label = 'Kritis · perlu tindakan' if indicator == 'red' else ('Waspada · perlu dipantau' if indicator == 'amber' else 'Sehat · terkendali')
+
         pond_assets.append({
-            'pond': pond, 'sampling': latest_sampling, 'cycle_name': cycle_name,
-            'doc': doc, 'abw': abw, 'sr': sr, 'raw_biomass_kg': raw_biomass,
-            'partial_harvest_kg': partial_harvest_kg, 'biomass_kg': biomass,
-            'price_per_kg': price, 'price_source': price_source,
-            'asset_value': value, 'sampling_age': sampling_age,
-            'indicator': indicator, 'indicator_label': indicator_label,
-            'is_active_pond': True,
+            'pond': pond, 'sampling': latest_sampling,
+            'cycle_name': cycle.name if cycle else '-', 'doc': latest_sampling.doc or 0,
+            'sampling_abw': sampling_abw, 'projected_abw': projected_abw,
+            'current_size': current_size, 'adg': adg, 'target_adg': target_adg,
+            'sr': current_sr, 'fcr': fcr, 'raw_biomass_kg': raw_biomass,
+            'growth_kg': growth_kg, 'partial_harvest_kg': partial_harvest_kg,
+            'partial_harvest_population': partial_harvest_population,
+            'mortality_population': mortality_population, 'mortality_kg': mortality_kg,
+            'remaining_population': remaining_population, 'biomass_kg': biomass,
+            'net_change_kg': net_change_kg, 'price_per_kg': price,
+            'price_source': price_source, 'asset_value': value,
+            'sampling_age': sampling_age, 'indicator': indicator,
+            'indicator_label': indicator_label, 'is_active_pond': True,
+            'sampling_health': sampling_health, 'biomass_health': biomass_health,
+            'adg_health': adg_health, 'sr_health': sr_health,
+            'fcr_health': fcr_health, 'price_health': price_health,
         })
 
     start = timezone.datetime(as_of.year, 1, 1).date()
