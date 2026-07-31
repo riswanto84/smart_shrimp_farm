@@ -468,20 +468,8 @@ def _salary_slip_pdf_response(request, record):
         ]))
         story += [Spacer(1, 4*mm), note_table]
 
-    signature = Table([
-        ['Karyawan/Penerima', 'Disetujui oleh'],
-        ['', ''],
-        [record.employee.name, 'Manajer/Penanggung Jawab'],
-    ], colWidths=[86*mm, 86*mm], rowHeights=[6*mm, 15*mm, 7*mm])
-    signature.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),
-        ('FONTNAME', (0, 2), (-1, 2), 'Helvetica-Bold'),
-        ('LINEABOVE', (0, 2), (-1, 2), 0.6, colors.HexColor('#334155')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), muted),
-        ('FONTSIZE', (0, 0), (-1, -1), 8.5),
-    ]))
-    story += [Spacer(1, 7*mm), KeepTogether(signature)]
+    # Blok tanda tangan dihilangkan karena dokumen diterbitkan secara elektronik.
+    story += [Spacer(1, 4*mm)]
 
     electronic_notice = Table([[
         Paragraph(
