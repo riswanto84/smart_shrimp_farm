@@ -19,6 +19,9 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle, KeepTogether
 from reportlab.lib.utils import ImageReader
+from reportlab.graphics import renderPDF
+from reportlab.graphics.barcode.qr import QrCodeWidget
+from reportlab.graphics.shapes import Drawing
 from accounts.rbac import permission_required
 from finance.models import OperationalExpense
 from .forms import EmployeeForm, PayrollPeriodForm, PayrollRecordForm
@@ -231,6 +234,12 @@ def _salary_slip_pdf_response(request, record):
     if user is not None and getattr(user, 'is_authenticated', False):
         printed_by = user.get_full_name() or user.get_username()
 
+    slip_number = f'SG-{record.period.start_date:%Y%m}-{record.pk:05d}'
+    verification_token = signing.dumps(record.pk, salt='payroll-slip-share')
+    verification_url = request.build_absolute_uri(
+        reverse('payroll:salary_slip_pdf_shared', args=[verification_token])
+    )
+
     def draw_brand(canvas, doc_obj):
         canvas.saveState()
         width, height = A4
@@ -285,7 +294,7 @@ def _salary_slip_pdf_response(request, record):
         canvas.setFillColor(muted)
         canvas.setFont('Helvetica', 7)
         canvas.drawString(18 * mm, 11.5 * mm, f'Dicetak {printed_at:%d/%m/%Y %H:%M} WIB · Oleh: {printed_by}')
-        canvas.drawCentredString(width / 2, 11.5 * mm, 'Dokumen ini dihasilkan oleh Smart Shrimp Farm')
+        canvas.drawCentredString(width / 2, 11.5 * mm, 'Smart Shrimp Farm · Udang Emas Nusantara')
         canvas.drawRightString(width - 18 * mm, 11.5 * mm, f'Halaman {doc_obj.page}')
         canvas.restoreState()
 
@@ -306,7 +315,7 @@ def _salary_slip_pdf_response(request, record):
         [Paragraph('<b>Metode Pembayaran</b>', small), Paragraph(record.get_payment_method_display() or '-', normal),
          Paragraph('<b>Tanggal Pembayaran</b>', small), Paragraph(record.payment_date.strftime('%d/%m/%Y') if record.payment_date else '-', normal)],
         [Paragraph('<b>Status Pembayaran</b>', small), Paragraph(record.get_payment_status_display() or '-', normal),
-         Paragraph('<b>Nomor Slip</b>', small), Paragraph(f'PAY-{record.pk:06d}', normal)],
+         Paragraph('<b>Nomor Slip</b>', small), Paragraph(slip_number, normal)],
     ]
     info_table = Table(employee_info, colWidths=[31*mm, 55*mm, 32*mm, 54*mm])
     info_table.setStyle(TableStyle([
@@ -393,7 +402,52 @@ def _salary_slip_pdf_response(request, record):
         ('TOPPADDING', (0, 0), (-1, -1), 7),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
     ]))
-    story += [total_box]
+    story += [total_box, Spacer(1, 3 * mm)]
+
+    status_label = (record.get_payment_status_display() or 'BELUM LUNAS').upper()
+    status_is_paid = record.payment_status == 'paid'
+    status_bg = colors.HexColor('#E7F6ED') if status_is_paid else colors.HexColor('#FFF3D8')
+    status_fg = colors.HexColor('#0F8A4B') if status_is_paid else colors.HexColor('#A86400')
+    status_border = colors.HexColor('#63B780') if status_is_paid else colors.HexColor('#D5A928')
+
+    qr_widget = QrCodeWidget(verification_url)
+    bounds = qr_widget.getBounds()
+    qr_size = 25 * mm
+    qr_drawing = Drawing(qr_size, qr_size, transform=[
+        qr_size / (bounds[2] - bounds[0]), 0,
+        0, qr_size / (bounds[3] - bounds[1]),
+        0, 0,
+    ])
+    qr_drawing.add(qr_widget)
+
+    verification_block = Table([
+        [
+            Paragraph(
+                f'<b>STATUS PEMBAYARAN</b><br/><font size="14"><b>{status_label}</b></font><br/>'
+                f'<font size="7" color="#52637A">Nomor slip: {slip_number}</font>',
+                ParagraphStyle('StatusStamp', parent=normal, alignment=TA_CENTER, textColor=status_fg, leading=16),
+            ),
+            qr_drawing,
+            Paragraph(
+                '<b>VERIFIKASI DOKUMEN</b><br/>'
+                'Pindai QR Code untuk membuka dokumen elektronik yang tersimpan pada sistem.<br/>'
+                '<font size="7" color="#52637A">Tautan verifikasi berlaku maksimal 30 hari sejak dibuat.</font>',
+                small,
+            ),
+        ]
+    ], colWidths=[51*mm, 29*mm, 92*mm])
+    verification_block.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, 0), status_bg),
+        ('BOX', (0, 0), (0, 0), 1.1, status_border),
+        ('BOX', (1, 0), (-1, 0), 0.6, line_color),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (1, 0), 'CENTER'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 7),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 7),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    story += [verification_block]
 
     notes_flow = []
     if record.notes:
@@ -427,7 +481,26 @@ def _salary_slip_pdf_response(request, record):
         ('TEXTCOLOR', (0, 0), (-1, 0), muted),
         ('FONTSIZE', (0, 0), (-1, -1), 8.5),
     ]))
-    story += [Spacer(1, 9*mm), KeepTogether(signature)]
+    story += [Spacer(1, 7*mm), KeepTogether(signature)]
+
+    electronic_notice = Table([[
+        Paragraph(
+            '<b>Dokumen ini diterbitkan secara elektronik oleh Smart Shrimp Farm – Udang Emas Nusantara '
+            'dan tidak memerlukan tanda tangan maupun cap basah.</b><br/>'
+            '<font size="7.5" color="#52637A">Slip gaji ini bersifat rahasia dan hanya diperuntukkan bagi '
+            'karyawan yang bersangkutan. Apabila terdapat perbedaan, data yang tersimpan dalam sistem menjadi acuan.</font>',
+            ParagraphStyle('ElectronicNotice', parent=small, alignment=TA_CENTER, leading=11, textColor=navy),
+        )
+    ]], colWidths=[172*mm])
+    electronic_notice.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F2F6FB')),
+        ('BOX', (0, 0), (-1, -1), 0.7, line_color),
+        ('LEFTPADDING', (0, 0), (-1, -1), 9),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 9),
+        ('TOPPADDING', (0, 0), (-1, -1), 7),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
+    ]))
+    story += [Spacer(1, 4*mm), KeepTogether(electronic_notice)]
 
     doc.build(story, onFirstPage=draw_brand, onLaterPages=draw_brand)
     return response
