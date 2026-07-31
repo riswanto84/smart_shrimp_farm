@@ -80,10 +80,26 @@ def dashboard(request):
         sales_change_state = 'neutral'
         sales_change_text = 'Belum ada omzet hari ini maupun kemarin'
 
-    expense_total = (
-        filter_selected_cycle(request, OperationalExpense.objects.all())
-        .aggregate(s=Sum('amount'))['s']
+    # Gunakan satu queryset sebagai sumber tunggal seluruh kartu pengeluaran.
+    # Total pengeluaran sudah mencakup gaji; kategori hanya dipecah untuk
+    # penyajian dashboard agar tidak terjadi penghitungan ganda.
+    cycle_expenses = filter_selected_cycle(request, OperationalExpense.objects.all())
+    expense_total = cycle_expenses.aggregate(s=Sum('amount'))['s'] or Decimal('0')
+    payroll_total = (
+        cycle_expenses.filter(category='Tenaga Kerja').aggregate(s=Sum('amount'))['s']
         or Decimal('0')
+    )
+    depreciation_total = (
+        cycle_expenses.filter(category='Penyusutan').aggregate(s=Sum('amount'))['s']
+        or Decimal('0')
+    )
+    administration_total = (
+        cycle_expenses.filter(category='Administrasi').aggregate(s=Sum('amount'))['s']
+        or Decimal('0')
+    )
+    production_operational_total = max(
+        expense_total - payroll_total - depreciation_total - administration_total,
+        Decimal('0'),
     )
 
     # Ringkasan laba/rugi dashboard menggunakan basis yang sama dengan dua card
@@ -501,6 +517,10 @@ def dashboard(request):
         'sales_change_state': sales_change_state,
         'sales_change_text': sales_change_text,
         'expense_total': expense_total,
+        'production_operational_total': production_operational_total,
+        'payroll_total': payroll_total,
+        'depreciation_total': depreciation_total,
+        'administration_total': administration_total,
         'profit_loss_total': profit_loss_total,
         'profit_margin_percent': profit_margin_percent,
         'profit_loss_status': profit_loss_status,

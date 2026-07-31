@@ -78,7 +78,11 @@
 </div>
 <div class="kpi-grid">
   <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-chart-line"></i></div><div><span>Total Omzet</span><strong>{{ sales_total|rupiah }}</strong><small>Total omzet pada siklus yang dipilih</small></div></div>
-  <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-wallet"></i></div><div><span>Total Pengeluaran</span><strong>{{ expense_total|rupiah }}</strong><small>Total pengeluaran pada siklus yang dipilih</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-shrimp"></i></div><div><span>Biaya Produksi &amp; Operasional</span><strong>{{ production_operational_total|rupiah }}</strong><small>Selain penggajian, penyusutan, dan administrasi</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-users"></i></div><div><span>Penggajian</span><strong>{{ payroll_total|rupiah }}</strong><small>Kategori Tenaga Kerja · sudah termasuk dalam total pengeluaran</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-building-columns"></i></div><div><span>Penyusutan</span><strong>{{ depreciation_total|rupiah }}</strong><small>Kategori Penyusutan pada siklus yang dipilih</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-file-invoice"></i></div><div><span>Administrasi</span><strong>{{ administration_total|rupiah }}</strong><small>Kategori Administrasi pada siklus yang dipilih</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-wallet"></i></div><div><span>Total Pengeluaran</span><strong>{{ expense_total|rupiah }}</strong><small>Seluruh pengeluaran, termasuk penggajian, penyusutan, dan administrasi</small></div></div>
   <div class="kpi-card">
     <div class="kpi-icon {% if profit_loss_total > 0 %}green{% elif profit_loss_total < 0 %}red{% else %}gold{% endif %}"><i class="fa-solid {% if profit_loss_total > 0 %}fa-arrow-trend-up{% elif profit_loss_total < 0 %}fa-arrow-trend-down{% else %}fa-scale-balanced{% endif %}"></i></div>
     <div>
