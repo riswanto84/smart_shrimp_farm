@@ -1,5 +1,39 @@
+from decimal import Decimal, InvalidOperation
 from django import forms
 from .models import Employee, PayrollPeriod, PayrollRecord
+
+
+
+
+class IndonesianMoneyField(forms.DecimalField):
+    """Input nominal dengan tampilan pemisah ribuan Indonesia."""
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('min_value', Decimal('0'))
+        kwargs.setdefault('decimal_places', 2)
+        kwargs.setdefault('max_digits', 16)
+        kwargs.setdefault('widget', forms.TextInput(attrs={
+            'inputmode': 'numeric',
+            'autocomplete': 'off',
+            'class': 'form-control money-input',
+            'placeholder': '0',
+        }))
+        super().__init__(*args, **kwargs)
+
+    def prepare_value(self, value):
+        if value in (None, ''):
+            return '0'
+        try:
+            number = Decimal(str(value))
+            return f"{int(number):,}".replace(',', '.')
+        except (InvalidOperation, ValueError, TypeError):
+            return value
+
+    def to_python(self, value):
+        if isinstance(value, str):
+            value = value.strip().replace('Rp', '').replace(' ', '')
+            # Form ini khusus nominal rupiah bulat; titik/koma pada UI dianggap pemisah ribuan.
+            value = value.replace('.', '').replace(',', '') or '0'
+        return super().to_python(value)
 
 
 class EmployeeChoiceField(forms.ModelChoiceField):
@@ -14,6 +48,8 @@ class DateInput(forms.DateInput):
 
 
 class EmployeeForm(forms.ModelForm):
+    base_salary = IndonesianMoneyField(label='Gaji Pokok')
+    daily_rate = IndonesianMoneyField(label='Upah Harian')
     class Meta:
         model = Employee
         fields = ['employee_code', 'name', 'position', 'phone', 'bank_name', 'bank_account', 'join_date', 'employment_status', 'pay_type', 'base_salary', 'daily_rate', 'notes']

@@ -16,6 +16,9 @@ urlpatterns = [
     path('records/<int:pk>/edit/', views.record_form, name='record_edit'),
     path('records/<int:pk>/delete/', views.record_delete, name='record_delete'),
     path('records/<int:pk>/slip/', views.salary_slip, name='salary_slip'),
+    path('records/<int:pk>/slip/pdf/', views.salary_slip_pdf, name='salary_slip_pdf'),
+    path('slip/share/<str:token>/', views.salary_slip_pdf_shared, name='salary_slip_pdf_shared'),
+    path('records/<int:pk>/slip/whatsapp/', views.salary_slip_whatsapp, name='salary_slip_whatsapp'),
     path('reports/', views.report, name='report'),
     path('reports/excel/', views.report_excel, name='report_excel'),
 ]

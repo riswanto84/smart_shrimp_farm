@@ -18,14 +18,12 @@ from pathlib import Path
 import json
 import mimetypes
 from ponds.models import Pond
-from sales.models import Sale, SaleItem, Customer
+from sales.models import Sale, Customer
 from .models import OperationalExpense, ExpenseDocument, TradeAccount, TradePayment, TradeDocument, BalanceEntry, FixedAsset, OtherRevenue
 from core.reporting import get_date_range, filter_by_date_range, format_date_range, export_excel, export_pdf, rupiah
 from core.utils import parse_rupiah
 from core.pagination import paginate_queryset
 from cultivation.utils import get_selected_cycle, filter_selected_cycle
-from cultivation.models import CultivationCycle
-from operations.models import SamplingRecord, Harvest
 
 
 EXPENSE_DOCUMENT_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.webp', '.doc', '.docx', '.xls', '.xlsx'}
@@ -1413,118 +1411,6 @@ def _balance_sheet_data(request):
     debt_to_equity = safe_ratio(total_liabilities, total_equity_with_profit) if total_equity_with_profit > 0 else None
     debt_ratio = safe_ratio(total_liabilities, total_assets)
 
-    # Likuiditas operasional tambak: biomassa hidup ditampilkan terpisah dari
-    # rasio akuntansi agar tidak disalahartikan sebagai kas yang siap digunakan.
-    active_cycles = CultivationCycle.objects.filter(
-        status__in=[CultivationCycle.STATUS_ACTIVE, CultivationCycle.STATUS_HARVEST],
-        start_date__lte=as_of,
-    )
-    latest_samples = {}
-    for sample in SamplingRecord.objects.filter(
-        cycle__in=active_cycles, date__lte=as_of
-    ).select_related('pond', 'cycle').order_by('pond_id', '-date', '-id'):
-        latest_samples.setdefault(sample.pond_id, sample)
-
-    biomass_details = []
-    biomass_active_kg = Decimal('0')
-    total_words = {'total', 'final', 'panen total', 'panen final', 'selesai'}
-    for pond_id, sample in latest_samples.items():
-        harvests_after = Harvest.objects.filter(
-            pond_id=pond_id, cycle=sample.cycle, date__gt=sample.date, date__lte=as_of
-        )
-        has_total_harvest = any((h.harvest_type or '').strip().lower() in total_words for h in harvests_after)
-        harvested_kg = harvests_after.aggregate(s=Sum('total_kg'))['s'] or Decimal('0')
-        remaining_kg = Decimal('0') if has_total_harvest else max(
-            Decimal('0'), (sample.biomass_index_kg or Decimal('0')) - harvested_kg
-        )
-        if remaining_kg > 0:
-            biomass_active_kg += remaining_kg
-            biomass_details.append({
-                'pond': sample.pond, 'cycle': sample.cycle, 'sample_date': sample.date,
-                'biomass_kg': remaining_kg,
-            })
-
-    sale_price = SaleItem.objects.filter(
-        sale__date__date__lte=as_of, weight_kg__gt=0, price_per_kg__gt=0
-    ).aggregate(weight=Sum('weight_kg'), value=Sum('subtotal'))
-    sale_weight = sale_price['weight'] or Decimal('0')
-    sale_value = sale_price['value'] or Decimal('0')
-    average_shrimp_price = safe_ratio(sale_value, sale_weight) or Decimal('0')
-    if average_shrimp_price <= 0:
-        price_values = list(active_cycles.filter(estimated_price_per_kg__gt=0).values_list('estimated_price_per_kg', flat=True))
-        average_shrimp_price = (sum(price_values, Decimal('0')) / len(price_values)) if price_values else Decimal('0')
-
-    biomass_active_value = biomass_active_kg * average_shrimp_price
-    operational_current_assets = current_assets + biomass_active_value
-    operational_current_ratio = safe_ratio(operational_current_assets, total_liabilities)
-    biomass_coverage_ratio = safe_ratio(biomass_active_value, total_liabilities)
-    operational_working_capital = operational_current_assets - total_liabilities
-    biomass_asset_percent = ((biomass_active_value / (total_assets + biomass_active_value)) * Decimal('100')) if (total_assets + biomass_active_value) else Decimal('0')
-
-    def ratio_health(value, ratio_type):
-        """Menghasilkan indikator warna dan interpretasi otomatis untuk rasio."""
-        if value is None:
-            return {
-                'level': 'neutral', 'icon': 'fa-circle-minus', 'label': 'Belum dapat dihitung',
-                'description': 'Kewajiban atau basis pembanding belum tersedia.'
-            }
-
-        value = Decimal(value)
-        thresholds = {
-            'current': [
-                (Decimal('2.00'), 'excellent', 'fa-circle-check', 'Sangat Sehat', 'Aset lancar sangat kuat untuk menutup kewajiban jangka pendek.'),
-                (Decimal('1.00'), 'good', 'fa-circle-check', 'Sehat', 'Aset lancar cukup untuk menutup kewajiban jangka pendek.'),
-                (Decimal('0.75'), 'warning', 'fa-circle-exclamation', 'Perlu Perhatian', 'Likuiditas cukup ketat dan perlu pengaturan arus kas.'),
-                (Decimal('-Infinity'), 'danger', 'fa-triangle-exclamation', 'Likuiditas Rendah', 'Aset lancar belum cukup untuk menutup kewajiban jangka pendek.'),
-            ],
-            'cash': [
-                (Decimal('1.00'), 'excellent', 'fa-circle-check', 'Kas Sangat Kuat', 'Kas dan bank mampu menutup seluruh kewajiban lancar.'),
-                (Decimal('0.50'), 'good', 'fa-circle-check', 'Kas Cukup', 'Kas cukup memadai selama penerimaan usaha berjalan normal.'),
-                (Decimal('0.25'), 'warning', 'fa-circle-exclamation', 'Kas Terbatas', 'Perlu menjaga jadwal pembayaran dan penerimaan kas.'),
-                (Decimal('-Infinity'), 'danger', 'fa-triangle-exclamation', 'Kas Rendah', 'Kas siap pakai masih rendah dibanding kewajiban.'),
-            ],
-            'debt_to_equity': [
-                (Decimal('0.50'), 'excellent', 'fa-circle-check', 'Sangat Baik', 'Utang relatif rendah dibanding modal sendiri.'),
-                (Decimal('1.00'), 'good', 'fa-circle-check', 'Sehat', 'Struktur modal masih seimbang dan terkendali.'),
-                (Decimal('2.00'), 'warning', 'fa-circle-exclamation', 'Perlu Perhatian', 'Ketergantungan terhadap utang mulai meningkat.'),
-                (Decimal('Infinity'), 'danger', 'fa-triangle-exclamation', 'Utang Tinggi', 'Utang jauh lebih besar dibanding modal sendiri.'),
-            ],
-            'debt_ratio': [
-                (Decimal('0.30'), 'excellent', 'fa-circle-check', 'Sangat Baik', 'Sebagian besar aset dibiayai oleh modal sendiri.'),
-                (Decimal('0.50'), 'good', 'fa-circle-check', 'Sehat', 'Porsi aset yang dibiayai utang masih wajar.'),
-                (Decimal('0.70'), 'warning', 'fa-circle-exclamation', 'Perlu Perhatian', 'Porsi pembiayaan dari utang mulai tinggi.'),
-                (Decimal('Infinity'), 'danger', 'fa-triangle-exclamation', 'Risiko Utang Tinggi', 'Sebagian besar aset dibiayai oleh utang.'),
-            ],
-            'operational_current': [
-                (Decimal('2.00'), 'excellent', 'fa-circle-check', 'Sangat Sehat', 'Aset lancar dan biomassa sangat kuat menutup kewajiban.'),
-                (Decimal('1.50'), 'good', 'fa-circle-check', 'Sehat', 'Aset operasional cukup aman untuk menutup kewajiban.'),
-                (Decimal('1.00'), 'warning', 'fa-circle-exclamation', 'Cukup', 'Kewajiban tertutup, tetapi ruang pengamannya masih terbatas.'),
-                (Decimal('-Infinity'), 'danger', 'fa-triangle-exclamation', 'Belum Aman', 'Aset operasional belum cukup menutup kewajiban.'),
-            ],
-            'biomass_coverage': [
-                (Decimal('2.00'), 'excellent', 'fa-circle-check', 'Biomassa Sangat Kuat', 'Nilai biomassa melebihi dua kali kewajiban.'),
-                (Decimal('1.00'), 'good', 'fa-circle-check', 'Biomassa Mencukupi', 'Nilai biomassa secara estimasi dapat menutup kewajiban.'),
-                (Decimal('0.50'), 'warning', 'fa-circle-exclamation', 'Menutup Sebagian', 'Biomassa hanya menutup sebagian kewajiban.'),
-                (Decimal('-Infinity'), 'danger', 'fa-triangle-exclamation', 'Coverage Rendah', 'Nilai biomassa masih rendah dibanding kewajiban.'),
-            ],
-        }
-
-        rules = thresholds[ratio_type]
-        lower_is_better = ratio_type in {'debt_to_equity', 'debt_ratio'}
-        for threshold, level, icon, label, description in rules:
-            if (value <= threshold) if lower_is_better else (value >= threshold):
-                return {'level': level, 'icon': icon, 'label': label, 'description': description}
-        return {'level': 'neutral', 'icon': 'fa-circle-minus', 'label': 'Belum dinilai', 'description': ''}
-
-    ratio_healths = {
-        'current': ratio_health(current_ratio, 'current'),
-        'cash': ratio_health(cash_ratio, 'cash'),
-        'debt_to_equity': ratio_health(debt_to_equity, 'debt_to_equity'),
-        'debt_ratio': ratio_health(debt_ratio, 'debt_ratio'),
-        'operational_current': ratio_health(operational_current_ratio, 'operational_current'),
-        'biomass_coverage': ratio_health(biomass_coverage_ratio, 'biomass_coverage'),
-    }
-
     def percentage(part, whole):
         return (part / whole * Decimal('100')) if whole else Decimal('0')
 
@@ -1558,15 +1444,7 @@ def _balance_sheet_data(request):
         'capital_expenses': capital_expenses, 'warnings': warnings,
         'current_ratio': current_ratio, 'cash_ratio': cash_ratio,
         'debt_to_equity': debt_to_equity, 'debt_ratio': debt_ratio,
-        'biomass_active_kg': biomass_active_kg, 'average_shrimp_price': average_shrimp_price,
-        'biomass_active_value': biomass_active_value, 'biomass_details': biomass_details,
-        'operational_current_assets': operational_current_assets,
-        'operational_current_ratio': operational_current_ratio,
-        'biomass_coverage_ratio': biomass_coverage_ratio,
-        'operational_working_capital': operational_working_capital,
-        'biomass_asset_percent': biomass_asset_percent,
         'asset_composition': asset_composition, 'validation_checks': validation_checks,
-        'ratio_healths': ratio_healths,
         'is_balanced': difference == 0,
         'is_reconciled': reconciliation_equity == 0,
         'balance_status': (

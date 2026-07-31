@@ -1,5 +1,3 @@
-## edit model
-
 from decimal import Decimal
 from django.db import models
 from ponds.models import Pond
