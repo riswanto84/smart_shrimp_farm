@@ -18,6 +18,7 @@ from pathlib import Path
 import json
 import mimetypes
 from ponds.models import Pond
+from operations.services.biomass import calculate_index_biomass_snapshot
 from sales.models import Sale, Customer
 from .models import OperationalExpense, ExpenseDocument, TradeAccount, TradePayment, TradeDocument, BalanceEntry, FixedAsset, OtherRevenue
 from core.reporting import get_date_range, filter_by_date_range, format_date_range, export_excel, export_pdf, rupiah
@@ -1476,80 +1477,33 @@ def _balance_sheet_data(request):
             return {'class': 'red', 'label': 'Tidak efisien/data kosong'}
         return {'class': 'gray', 'label': 'Belum dinilai'}
 
+    # Dashboard dan Neraca memakai snapshot biomassa INDEX yang sama.
+    index_snapshot = calculate_index_biomass_snapshot(as_of=as_of)
     pond_assets = []
-    excluded_pond_assets = []
+    excluded_pond_assets = [
+        {'pond': row.pond, 'reason': row.exclusion_reason}
+        for row in index_snapshot['excluded']
+    ]
     biological_assets_total = Decimal('0')
-    for pond in Pond.objects.all().order_by('code', 'name'):
-        latest_sampling = (
-            SamplingRecord.objects.filter(pond=pond, date__lte=as_of)
-            .select_related('cycle').order_by('-date', '-id').first()
-        )
-        if not latest_sampling:
-            continue
 
-        cycle = latest_sampling.cycle
-        harvests = Harvest.objects.filter(pond=pond, date__lte=as_of)
-        if cycle:
-            harvests = harvests.filter(cycle=cycle)
-        else:
-            harvests = harvests.filter(date__gte=latest_sampling.date)
-        harvest_rows = list(harvests.order_by('date', 'id'))
-        total_harvest = next((row for row in harvest_rows if is_total_harvest(row.harvest_type)), None)
-        cycle_completed = bool(cycle and (
-            cycle.status == getattr(cycle, 'STATUS_COMPLETED', 'completed')
-            or (cycle.actual_end_date and cycle.actual_end_date <= as_of)
-        ))
-        pond_operational = pond.status in ('Budidaya', 'Panen')
-        if total_harvest or cycle_completed or not pond_operational:
-            excluded_pond_assets.append({
-                'pond': pond,
-                'reason': 'Panen total' if total_harvest else ('Siklus selesai' if cycle_completed else 'Kolam tidak aktif'),
-            })
-            continue
-
-        raw_biomass = decimal_value(latest_sampling.biomass_index_kg or latest_sampling.biomass_kg)
-        sampling_abw = decimal_value(latest_sampling.abw_g)
-        sampling_age = max((as_of - latest_sampling.date).days, 0)
+    for result in index_snapshot['rows']:
+        pond = result.pond
+        latest_sampling = result.sampling
+        cycle = result.cycle
+        raw_biomass = result.sampling_biomass_index_kg
+        sampling_abw = result.sampling_abw_g
+        sampling_age = result.sampling_age_days
         target_adg = decimal_value(getattr(cycle, 'target_adg', Decimal('0.25')) if cycle else Decimal('0.25'))
-        adg = decimal_value(latest_sampling.adg_weekly or latest_sampling.adg_cumulative or target_adg)
-        if adg <= 0 or adg > Decimal('0.60'):
-            adg = target_adg if Decimal('0') < target_adg <= Decimal('0.60') else Decimal('0.25')
-        projected_abw = sampling_abw + adg * Decimal(sampling_age)
-        current_size = (Decimal('1000') / projected_abw) if projected_abw > 0 else Decimal('0')
-
-        base_population = int(latest_sampling.population_index or latest_sampling.population or 0)
-        if base_population <= 0 and raw_biomass > 0 and sampling_abw > 0:
-            base_population = int((raw_biomass * Decimal('1000') / sampling_abw).quantize(Decimal('1')))
-
-        partial_harvest_kg = Decimal('0')
-        partial_harvest_population = 0
-        for row in harvest_rows:
-            if row.date <= latest_sampling.date or is_total_harvest(row.harvest_type):
-                continue
-            harvest_kg = decimal_value(row.total_kg)
-            partial_harvest_kg += harvest_kg
-            harvest_size = size_number(row.size_text)
-            if not harvest_size or harvest_size <= 0:
-                days_to_harvest = max((row.date - latest_sampling.date).days, 0)
-                harvest_abw = sampling_abw + adg * Decimal(days_to_harvest)
-                harvest_size = Decimal('1000') / harvest_abw if harvest_abw > 0 else current_size
-            if harvest_kg > 0 and harvest_size > 0:
-                partial_harvest_population += int((harvest_kg * harvest_size).quantize(Decimal('1')))
-
-        siphons = SiphonRecord.objects.filter(pond=pond, date__gt=latest_sampling.date, date__lte=as_of)
-        if cycle:
-            siphons = siphons.filter(cycle=cycle)
-        mortality_population = int(siphons.aggregate(total=Sum('dead_count'))['total'] or 0)
-        remaining_population = max(base_population - partial_harvest_population - mortality_population, 0)
-
-        projected_biomass_before_deductions = (
-            Decimal(base_population) * projected_abw / Decimal('1000') if base_population and projected_abw else raw_biomass
-        )
-        biomass = (
-            Decimal(remaining_population) * projected_abw / Decimal('1000') if remaining_population and projected_abw else Decimal('0')
-        )
-        growth_kg = max(projected_biomass_before_deductions - raw_biomass, Decimal('0'))
-        mortality_kg = Decimal(mortality_population) * projected_abw / Decimal('1000') if projected_abw else Decimal('0')
+        adg = result.adg_g_per_day
+        projected_abw = result.projected_abw_g
+        current_size = result.size
+        partial_harvest_kg = result.partial_harvest_kg
+        partial_harvest_population = result.harvested_population
+        mortality_population = result.mortality_population
+        remaining_population = result.remaining_population_index
+        biomass = result.biomass_index_kg
+        growth_kg = result.growth_index_kg
+        mortality_kg = result.mortality_index_kg
         net_change_kg = biomass - raw_biomass
         current_sr = (
             Decimal(remaining_population) / Decimal(latest_sampling.stocking_count) * Decimal('100')
@@ -1595,6 +1549,7 @@ def _balance_sheet_data(request):
             'sampling_health': sampling_health, 'biomass_health': biomass_health,
             'adg_health': adg_health, 'sr_health': sr_health,
             'fcr_health': fcr_health, 'price_health': price_health,
+            'biomass_method': 'INDEX',
         })
 
     start = timezone.datetime(as_of.year, 1, 1).date()

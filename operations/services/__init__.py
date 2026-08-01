@@ -1,0 +1,1 @@
+"""Layanan perhitungan operasional terpusat."""

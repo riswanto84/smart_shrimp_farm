@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from accounts.rbac import permission_required
 from ponds.models import Pond
 from operations.models import DailyParameter, SamplingRecord, Harvest, SiphonRecord
+from operations.services.biomass import calculate_index_biomass_snapshot
 from sales.models import Sale, SaleItem
 from finance.models import OperationalExpense
 from django.db.models import Sum
@@ -459,6 +460,36 @@ def dashboard(request):
             pond.dashboard_doc120_status = 'Populasi tersisa tidak tersedia'
         elif adg_actual <= 0:
             pond.dashboard_doc120_status = 'ADG aktual belum tersedia'
+
+    # Sumber tunggal biomassa INDEX untuk Dashboard dan Neraca.
+    # Nilai hasil perhitungan lama di atas ditimpa secara sengaja agar semua
+    # modul menampilkan angka yang identik.
+    index_snapshot = calculate_index_biomass_snapshot(as_of=today, ponds=ponds)
+    production_index_items = []
+    production_index_total_kg = index_snapshot['total_kg']
+    index_by_pond = index_snapshot['by_pond']
+    for pond in ponds:
+        result = index_by_pond.get(pond.id)
+        if not result:
+            pond.dashboard_remaining_biomass_index_kg = Decimal('0')
+            pond.dashboard_cc_index = Decimal('0')
+            continue
+        pond.dashboard_remaining_biomass_index_kg = result.biomass_index_kg
+        pond.dashboard_index_method = 'INDEX'
+        pond.dashboard_index_sampling_kg = result.sampling_biomass_index_kg
+        pond.dashboard_index_growth_kg = result.growth_index_kg
+        pond.dashboard_index_partial_harvest_kg = result.partial_harvest_kg
+        pond.dashboard_index_mortality_kg = result.mortality_index_kg
+        pond_area = Decimal(str(pond.area_m2 or 0))
+        cc_index = result.biomass_index_kg / pond_area if pond_area > 0 else Decimal('0')
+        pond.dashboard_cc_index = cc_index.quantize(Decimal('0.01'))
+        production_index_items.append({
+            'pond': pond,
+            'biomass_kg': float(result.biomass_index_kg),
+            'biomass_ton': float(result.biomass_index_kg / Decimal('1000')),
+            'cc': float(cc_index),
+            'method': 'INDEX',
+        })
 
     production_total_ton = production_total_kg / 1000
     production_index_total_ton = production_index_total_kg / Decimal('1000')
