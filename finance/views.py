@@ -199,10 +199,13 @@ def add_expense(request):
 def _profit_loss_data(request):
     date_from, date_to = get_date_range(request)
     cycle = get_selected_cycle(request)
+    # Tanpa tanggal akhir eksplisit, batasi sampai hari ini agar angka identik
+    # dengan Dashboard dan tidak memasukkan transaksi bertanggal masa depan.
+    effective_date_to = date_to or timezone.localdate()
     result = calculate_profit_loss(
         cycle=cycle,
         date_from=date_from,
-        date_to=date_to,
+        date_to=effective_date_to,
     )
     return date_from, date_to, result['revenue'], result['expense_total'], result['profit']
 
@@ -1073,14 +1076,23 @@ def export_gross_turnover_pdf(request):
 
 
 def _profit_loss_tax_data(request):
-    date_from, date_to = _date_period(request)
-    result = _calculate_profit_loss_period(date_from, date_to)
+    selected_cycle = get_selected_cycle(request)
+    has_explicit_period = any(
+        request.GET.get(key) for key in ('date_from', 'date_to', 'year')
+    )
+    if has_explicit_period:
+        date_from, date_to = _date_period(request)
+    else:
+        # Tanpa filter eksplisit, samakan dengan Dashboard dan Neraca: seluruh
+        # transaksi pada siklus terpilih sampai hari ini.
+        date_from, date_to = None, timezone.localdate()
+
+    result = _calculate_profit_loss_period(
+        date_from, date_to, cycle=selected_cycle
+    )
     grouped = list(result['grouped'])
-    if result['depreciation_total']:
-        grouped.append({
-            'category': 'Penyusutan Aset (otomatis)',
-            'total': result['depreciation_total'],
-        })
+    # Kategori Penyusutan sudah berada di OperationalExpense dan sudah masuk
+    # grouped/expense_total. Jangan menambahkan baris otomatis kedua.
     non_deductible = (
         result['expenses'].filter(is_fiscal_deductible=False)
         .aggregate(s=Sum('amount'))['s']
@@ -1507,8 +1519,16 @@ def _balance_sheet_data(request):
         })
 
     selected_cycle = get_selected_cycle(request)
-    start = selected_cycle.start_date if selected_cycle else timezone.datetime(as_of.year, 1, 1).date()
-    profit_loss = _calculate_profit_loss_period(start, as_of, cycle=selected_cycle)
+    # Gunakan konteks yang sama persis dengan Dashboard: seluruh transaksi yang
+    # terhubung ke siklus terpilih sampai tanggal posisi neraca. Jangan memakai
+    # tanggal mulai siklus sebagai filter tambahan karena transaksi yang sudah
+    # ditautkan ke siklus dapat memiliki tanggal administrasi sebelum start_date.
+    # Filter ganda tersebut sebelumnya membuat laba operasional Neraca berbeda.
+    if selected_cycle is not None:
+        profit_loss = _calculate_profit_loss_period(None, as_of, cycle=selected_cycle)
+    else:
+        start = timezone.datetime(as_of.year, 1, 1).date()
+        profit_loss = _calculate_profit_loss_period(start, as_of, cycle=None)
     sales_revenue = profit_loss['sales_revenue']
     other_revenue = profit_loss['other_revenue']
     operating_cost = profit_loss['operating_cost']
