@@ -25,6 +25,7 @@ from core.reporting import get_date_range, filter_by_date_range, format_date_ran
 from core.utils import parse_rupiah
 from core.pagination import paginate_queryset
 from cultivation.utils import get_selected_cycle, filter_selected_cycle
+from finance.services.profit_loss import calculate_profit_loss
 
 
 EXPENSE_DOCUMENT_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.webp', '.doc', '.docx', '.xls', '.xlsx'}
@@ -197,14 +198,13 @@ def add_expense(request):
 
 def _profit_loss_data(request):
     date_from, date_to = get_date_range(request)
-    sales = filter_selected_cycle(request, Sale.objects.all())
-    sales = filter_by_date_range(sales, 'date', date_from, date_to, is_datetime=True)
-    expenses = filter_selected_cycle(request, OperationalExpense.objects.all())
-    expenses = filter_by_date_range(expenses, 'date', date_from, date_to)
-    revenue = sales.aggregate(s=Sum('total_amount'))['s'] or 0
-    expense_total = expenses.aggregate(s=Sum('amount'))['s'] or 0
-    profit = revenue - expense_total
-    return date_from, date_to, revenue, expense_total, profit
+    cycle = get_selected_cycle(request)
+    result = calculate_profit_loss(
+        cycle=cycle,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return date_from, date_to, result['revenue'], result['expense_total'], result['profit']
 
 
 @login_required
@@ -985,59 +985,13 @@ def _asset_depreciation(asset, as_of):
     }
 
 
-def _calculate_profit_loss_period(date_from, date_to):
-    """Single source of truth for profit/loss calculations.
-
-    Both the profit/loss report and the balance sheet call this helper so the
-    current-year result cannot drift because of different queries or
-    depreciation cut-off dates.
-    """
-    valid_statuses_excluded = ['Gagal', 'Expired', 'Dibatalkan', 'Refund']
-    sales_revenue = (
-        Sale.objects.filter(date__date__range=(date_from, date_to))
-        .exclude(status__in=valid_statuses_excluded)
-        .aggregate(s=Sum('total_amount'))['s']
-        or Decimal('0')
+def _calculate_profit_loss_period(date_from, date_to, cycle=None):
+    """Backward-compatible wrapper around the central finance service."""
+    return calculate_profit_loss(
+        cycle=cycle,
+        date_from=date_from,
+        date_to=date_to,
     )
-    other_revenue = (
-        OtherRevenue.objects.filter(date__range=(date_from, date_to))
-        .aggregate(s=Sum('gross_amount'))['s']
-        or Decimal('0')
-    )
-
-    expenses = OperationalExpense.objects.filter(
-        date__range=(date_from, date_to),
-        is_capital_expenditure=False,
-    ).exclude(category='Penyusutan')
-    grouped = list(
-        expenses.values('category').annotate(total=Sum('amount')).order_by('category')
-    )
-    operating_cost = sum((row['total'] for row in grouped), Decimal('0'))
-
-    depreciation_total = Decimal('0')
-    day_before = date_from - timedelta(days=1)
-    for asset in FixedAsset.objects.filter(use_date__lte=date_to).exclude(status='disposed'):
-        dep_to = _asset_depreciation(asset, date_to)['accumulated']
-        dep_before = (
-            _asset_depreciation(asset, day_before)['accumulated']
-            if day_before >= asset.use_date
-            else Decimal('0')
-        )
-        depreciation_total += max(dep_to - dep_before, Decimal('0'))
-
-    total_revenue = sales_revenue + other_revenue
-    total_expense = operating_cost + depreciation_total
-    return {
-        'sales_revenue': sales_revenue,
-        'other_revenue': other_revenue,
-        'revenue': total_revenue,
-        'expenses': expenses,
-        'grouped': grouped,
-        'operating_cost': operating_cost,
-        'depreciation_total': depreciation_total,
-        'expense_total': total_expense,
-        'profit': total_revenue - total_expense,
-    }
 
 
 def _gross_turnover_data(request):
@@ -1552,8 +1506,9 @@ def _balance_sheet_data(request):
             'biomass_method': 'INDEX',
         })
 
-    start = timezone.datetime(as_of.year, 1, 1).date()
-    profit_loss = _calculate_profit_loss_period(start, as_of)
+    selected_cycle = get_selected_cycle(request)
+    start = selected_cycle.start_date if selected_cycle else timezone.datetime(as_of.year, 1, 1).date()
+    profit_loss = _calculate_profit_loss_period(start, as_of, cycle=selected_cycle)
     sales_revenue = profit_loss['sales_revenue']
     other_revenue = profit_loss['other_revenue']
     operating_cost = profit_loss['operating_cost']

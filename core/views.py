@@ -8,6 +8,7 @@ from operations.models import DailyParameter, SamplingRecord, Harvest, SiphonRec
 from operations.services.biomass import calculate_index_biomass_snapshot
 from sales.models import Sale, SaleItem
 from finance.models import OperationalExpense
+from finance.services.profit_loss import calculate_profit_loss
 from django.db.models import Sum
 from django.utils import timezone
 from decimal import Decimal
@@ -81,32 +82,21 @@ def dashboard(request):
         sales_change_state = 'neutral'
         sales_change_text = 'Belum ada omzet hari ini maupun kemarin'
 
-    # Gunakan satu queryset sebagai sumber tunggal seluruh kartu pengeluaran.
-    # Total pengeluaran sudah mencakup gaji; kategori hanya dipecah untuk
-    # penyajian dashboard agar tidak terjadi penghitungan ganda.
-    cycle_expenses = filter_selected_cycle(request, OperationalExpense.objects.all())
-    expense_total = cycle_expenses.aggregate(s=Sum('amount'))['s'] or Decimal('0')
-    payroll_total = (
-        cycle_expenses.filter(category='Tenaga Kerja').aggregate(s=Sum('amount'))['s']
-        or Decimal('0')
-    )
-    depreciation_total = (
-        cycle_expenses.filter(category='Penyusutan').aggregate(s=Sum('amount'))['s']
-        or Decimal('0')
-    )
-    administration_total = (
-        cycle_expenses.filter(category='Administrasi').aggregate(s=Sum('amount'))['s']
-        or Decimal('0')
-    )
+    # Satu sumber laba/rugi untuk Dashboard, Laporan Laba/Rugi, dan Neraca.
+    selected_cycle = get_selected_cycle(request)
+    finance_result = calculate_profit_loss(cycle=selected_cycle, date_to=today)
+    sales_total = finance_result['revenue']
+    expense_total = finance_result['expense_total']
+    category_totals = finance_result['category_totals']
+    payroll_total = category_totals.get('Tenaga Kerja', Decimal('0'))
+    depreciation_total = category_totals.get('Penyusutan', Decimal('0'))
+    administration_total = category_totals.get('Administrasi', Decimal('0'))
     production_operational_total = max(
         expense_total - payroll_total - depreciation_total - administration_total,
         Decimal('0'),
     )
 
-    # Ringkasan laba/rugi dashboard menggunakan basis yang sama dengan dua card
-    # di atas: total omzet valid dikurangi total pengeluaran operasional pada
-    # siklus yang sedang dipilih.
-    profit_loss_total = sales_total - expense_total
+    profit_loss_total = finance_result['profit']
     profit_margin_percent = (
         (profit_loss_total / sales_total) * Decimal('100')
         if sales_total > 0
@@ -120,7 +110,6 @@ def dashboard(request):
         profit_loss_status = 'Impas'
 
     # Realisasi panen riil diambil langsung dari menu Panen pada siklus terpilih.
-    selected_cycle = get_selected_cycle(request)
     harvest_qs = filter_selected_cycle(
         request,
         Harvest.objects.select_related('pond').order_by('-date', '-id'),
