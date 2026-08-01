@@ -1651,10 +1651,19 @@ def _balance_sheet_data(request):
     debt_ratio_health = ratio_health(debt_ratio, green_max=0.5, amber_max=0.7)
     operational_current_health = ratio_health(operational_current_ratio, green_min=1.5, amber_min=1.0)
     biomass_coverage_health = ratio_health(biomass_coverage, green_min=1.0, amber_min=0.5)
-    biomass_value_health = (
-        {'class': 'red', 'label': 'Kritis'} if not pond_assets or any(x['indicator'] == 'red' for x in pond_assets)
-        else {'class': 'amber', 'label': 'Waspada'} if any(x['indicator'] == 'amber' for x in pond_assets)
-        else {'class': 'green', 'label': 'Sehat'}
+    # Nilai biomassa aktif tidak boleh dinilai dari nominal rupiah absolut.
+    # Kesehatan finansialnya mengikuti kemampuan nilai biomassa menutup kewajiban:
+    # >= 2,00x sehat; 1,00-<2,00x waspada; < 1,00x kritis.
+    # Kualitas/kelengkapan data kolam ditampilkan terpisah agar tidak mengubah
+    # status finansial hanya karena salah satu parameter operasional perlu validasi.
+    biomass_value_health = ratio_health(
+        biomass_coverage, green_min=2.0, amber_min=1.0
+    )
+    biomass_data_health = (
+        {'class': 'gray', 'label': 'Belum ada data'} if not pond_assets
+        else {'class': 'red', 'label': 'Perlu validasi'} if any(x['indicator'] == 'red' for x in pond_assets)
+        else {'class': 'amber', 'label': 'Perlu dipantau'} if any(x['indicator'] == 'amber' for x in pond_assets)
+        else {'class': 'green', 'label': 'Data memadai'}
     )
     working_capital_health = (
         {'class': 'green', 'label': 'Sehat'} if operational_working_capital > 0
@@ -1717,6 +1726,7 @@ def _balance_sheet_data(request):
         'operational_current_health': operational_current_health,
         'biomass_coverage_health': biomass_coverage_health,
         'biomass_value_health': biomass_value_health,
+        'biomass_data_health': biomass_data_health,
         'working_capital_health': working_capital_health,
         'asset_composition': asset_composition, 'validation_checks': validation_checks,
         'is_balanced': difference == 0,
