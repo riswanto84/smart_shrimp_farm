@@ -1,59 +1,70 @@
 {% extends 'base.html' %}
 {% load currency %}
 {% block title %}Riwayat {{ cycle.name }}{% endblock %}
+{% block extra_css %}
+<style>
+.cycle-hero{position:relative;overflow:hidden;background:linear-gradient(135deg,#062b55 0%,#0b4b80 72%,#146b86 100%);border-radius:22px;padding:28px;color:#fff;box-shadow:0 18px 46px rgba(6,43,85,.17);margin-bottom:22px}
+.cycle-hero:after{content:"";position:absolute;width:270px;height:270px;border:1px solid rgba(255,196,42,.23);border-radius:50%;right:-80px;top:-130px;box-shadow:0 0 0 38px rgba(255,255,255,.03),0 0 0 78px rgba(255,255,255,.025)}
+.cycle-eyebrow{font-size:.74rem;letter-spacing:.16em;text-transform:uppercase;color:#ffd56a;font-weight:800;margin-bottom:7px}
+.cycle-title{font-size:2rem;font-weight:850;line-height:1.12;margin:0 0 8px}.cycle-subtitle{color:rgba(255,255,255,.8);margin:0}
+.cycle-status{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:8px 13px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);font-weight:700;font-size:.82rem}
+.cycle-status-dot{width:9px;height:9px;border-radius:50%;background:#39d98a;box-shadow:0 0 0 5px rgba(57,217,138,.14)}
+.hero-actions{position:relative;z-index:2}.hero-actions .btn{border-radius:12px;font-weight:700;padding:.68rem 1rem}.btn-gold{background:#f4b928;border-color:#f4b928;color:#082d57}.btn-gold:hover{background:#dda30f;border-color:#dda30f;color:#082d57}
+.metric-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:22px}.metric-card{background:#fff;border:1px solid #dfebf5;border-radius:18px;padding:18px;box-shadow:0 8px 25px rgba(14,55,94,.06);position:relative;overflow:hidden}.metric-card:before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--accent,#1770d5)}.metric-label{font-size:.78rem;color:#72849a;font-weight:700;text-transform:uppercase;letter-spacing:.05em}.metric-value{font-size:1.42rem;font-weight:850;color:#092b53;margin:7px 0 3px;line-height:1.15}.metric-meta{font-size:.78rem;color:#72849a}.metric-icon{position:absolute;right:14px;top:14px;width:38px;height:38px;border-radius:12px;background:color-mix(in srgb,var(--accent,#1770d5) 11%,white);color:var(--accent,#1770d5);display:grid;place-items:center}
+.prof-panel{background:#fff;border:1px solid #dfebf5;border-radius:20px;box-shadow:0 9px 28px rgba(14,55,94,.055);overflow:hidden;margin-bottom:22px}.prof-panel-head{padding:18px 20px;border-bottom:1px solid #e8f0f7;display:flex;justify-content:space-between;gap:14px;align-items:center}.prof-panel-head h2{font-size:1.12rem;margin:0;color:#092b53;font-weight:850}.prof-panel-head p{margin:3px 0 0;color:#7a8ca1;font-size:.82rem}.prof-panel-body{padding:20px}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.kpi-item{background:#f7fafd;border:1px solid #e1ebf4;border-radius:14px;padding:14px}.kpi-item small{display:block;color:#73869b;font-weight:650;margin-bottom:5px}.kpi-item strong{font-size:1.05rem;color:#102e53}.data-list .data-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px dashed #dce7f0}.data-list .data-row:last-child{border-bottom:0}.data-row span{color:#526b86}.data-row b{background:#eef5fb;color:#123a65;border-radius:999px;min-width:44px;text-align:center;padding:5px 10px}
+.table-pro-wrap{overflow:auto}.table-pro{min-width:1200px;margin:0}.table-pro thead th{position:sticky;top:0;background:#eef5fb;color:#173a61;border:0;font-size:.75rem;text-transform:uppercase;letter-spacing:.035em;white-space:nowrap;padding:13px 11px}.table-pro tbody td{border-color:#e7eef5;padding:13px 11px;vertical-align:middle;font-size:.84rem}.table-pro tbody tr:hover{background:#f8fbfe}.pond-name{font-weight:800;color:#0b315c}.source-pill{display:inline-block;margin-top:4px;padding:3px 7px;border-radius:999px;background:#edf4fa;color:#627a92;font-size:.68rem}.num-strong{font-weight:750;color:#14395f}.health-pill{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:5px 8px;font-size:.7rem;font-weight:750;background:#e6f7ee;color:#11764a}.health-pill.warn{background:#fff3d6;color:#a26700}
+.cost-bar{display:grid;grid-template-columns:minmax(140px,1fr) 3fr minmax(125px,auto);gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #edf2f7}.cost-bar:last-child{border-bottom:0}.cost-track{height:9px;background:#edf3f8;border-radius:999px;overflow:hidden}.cost-fill{height:100%;background:linear-gradient(90deg,#176fd1,#2eb99d);border-radius:inherit}.cost-amount{text-align:right;font-weight:750;color:#163b61}.report-note{display:flex;gap:10px;align-items:flex-start;background:#eef8f5;border:1px solid #d5eee5;border-radius:14px;padding:13px 15px;color:#296451;font-size:.82rem}
+@media(max-width:1100px){.metric-grid{grid-template-columns:repeat(2,1fr)}.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:640px){.cycle-hero{padding:22px 18px}.cycle-title{font-size:1.65rem}.metric-grid{grid-template-columns:1fr}.kpi-grid{grid-template-columns:1fr 1fr}.hero-actions{margin-top:18px}.hero-actions .btn{width:100%;margin-bottom:7px}.prof-panel-body{padding:15px}.cost-bar{grid-template-columns:1fr}.cost-amount{text-align:left}}
+</style>
+{% endblock %}
 {% block content %}
-<div class="page-head">
-  <div><h1>{{ cycle.name }}</h1><p>{{ cycle.start_date|date:'d M Y' }} s.d. {{ metrics.period_end|date:'d M Y' }} · {{ cycle.get_status_display }}</p></div>
-  <div class="d-flex gap-2 flex-wrap">
-    <a class="btn btn-outline-secondary" href="{% url 'cultivation:history' %}"><i class="fa-solid fa-arrow-left"></i> Riwayat</a>
-    <a class="btn btn-success" href="{% url 'cultivation:history_excel' cycle.id %}"><i class="fa-solid fa-file-excel"></i> Excel</a>
-    {% if cycle.status == 'completed' %}<a class="btn btn-danger" href="{% url 'cultivation:report_pdf' cycle.id %}"><i class="fa-solid fa-file-pdf"></i> PDF</a>{% endif %}
+<section class="cycle-hero">
+  <div class="row align-items-center position-relative" style="z-index:2">
+    <div class="col-lg-8">
+      <div class="cycle-eyebrow">Laporan Kinerja Siklus Budidaya</div>
+      <h1 class="cycle-title">{{ cycle.name }}</h1>
+      <p class="cycle-subtitle">{{ cycle.start_date|date:'d F Y' }} – {{ metrics.period_end|date:'d F Y' }} · {{ metrics.duration_days }} hari</p>
+      <div class="mt-3"><span class="cycle-status"><span class="cycle-status-dot"></span>{{ cycle.get_status_display }}</span></div>
+    </div>
+    <div class="col-lg-4 text-lg-end hero-actions mt-3 mt-lg-0">
+      <a class="btn btn-light me-lg-2" href="{% url 'cultivation:history' %}"><i class="fa-solid fa-arrow-left"></i> Riwayat</a>
+      <a class="btn btn-success me-lg-2" href="{% url 'cultivation:history_excel' cycle.id %}"><i class="fa-solid fa-file-excel"></i> Excel</a>
+      <a class="btn btn-gold" href="{% url 'cultivation:history_pdf' cycle.id %}" target="_blank"><i class="fa-solid fa-file-pdf"></i> Laporan PDF</a>
+    </div>
   </div>
+</section>
+
+<div class="metric-grid">
+  <div class="metric-card" style="--accent:#1770d5"><div class="metric-icon"><i class="fa-solid fa-shrimp"></i></div><div class="metric-label">Produksi Riil</div><div class="metric-value">{{ metrics.total_harvest_kg|floatformat:2 }} kg</div><div class="metric-meta">{{ metrics.harvest_count }} transaksi panen</div></div>
+  <div class="metric-card" style="--accent:#19a873"><div class="metric-icon"><i class="fa-solid fa-chart-line"></i></div><div class="metric-label">Omzet</div><div class="metric-value">{{ metrics.revenue|rupiah }}</div><div class="metric-meta">Rata-rata {{ metrics.average_price_per_kg|rupiah }}/kg</div></div>
+  <div class="metric-card" style="--accent:#e4a319"><div class="metric-icon"><i class="fa-solid fa-wallet"></i></div><div class="metric-label">Total Biaya</div><div class="metric-value">{{ metrics.expense|rupiah }}</div><div class="metric-meta">Pakan tercatat {{ metrics.total_feed_kg|floatformat:2 }} kg</div></div>
+  <div class="metric-card" style="--accent:{% if metrics.profit < 0 %}#d9363e{% else %}#16a36a{% endif %}"><div class="metric-icon"><i class="fa-solid fa-sack-dollar"></i></div><div class="metric-label">Laba/Rugi & ROI</div><div class="metric-value {% if metrics.profit < 0 %}text-danger{% else %}text-success{% endif %}">{{ metrics.profit|rupiah }}</div><div class="metric-meta">ROI {{ metrics.roi_percent|floatformat:2 }}%</div></div>
 </div>
 
-<div class="row g-3 mb-4">
-  <div class="col-6 col-lg-3"><div class="cardx p-3 h-100"><small class="text-muted">Produksi Riil</small><h3>{{ metrics.total_harvest_kg|floatformat:2 }} kg</h3><small>{{ metrics.harvest_count }} transaksi panen</small></div></div>
-  <div class="col-6 col-lg-3"><div class="cardx p-3 h-100"><small class="text-muted">Omzet</small><h3>{{ metrics.revenue|rupiah }}</h3><small>Harga rata-rata {{ metrics.average_price_per_kg|rupiah }}/kg</small></div></div>
-  <div class="col-6 col-lg-3"><div class="cardx p-3 h-100"><small class="text-muted">Total Biaya</small><h3>{{ metrics.expense|rupiah }}</h3><small>Pakan {{ metrics.total_feed_kg|floatformat:2 }} kg</small></div></div>
-  <div class="col-6 col-lg-3"><div class="cardx p-3 h-100"><small class="text-muted">Laba/Rugi & ROI</small><h3 class="{% if metrics.profit < 0 %}text-danger{% else %}text-success{% endif %}">{{ metrics.profit|rupiah }}</h3><small>ROI {{ metrics.roi_percent|floatformat:2 }}%</small></div></div>
+<div class="row g-3">
+ <div class="col-xl-8"><section class="prof-panel h-100"><div class="prof-panel-head"><div><h2><i class="fa-solid fa-gauge-high me-2"></i>Kinerja Produksi</h2><p>Indikator akhir berdasarkan data siklus dan sampling per kolam.</p></div></div><div class="prof-panel-body"><div class="kpi-grid">
+   <div class="kpi-item"><small>Total Tebar</small><strong>{{ metrics.total_stocking }} ekor</strong></div>
+   <div class="kpi-item"><small>SR Index</small><strong>{{ metrics.average_sr_index|floatformat:2 }}%</strong></div>
+   <div class="kpi-item"><small>FCR Rata-rata</small><strong>{{ metrics.average_fcr|floatformat:2 }}</strong></div>
+   <div class="kpi-item"><small>ADG Rata-rata</small><strong>{{ metrics.average_adg|floatformat:3 }} g/hari</strong></div>
+   <div class="kpi-item"><small>ABW Akhir</small><strong>{{ metrics.average_abw_g|floatformat:2 }} g</strong></div>
+   <div class="kpi-item"><small>Mortalitas</small><strong>{{ metrics.mortality_total }} ekor</strong></div>
+   <div class="kpi-item"><small>Durasi Siklus</small><strong>{{ metrics.duration_days }} hari</strong></div>
+   <div class="kpi-item"><small>Sampling Akhir</small><strong>{{ metrics.latest_sampling_date|date:'d/m/Y'|default:'-' }}</strong></div>
+  </div></div></section></div>
+ <div class="col-xl-4"><section class="prof-panel h-100"><div class="prof-panel-head"><div><h2><i class="fa-solid fa-clipboard-check me-2"></i>Kelengkapan Data</h2><p>Jumlah catatan operasional pada siklus ini.</p></div></div><div class="prof-panel-body data-list">
+   <div class="data-row"><span>Sampling</span><b>{{ metrics.sampling_count }}</b></div><div class="data-row"><span>Cek Anco</span><b>{{ metrics.anco_count }}</b></div><div class="data-row"><span>Parameter Harian</span><b>{{ metrics.parameter_count }}</b></div><div class="data-row"><span>Siphon</span><b>{{ metrics.siphon_count }}</b></div><div class="data-row"><span>Panen</span><b>{{ metrics.harvest_count }}</b></div>
+  </div></section></div>
 </div>
 
-<div class="row g-3 mb-4">
- <div class="col-lg-7"><div class="cardx h-100"><div class="panel-title"><h2>Kinerja Produksi</h2></div>
-  <div class="row g-3 p-3 pt-0">
-   <div class="col-6 col-md-3"><small class="text-muted">Tebar</small><h4>{{ metrics.total_stocking }} ekor</h4></div>
-   <div class="col-6 col-md-3"><small class="text-muted">SR Index</small><h4>{{ metrics.average_sr_index|floatformat:2 }}%</h4></div>
-   <div class="col-6 col-md-3"><small class="text-muted">FCR</small><h4>{{ metrics.average_fcr|floatformat:2 }}</h4></div>
-   <div class="col-6 col-md-3"><small class="text-muted">ADG</small><h4>{{ metrics.average_adg|floatformat:3 }}</h4></div>
-   <div class="col-6 col-md-3"><small class="text-muted">ABW Akhir</small><h4>{{ metrics.average_abw_g|floatformat:2 }} g</h4></div>
-   <div class="col-6 col-md-3"><small class="text-muted">Mortalitas</small><h4>{{ metrics.mortality_total }}</h4></div>
-   <div class="col-6 col-md-3"><small class="text-muted">Durasi</small><h4>{{ metrics.duration_days }} hari</h4></div>
-   <div class="col-6 col-md-3"><small class="text-muted">Sampling Akhir</small><h4>{{ metrics.latest_sampling_date|date:'d/m/Y'|default:'-' }}</h4></div>
-  </div></div></div>
- <div class="col-lg-5"><div class="cardx h-100"><div class="panel-title"><h2>Kelengkapan Data</h2></div>
-  <div class="p-3 pt-0">
-   <div class="d-flex justify-content-between py-2 border-bottom"><span>Sampling</span><b>{{ metrics.sampling_count }}</b></div>
-   <div class="d-flex justify-content-between py-2 border-bottom"><span>Cek Anco</span><b>{{ metrics.anco_count }}</b></div>
-   <div class="d-flex justify-content-between py-2 border-bottom"><span>Parameter Harian</span><b>{{ metrics.parameter_count }}</b></div>
-   <div class="d-flex justify-content-between py-2 border-bottom"><span>Siphon</span><b>{{ metrics.siphon_count }}</b></div>
-   <div class="d-flex justify-content-between py-2"><span>Panen</span><b>{{ metrics.harvest_count }}</b></div>
-  </div></div></div>
-</div>
+<section class="prof-panel mt-3"><div class="prof-panel-head"><div><h2><i class="fa-solid fa-water me-2"></i>Rekap Produksi per Kolam</h2><p>Performa akhir dan histori produksi masing-masing kolam.</p></div><span class="health-pill"><i class="fa-solid fa-database"></i>{{ metrics.pond_rows|length }} kolam</span></div>
+<div class="table-pro-wrap"><table class="table table-pro align-middle"><thead><tr><th>Kolam</th><th>Tebar</th><th>Total Panen</th><th>Panen</th><th>Sampling Akhir</th><th>ABW</th><th>Size</th><th>ADG</th><th>FCR</th><th>SR Index</th><th>Biomassa FR</th><th>Biomassa Index</th></tr></thead><tbody>{% for r in metrics.pond_rows %}<tr>
+<td><span class="pond-name">{{ r.pond_name }}</span></td><td><span class="num-strong">{{ r.seed_count }}</span><br><span class="source-pill">{{ r.seed_source }}</span></td><td><span class="num-strong">{{ r.harvest_total_kg|floatformat:2 }} kg</span></td><td>{{ r.harvest_count }}x</td><td>{% if r.last_sampling_date %}<b>{{ r.last_sampling_date|date:'d/m/Y' }}</b><br><small class="text-muted">DOC {{ r.last_sampling_doc }}</small>{% else %}-{% endif %}</td><td>{{ r.abw_g|floatformat:2 }} g</td><td>{{ r.size|floatformat:0 }}/kg</td><td>{{ r.adg|floatformat:3 }}</td><td>{{ r.fcr|floatformat:2 }}</td><td><span class="health-pill {% if r.sr_index < 70 %}warn{% endif %}">{{ r.sr_index|floatformat:2 }}%</span></td><td>{{ r.biomass_fr_kg|floatformat:2 }} kg</td><td><b>{{ r.biomass_index_kg|floatformat:2 }} kg</b></td>
+</tr>{% empty %}<tr><td colspan="12" class="text-center text-muted py-4">Belum ada data per kolam.</td></tr>{% endfor %}</tbody></table></div></section>
 
-<div class="cardx mb-4"><div class="panel-title"><h2>Rekap Produksi per Kolam</h2></div>
-<div class="table-responsive"><table class="table app-table align-middle">
-<thead><tr><th>Kolam</th><th>Tebar</th><th>Total Panen</th><th>Jumlah Panen</th><th>Sampling Akhir</th><th>ABW</th><th>Size</th><th>ADG</th><th>FCR</th><th>SR Index</th><th>Biomassa FR</th><th>Biomassa Index</th></tr></thead>
-<tbody>{% for r in metrics.pond_rows %}<tr>
-<td><b>{{ r.pond_name }}</b></td>
-<td><b>{{ r.seed_count }}</b><br><small class="text-muted">{{ r.seed_source }}</small></td>
-<td>{{ r.harvest_total_kg|floatformat:2 }} kg</td><td>{{ r.harvest_count }}</td>
-<td>{% if r.last_sampling_date %}{{ r.last_sampling_date|date:'d/m/Y' }}<br><small class="text-muted">DOC {{ r.last_sampling_doc }}</small>{% else %}-{% endif %}</td>
-<td>{{ r.abw_g|floatformat:2 }} g</td><td>{{ r.size|floatformat:0 }}</td><td>{{ r.adg|floatformat:3 }}</td><td>{{ r.fcr|floatformat:2 }}</td><td>{{ r.sr_index|floatformat:2 }}%</td><td>{{ r.biomass_fr_kg|floatformat:2 }} kg</td><td>{{ r.biomass_index_kg|floatformat:2 }} kg</td>
-</tr>{% empty %}<tr><td colspan="12" class="text-center text-muted">Belum ada data per kolam.</td></tr>{% endfor %}</tbody>
-</table></div></div>
-
-<div class="cardx"><div class="panel-title"><h2>Komposisi Biaya Siklus</h2></div>
-<div class="table-responsive"><table class="table app-table"><thead><tr><th>Kategori</th><th class="text-end">Jumlah</th></tr></thead><tbody>
-{% for row in metrics.expense_categories %}<tr><td>{{ row.category }}</td><td class="text-end">{{ row.total|rupiah }}</td></tr>{% empty %}<tr><td colspan="2" class="text-center text-muted">Belum ada pengeluaran.</td></tr>{% endfor %}
-<tr class="fw-bold"><td>Total Biaya</td><td class="text-end">{{ metrics.expense|rupiah }}</td></tr></tbody></table></div></div>
+<section class="prof-panel"><div class="prof-panel-head"><div><h2><i class="fa-solid fa-chart-pie me-2"></i>Komposisi Biaya Siklus</h2><p>Distribusi pengeluaran berdasarkan kategori.</p></div><b>{{ metrics.expense|rupiah }}</b></div><div class="prof-panel-body">
+{% for row in metrics.expense_categories %}<div class="cost-bar"><span>{{ row.category }}</span><div class="cost-track"><div class="cost-fill" style="width:{% widthratio row.total metrics.expense 100 %}%"></div></div><span class="cost-amount">{{ row.total|rupiah }}</span></div>{% empty %}<div class="text-center text-muted py-4">Belum ada pengeluaran.</div>{% endfor %}
+<div class="report-note mt-3"><i class="fa-solid fa-circle-info mt-1"></i><span>Dokumen PDF memakai data yang sama dengan halaman ini dan dibuat langsung dari sistem untuk kebutuhan arsip, evaluasi, serta audit internal.</span></div></div></section>
 {% endblock %}

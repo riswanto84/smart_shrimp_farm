@@ -309,3 +309,182 @@ def cycle_history_excel(request, pk):
     response['Content-Disposition'] = f'attachment; filename="riwayat_{cycle.name.lower().replace(" ", "_")}.xlsx"'
     wb.save(response)
     return response
+
+@login_required
+def cycle_history_pdf(request, pk):
+    """PDF profesional untuk arsip dan evaluasi satu siklus budidaya."""
+    from io import BytesIO
+    from pathlib import Path
+    from django.conf import settings
+    from django.http import HttpResponse
+    from django.utils import timezone
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+        Image, PageBreak, KeepTogether,
+    )
+    from .services import build_cycle_history_metrics
+
+    cycle = get_object_or_404(CultivationCycle, pk=pk)
+    m = build_cycle_history_metrics(cycle)
+    buffer = BytesIO()
+    page_size = landscape(A4)
+    navy = colors.HexColor('#082F5B')
+    blue = colors.HexColor('#176FD1')
+    gold = colors.HexColor('#E4AE21')
+    teal = colors.HexColor('#1FA58A')
+    light = colors.HexColor('#F3F7FB')
+    border = colors.HexColor('#DCE7F1')
+    red = colors.HexColor('#C8323A')
+    green = colors.HexColor('#12835B')
+    text = colors.HexColor('#17324F')
+    muted = colors.HexColor('#667C93')
+
+    def id_num(value, decimals=0):
+        try:
+            value = float(value or 0)
+        except (TypeError, ValueError):
+            value = 0
+        raw = f'{value:,.{decimals}f}'
+        return raw.replace(',', 'X').replace('.', ',').replace('X', '.')
+
+    def rupiah(value, decimals=0):
+        value = float(value or 0)
+        sign = '-' if value < 0 else ''
+        return f'Rp {sign}{id_num(abs(value), decimals)}'
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('CycleTitle', parent=styles['Title'], fontName='Helvetica-Bold', fontSize=20, leading=23, textColor=colors.white, alignment=TA_LEFT, spaceAfter=4)
+    subtitle_style = ParagraphStyle('CycleSubtitle', parent=styles['Normal'], fontName='Helvetica', fontSize=8.5, leading=12, textColor=colors.HexColor('#DDEBFA'))
+    section_style = ParagraphStyle('Section', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=12, leading=15, textColor=navy, spaceBefore=4, spaceAfter=7)
+    body_style = ParagraphStyle('Body', parent=styles['BodyText'], fontName='Helvetica', fontSize=7.5, leading=10, textColor=text)
+    small_style = ParagraphStyle('Small', parent=body_style, fontSize=6.5, leading=8, textColor=muted)
+    white_small = ParagraphStyle('WhiteSmall', parent=small_style, textColor=colors.white)
+    metric_label = ParagraphStyle('MetricLabel', parent=small_style, fontName='Helvetica-Bold', fontSize=6.5, textColor=muted, uppercase=True)
+    metric_value = ParagraphStyle('MetricValue', parent=body_style, fontName='Helvetica-Bold', fontSize=11, leading=13, textColor=navy)
+    right_style = ParagraphStyle('Right', parent=body_style, alignment=TA_RIGHT)
+    center_style = ParagraphStyle('Center', parent=body_style, alignment=TA_CENTER)
+
+    def header_footer(canvas, doc):
+        canvas.saveState()
+        w, h = page_size
+        canvas.setFillColor(navy)
+        canvas.rect(0, h - 13*mm, w, 13*mm, fill=1, stroke=0)
+        canvas.setFillColor(gold)
+        canvas.rect(0, h - 14.5*mm, w, 1.5*mm, fill=1, stroke=0)
+        canvas.setFont('Helvetica-Bold', 8)
+        canvas.setFillColor(colors.white)
+        canvas.drawString(14*mm, h - 8.5*mm, 'UDANG EMAS NUSANTARA  •  SMART SHRIMP FARM')
+        canvas.setStrokeColor(border)
+        canvas.line(14*mm, 12*mm, w-14*mm, 12*mm)
+        canvas.setFillColor(muted)
+        canvas.setFont('Helvetica', 6.5)
+        canvas.drawString(14*mm, 7.5*mm, 'Dokumen ini diterbitkan secara elektronik oleh Smart Shrimp Farm – Udang Emas Nusantara dan tidak memerlukan tanda tangan maupun cap basah.')
+        canvas.drawRightString(w-14*mm, 7.5*mm, f'Halaman {doc.page}')
+        canvas.restoreState()
+
+    doc = SimpleDocTemplate(
+        buffer, pagesize=page_size,
+        rightMargin=14*mm, leftMargin=14*mm,
+        topMargin=20*mm, bottomMargin=17*mm,
+        title=f'Laporan Riwayat {cycle.name}', author='Smart Shrimp Farm',
+    )
+    story = []
+
+    logo_path = Path(settings.BASE_DIR) / 'static' / 'img' / 'logo_uen_report_black.png'
+    logo = Image(str(logo_path), width=25*mm, height=25*mm) if logo_path.exists() else Spacer(25*mm, 25*mm)
+    period = f"{cycle.start_date:%d/%m/%Y} – {m['period_end']:%d/%m/%Y}"
+    hero_text = [
+        Paragraph('LAPORAN KINERJA SIKLUS BUDIDAYA', white_small),
+        Paragraph(cycle.name, title_style),
+        Paragraph(f"Periode {period}  •  {m['duration_days']} hari  •  Status: {cycle.get_status_display()}", subtitle_style),
+    ]
+    hero = Table([[logo, hero_text]], colWidths=[31*mm, 226*mm], rowHeights=[29*mm])
+    hero.setStyle(TableStyle([
+        ('BACKGROUND',(0,0),(-1,-1),navy), ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('LEFTPADDING',(0,0),(0,0),5*mm), ('LEFTPADDING',(1,0),(1,0),2*mm),
+        ('RIGHTPADDING',(-1,0),(-1,0),5*mm), ('BOX',(0,0),(-1,-1),0.7,gold),
+    ]))
+    story += [hero, Spacer(1, 5*mm)]
+
+    metrics_data = [
+        [Paragraph('PRODUKSI RIIL', metric_label), Paragraph('OMZET', metric_label), Paragraph('TOTAL BIAYA', metric_label), Paragraph('LABA/RUGI & ROI', metric_label)],
+        [Paragraph(f"{id_num(m['total_harvest_kg'],2)} kg", metric_value), Paragraph(rupiah(m['revenue']), metric_value), Paragraph(rupiah(m['expense']), metric_value), Paragraph(rupiah(m['profit']), ParagraphStyle('MVProfit', parent=metric_value, textColor=red if m['profit'] < 0 else green))],
+        [Paragraph(f"{m['harvest_count']} transaksi panen", small_style), Paragraph(f"Rata-rata {rupiah(m['average_price_per_kg'])}/kg", small_style), Paragraph(f"Pakan {id_num(m['total_feed_kg'],2)} kg", small_style), Paragraph(f"ROI {id_num(m['roi_percent'],2)}%", small_style)],
+    ]
+    metric_table = Table(metrics_data, colWidths=[64*mm]*4, rowHeights=[7*mm,9*mm,7*mm])
+    metric_table.setStyle(TableStyle([
+        ('BACKGROUND',(0,0),(-1,-1),colors.white), ('BOX',(0,0),(-1,-1),0.6,border),
+        ('INNERGRID',(0,0),(-1,-1),0.4,border), ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('LEFTPADDING',(0,0),(-1,-1),4*mm), ('RIGHTPADDING',(0,0),(-1,-1),3*mm),
+        ('TOPPADDING',(0,0),(-1,-1),1.3*mm), ('BOTTOMPADDING',(0,0),(-1,-1),1.3*mm),
+    ]))
+    story += [metric_table, Spacer(1, 5*mm)]
+
+    story.append(Paragraph('Kinerja Produksi dan Kelengkapan Data', section_style))
+    kpi = [
+        ['Total Tebar', f"{id_num(m['total_stocking'])} ekor", 'SR Index', f"{id_num(m['average_sr_index'],2)}%", 'FCR', id_num(m['average_fcr'],2), 'ADG', f"{id_num(m['average_adg'],3)} g/hari"],
+        ['ABW Akhir', f"{id_num(m['average_abw_g'],2)} g", 'Mortalitas', f"{id_num(m['mortality_total'])} ekor", 'Sampling', str(m['sampling_count']), 'Panen', str(m['harvest_count'])],
+        ['Cek Anco', str(m['anco_count']), 'Parameter Harian', str(m['parameter_count']), 'Siphon', str(m['siphon_count']), 'Sampling Akhir', m['latest_sampling_date'].strftime('%d/%m/%Y') if m['latest_sampling_date'] else '-'],
+    ]
+    kpi_table = Table(kpi, colWidths=[25*mm,38*mm]*4, rowHeights=[9*mm]*3)
+    kpi_table.setStyle(TableStyle([
+        ('BACKGROUND',(0,0),(-1,-1),light), ('BOX',(0,0),(-1,-1),0.6,border), ('INNERGRID',(0,0),(-1,-1),0.35,border),
+        ('FONTNAME',(0,0),(-1,-1),'Helvetica'), ('FONTSIZE',(0,0),(-1,-1),7), ('TEXTCOLOR',(0,0),(-1,-1),text),
+        ('FONTNAME',(0,0),(0,-1),'Helvetica-Bold'), ('FONTNAME',(2,0),(2,-1),'Helvetica-Bold'), ('FONTNAME',(4,0),(4,-1),'Helvetica-Bold'), ('FONTNAME',(6,0),(6,-1),'Helvetica-Bold'),
+        ('TEXTCOLOR',(0,0),(0,-1),muted), ('TEXTCOLOR',(2,0),(2,-1),muted), ('TEXTCOLOR',(4,0),(4,-1),muted), ('TEXTCOLOR',(6,0),(6,-1),muted),
+        ('VALIGN',(0,0),(-1,-1),'MIDDLE'), ('LEFTPADDING',(0,0),(-1,-1),2.5*mm),
+    ]))
+    story += [kpi_table, Spacer(1, 5*mm)]
+
+    story.append(Paragraph('Rekap Produksi per Kolam', section_style))
+    pond_data = [['Kolam','Tebar','Panen (kg)','Jml','Sampling Akhir','ABW','Size','ADG','FCR','SR Index','Bio. FR','Bio. Index']]
+    for r in m['pond_rows']:
+        pond_data.append([
+            r['pond_name'], id_num(r['seed_count']), id_num(r['harvest_total_kg'],2), str(r['harvest_count']),
+            (r['last_sampling_date'].strftime('%d/%m/%Y') + f"\nDOC {r['last_sampling_doc']}") if r['last_sampling_date'] else '-',
+            id_num(r['abw_g'],2), id_num(r['size'],0), id_num(r['adg'],3), id_num(r['fcr'],2),
+            f"{id_num(r['sr_index'],2)}%", id_num(r['biomass_fr_kg'],2), id_num(r['biomass_index_kg'],2),
+        ])
+    pond_table = Table(pond_data, repeatRows=1, colWidths=[22*mm,24*mm,24*mm,10*mm,26*mm,17*mm,14*mm,16*mm,14*mm,19*mm,24*mm,25*mm])
+    pond_table.setStyle(TableStyle([
+        ('BACKGROUND',(0,0),(-1,0),navy), ('TEXTCOLOR',(0,0),(-1,0),colors.white), ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),
+        ('FONTSIZE',(0,0),(-1,0),6.4), ('ALIGN',(1,1),(-1,-1),'RIGHT'), ('ALIGN',(0,0),(-1,0),'CENTER'),
+        ('FONTNAME',(0,1),(0,-1),'Helvetica-Bold'), ('TEXTCOLOR',(0,1),(0,-1),navy),
+        ('FONTSIZE',(0,1),(-1,-1),6.3), ('LEADING',(0,1),(-1,-1),7.5), ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
+        ('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white, light]), ('GRID',(0,0),(-1,-1),0.35,border),
+        ('TOPPADDING',(0,0),(-1,-1),2.2*mm), ('BOTTOMPADDING',(0,0),(-1,-1),2.2*mm),
+    ]))
+    story += [pond_table, Spacer(1, 5*mm)]
+
+    story.append(Paragraph('Komposisi Biaya Siklus', section_style))
+    cost_data = [['Kategori','Jumlah','Proporsi']]
+    total_expense = float(m['expense'] or 0)
+    for row in m['expense_categories']:
+        value = float(row['total'] or 0)
+        pct = (value / total_expense * 100) if total_expense else 0
+        cost_data.append([str(row['category']), rupiah(value), f'{id_num(pct,2)}%'])
+    cost_data.append(['TOTAL BIAYA', rupiah(m['expense']), '100,00%' if total_expense else '0,00%'])
+    cost_table = Table(cost_data, repeatRows=1, colWidths=[135*mm,70*mm,40*mm])
+    cost_table.setStyle(TableStyle([
+        ('BACKGROUND',(0,0),(-1,0),navy), ('TEXTCOLOR',(0,0),(-1,0),colors.white), ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),
+        ('ALIGN',(1,1),(-1,-1),'RIGHT'), ('ROWBACKGROUNDS',(0,1),(-1,-2),[colors.white,light]), ('GRID',(0,0),(-1,-1),0.35,border),
+        ('FONTNAME',(0,-1),(-1,-1),'Helvetica-Bold'), ('BACKGROUND',(0,-1),(-1,-1),colors.HexColor('#E7F0FA')),
+        ('FONTSIZE',(0,0),(-1,-1),7), ('TOPPADDING',(0,0),(-1,-1),2.2*mm), ('BOTTOMPADDING',(0,0),(-1,-1),2.2*mm),
+    ]))
+    story += [cost_table, Spacer(1, 5*mm)]
+
+    generated = timezone.localtime().strftime('%d/%m/%Y %H:%M WIB')
+    note = Table([[Paragraph('<b>Catatan Elektronik</b><br/>Laporan ini dihasilkan otomatis dari data Smart Shrimp Farm. Nilai pada laporan mengikuti data transaksi, produksi, sampling, dan keuangan yang terhubung dengan siklus terpilih.', body_style), Paragraph(f'<b>Dicetak:</b><br/>{generated}<br/><b>Oleh:</b> {request.user.get_username()}', right_style)]], colWidths=[190*mm,65*mm])
+    note.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),colors.HexColor('#EDF8F5')),('BOX',(0,0),(-1,-1),0.6,colors.HexColor('#CFE9DF')),('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),4*mm),('RIGHTPADDING',(0,0),(-1,-1),4*mm),('TOPPADDING',(0,0),(-1,-1),3*mm),('BOTTOMPADDING',(0,0),(-1,-1),3*mm)]))
+    story.append(note)
+
+    doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer)
+    response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+    safe_name = cycle.name.lower().replace(' ', '_')
+    response['Content-Disposition'] = f'inline; filename="laporan_riwayat_{safe_name}.pdf"'
+    return response

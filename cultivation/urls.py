@@ -11,5 +11,6 @@ urlpatterns = [
     path('history/', views.cycle_history, name='history'),
     path('history/<int:pk>/', views.cycle_history_detail, name='history_detail'),
     path('history/<int:pk>/excel/', views.cycle_history_excel, name='history_excel'),
+    path('history/<int:pk>/pdf/', views.cycle_history_pdf, name='history_pdf'),
     path('select/', views.select_cycle, name='select'),
 ]
