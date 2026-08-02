@@ -291,9 +291,10 @@ def cycle_history_excel(request, pk):
     ]
     for row in rows: ws.append(row)
     ws2 = wb.create_sheet('Per Kolam')
-    ws2.append(['Kolam','Tebar','Panen kg','Jumlah Panen','ABW','Size','ADG','FCR','SR Index','Biomassa FR','Biomassa Index'])
+    ws2.append(['Kolam','Tebar','Sumber Tebar','Panen kg','Jumlah Panen','Sampling Akhir','DOC Sampling','ABW','Size','ADG','FCR','SR Index','Biomassa FR','Biomassa Index'])
     for r in m['pond_rows']:
-        ws2.append([r['pond_name'], r['seed_count'], float(r['harvest_total_kg']), r['harvest_count'],
+        ws2.append([r['pond_name'], r['seed_count'], r['seed_source'], float(r['harvest_total_kg']), r['harvest_count'],
+                    r['last_sampling_date'].strftime('%d/%m/%Y') if r['last_sampling_date'] else '', r['last_sampling_doc'],
                     float(r['abw_g']), float(r['size']), float(r['adg']), float(r['fcr']),
                     float(r['sr_index']), float(r['biomass_fr_kg']), float(r['biomass_index_kg'])])
     for sheet in (ws, ws2):

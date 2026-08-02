@@ -42,8 +42,14 @@
 
 <div class="cardx mb-4"><div class="panel-title"><h2>Rekap Produksi per Kolam</h2></div>
 <div class="table-responsive"><table class="table app-table align-middle">
-<thead><tr><th>Kolam</th><th>Tebar</th><th>Total Panen</th><th>Jumlah Panen</th><th>ABW</th><th>Size</th><th>ADG</th><th>FCR</th><th>SR Index</th><th>Biomassa FR</th><th>Biomassa Index</th></tr></thead>
-<tbody>{% for r in metrics.pond_rows %}<tr><td><b>{{ r.pond_name }}</b></td><td>{{ r.seed_count }}</td><td>{{ r.harvest_total_kg|floatformat:2 }} kg</td><td>{{ r.harvest_count }}</td><td>{{ r.abw_g|floatformat:2 }} g</td><td>{{ r.size|floatformat:0 }}</td><td>{{ r.adg|floatformat:3 }}</td><td>{{ r.fcr|floatformat:2 }}</td><td>{{ r.sr_index|floatformat:2 }}%</td><td>{{ r.biomass_fr_kg|floatformat:2 }} kg</td><td>{{ r.biomass_index_kg|floatformat:2 }} kg</td></tr>{% empty %}<tr><td colspan="11" class="text-center text-muted">Belum ada data per kolam.</td></tr>{% endfor %}</tbody>
+<thead><tr><th>Kolam</th><th>Tebar</th><th>Total Panen</th><th>Jumlah Panen</th><th>Sampling Akhir</th><th>ABW</th><th>Size</th><th>ADG</th><th>FCR</th><th>SR Index</th><th>Biomassa FR</th><th>Biomassa Index</th></tr></thead>
+<tbody>{% for r in metrics.pond_rows %}<tr>
+<td><b>{{ r.pond_name }}</b></td>
+<td><b>{{ r.seed_count }}</b><br><small class="text-muted">{{ r.seed_source }}</small></td>
+<td>{{ r.harvest_total_kg|floatformat:2 }} kg</td><td>{{ r.harvest_count }}</td>
+<td>{% if r.last_sampling_date %}{{ r.last_sampling_date|date:'d/m/Y' }}<br><small class="text-muted">DOC {{ r.last_sampling_doc }}</small>{% else %}-{% endif %}</td>
+<td>{{ r.abw_g|floatformat:2 }} g</td><td>{{ r.size|floatformat:0 }}</td><td>{{ r.adg|floatformat:3 }}</td><td>{{ r.fcr|floatformat:2 }}</td><td>{{ r.sr_index|floatformat:2 }}%</td><td>{{ r.biomass_fr_kg|floatformat:2 }} kg</td><td>{{ r.biomass_index_kg|floatformat:2 }} kg</td>
+</tr>{% empty %}<tr><td colspan="12" class="text-center text-muted">Belum ada data per kolam.</td></tr>{% endfor %}</tbody>
 </table></div></div>
 
 <div class="cardx"><div class="panel-title"><h2>Komposisi Biaya Siklus</h2></div>

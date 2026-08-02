@@ -32,9 +32,14 @@ def build_cycle_final_snapshot(cycle):
 
 
 def build_cycle_history_metrics(cycle):
-    """Ringkasan lengkap satu siklus untuk halaman arsip dan perbandingan."""
-    from collections import defaultdict
-    from django.db.models import Sum, Avg, Count
+    """Ringkasan lengkap satu siklus untuk halaman arsip dan perbandingan.
+
+    Data akhir per kolam selalu memakai sampling terakhir milik kolam tersebut,
+    bukan sampling pada tanggal terakhir global. Jumlah tebar memprioritaskan
+    tabel Stocking dan memakai stocking_count pada sampling sebagai fallback
+    untuk data impor/lama.
+    """
+    from django.db.models import Sum, Count, Max
     from operations.models import (
         Stocking, SamplingRecord, Harvest, DailyPondRecord,
         SiphonRecord, AncoCheck, DailyParameter,
@@ -46,16 +51,18 @@ def build_cycle_history_metrics(cycle):
     harvest_qs = Harvest.objects.filter(cycle=cycle).select_related('pond')
     stocking_qs = Stocking.objects.filter(cycle=cycle).select_related('pond')
     samples = SamplingRecord.objects.filter(cycle=cycle).select_related('pond')
-    latest_date = samples.order_by('-date', '-id').values_list('date', flat=True).first()
 
+    # Sampling terakhir harus dicari PER KOLAM. Implementasi lama hanya mengambil
+    # satu tanggal terakhir global, sehingga kolam yang panen lebih dahulu tampil 0.
     latest_by_pond = {}
-    if latest_date:
-        for sample in samples.filter(date=latest_date).order_by('pond__name', '-id'):
-            latest_by_pond.setdefault(sample.pond_id, sample)
+    for sample in samples.order_by('pond_id', '-date', '-id'):
+        latest_by_pond.setdefault(sample.pond_id, sample)
+
+    latest_date = samples.order_by('-date', '-id').values_list('date', flat=True).first()
 
     harvest_by_pond = {
         row['pond_id']: row for row in harvest_qs.values('pond_id', 'pond__name').annotate(
-            total_kg=Sum('total_kg'), harvest_count=Count('id'), last_date=models.Max('date')
+            total_kg=Sum('total_kg'), harvest_count=Count('id'), last_date=Max('date')
         )
     }
     stocking_by_pond = {
@@ -64,7 +71,20 @@ def build_cycle_history_metrics(cycle):
         )
     }
 
-    pond_ids = set(latest_by_pond) | set(harvest_by_pond) | set(stocking_by_pond)
+    # Fallback jumlah tebar untuk data lama/impor yang hanya menyimpan angka pada
+    # SamplingRecord.stocking_count dan tidak memiliki baris Stocking.
+    sample_stocking_by_pond = {}
+    for row in samples.exclude(stocking_count=0).values('pond_id').annotate(
+        seed_count=Max('stocking_count')
+    ):
+        sample_stocking_by_pond[row['pond_id']] = int(row['seed_count'] or 0)
+
+    pond_ids = (
+        set(latest_by_pond)
+        | set(harvest_by_pond)
+        | set(stocking_by_pond)
+        | set(sample_stocking_by_pond)
+    )
     pond_rows = []
     for pond_id in sorted(pond_ids, key=lambda x: (
         (latest_by_pond.get(x).pond.name if x in latest_by_pond else
@@ -73,21 +93,31 @@ def build_cycle_history_metrics(cycle):
         sample = latest_by_pond.get(pond_id)
         harvest = harvest_by_pond.get(pond_id, {})
         stocking = stocking_by_pond.get(pond_id, {})
+
         seed_count = int(stocking.get('seed_count') or 0)
+        seed_source = 'Data tebar'
+        if not seed_count:
+            seed_count = int(sample_stocking_by_pond.get(pond_id) or 0)
+            seed_source = 'Sampling terakhir' if seed_count else 'Belum tersedia'
+
         harvested = harvest.get('total_kg') or zero
         abw = getattr(sample, 'abw_g', None) or zero
         fcr = getattr(sample, 'fcr', None) or zero
         adg = getattr(sample, 'adg_weekly', None) or zero
-        sr_index = getattr(sample, 'sr_index', None)
-        if sr_index is None:
+        sr_index = getattr(sample, 'sr_index_percent', None)
+        if sr_index in (None, zero):
             sr_index = getattr(sample, 'estimated_sr', None) or zero
+
         pond_rows.append({
             'pond_id': pond_id,
             'pond_name': sample.pond.name if sample else harvest.get('pond__name') or stocking.get('pond__name') or '-',
             'seed_count': seed_count,
+            'seed_source': seed_source,
             'harvest_total_kg': harvested,
             'harvest_count': harvest.get('harvest_count') or 0,
             'last_harvest_date': harvest.get('last_date'),
+            'last_sampling_date': getattr(sample, 'date', None),
+            'last_sampling_doc': getattr(sample, 'doc', 0) or 0,
             'abw_g': abw,
             'size': getattr(sample, 'size', None) or zero,
             'adg': adg,
@@ -97,7 +127,9 @@ def build_cycle_history_metrics(cycle):
             'biomass_index_kg': getattr(sample, 'biomass_index_kg', None) or zero,
         })
 
-    total_stocking = stocking_qs.aggregate(v=Sum('seed_count'))['v'] or 0
+    # Total tebar mengikuti angka final per kolam agar data impor lama ikut masuk
+    # dan tidak terjadi double count antara Stocking dan sampling fallback.
+    total_stocking = sum((r['seed_count'] for r in pond_rows), 0)
     total_harvest = harvest_qs.aggregate(v=Sum('total_kg'))['v'] or zero
     total_feed = DailyPondRecord.objects.filter(cycle=cycle).aggregate(v=Sum('daily_feed_kg'))['v'] or zero
     mortality = SiphonRecord.objects.filter(cycle=cycle).aggregate(v=Sum('dead_count'))['v'] or 0
