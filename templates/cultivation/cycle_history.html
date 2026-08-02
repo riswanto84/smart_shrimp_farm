@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% load currency %}
+{% block title %}Riwayat Siklus{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Riwayat Siklus</h1><p>Arsip lengkap performa produksi dan keuangan seluruh siklus budidaya.</p></div>
+  <a class="btn btn-outline-primary" href="{% url 'cultivation:list' %}"><i class="fa-solid fa-arrows-rotate"></i> Kelola Siklus</a>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-xl"><div class="cardx p-3 h-100"><small class="text-muted">Siklus Selesai</small><h3>{{ summary.cycle_count }}</h3></div></div>
+  <div class="col-6 col-xl"><div class="cardx p-3 h-100"><small class="text-muted">Total Produksi</small><h3>{{ summary.production_kg|floatformat:2 }} kg</h3></div></div>
+  <div class="col-6 col-xl"><div class="cardx p-3 h-100"><small class="text-muted">Total Omzet</small><h3>{{ summary.revenue|rupiah }}</h3></div></div>
+  <div class="col-6 col-xl"><div class="cardx p-3 h-100"><small class="text-muted">Total Laba/Rugi</small><h3 class="{% if summary.profit < 0 %}text-danger{% else %}text-success{% endif %}">{{ summary.profit|rupiah }}</h3></div></div>
+  <div class="col-6 col-xl"><div class="cardx p-3 h-100"><small class="text-muted">Rata-rata FCR / SR</small><h3>{{ summary.avg_fcr|floatformat:2 }} / {{ summary.avg_sr|floatformat:1 }}%</h3></div></div>
+</div>
+
+<div class="cardx mb-4">
+  <div class="panel-title"><h2>Daftar Siklus</h2><span class="text-muted">Klik Detail untuk membuka seluruh riwayat.</span></div>
+  <div class="table-responsive">
+    <table class="table app-table align-middle">
+      <thead><tr><th>Siklus</th><th>Periode</th><th>Status</th><th>Produksi</th><th>SR Index</th><th>FCR</th><th>Omzet</th><th>Biaya</th><th>Laba/Rugi</th><th>ROI</th><th>Aksi</th></tr></thead>
+      <tbody>
+      {% for m in metrics %}
+      <tr>
+        <td><b>{{ m.cycle.name }}</b></td>
+        <td>{{ m.cycle.start_date|date:'d/m/Y' }}<br><small class="text-muted">s.d. {{ m.period_end|date:'d/m/Y' }}</small></td>
+        <td>{% if m.cycle.status == 'completed' %}<span class="badge bg-secondary">Selesai</span>{% else %}<span class="badge bg-success">{{ m.cycle.get_status_display }}</span>{% endif %}</td>
+        <td><b>{{ m.total_harvest_kg|floatformat:2 }} kg</b><br><small>{{ m.harvest_count }} panen</small></td>
+        <td>{{ m.average_sr_index|floatformat:2 }}%</td><td>{{ m.average_fcr|floatformat:2 }}</td>
+        <td>{{ m.revenue|rupiah }}</td><td>{{ m.expense|rupiah }}</td>
+        <td class="{% if m.profit < 0 %}text-danger{% else %}text-success{% endif %}"><b>{{ m.profit|rupiah }}</b></td>
+        <td>{{ m.roi_percent|floatformat:2 }}%</td>
+        <td class="text-nowrap">
+          <a class="btn btn-sm btn-primary" href="{% url 'cultivation:history_detail' m.cycle.id %}"><i class="fa-solid fa-eye"></i> Detail</a>
+          <a class="btn btn-sm btn-success" href="{% url 'cultivation:history_excel' m.cycle.id %}"><i class="fa-solid fa-file-excel"></i></a>
+          {% if m.cycle.status == 'completed' %}<a class="btn btn-sm btn-danger" href="{% url 'cultivation:report_pdf' m.cycle.id %}"><i class="fa-solid fa-file-pdf"></i></a>{% endif %}
+        </td>
+      </tr>
+      {% empty %}<tr><td colspan="11" class="text-center text-muted">Belum ada siklus.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if completed_metrics %}
+<div class="cardx">
+  <div class="panel-title"><h2>Perbandingan Antar Siklus</h2><span class="text-muted">KPI siklus yang telah selesai.</span></div>
+  <div class="table-responsive"><table class="table app-table text-center">
+    <thead><tr><th class="text-start">Parameter</th>{% for m in completed_metrics %}<th>{{ m.cycle.name }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      <tr><th class="text-start">Produksi (kg)</th>{% for m in completed_metrics %}<td>{{ m.total_harvest_kg|floatformat:2 }}</td>{% endfor %}</tr>
+      <tr><th class="text-start">SR Index</th>{% for m in completed_metrics %}<td>{{ m.average_sr_index|floatformat:2 }}%</td>{% endfor %}</tr>
+      <tr><th class="text-start">FCR</th>{% for m in completed_metrics %}<td>{{ m.average_fcr|floatformat:2 }}</td>{% endfor %}</tr>
+      <tr><th class="text-start">ADG</th>{% for m in completed_metrics %}<td>{{ m.average_adg|floatformat:3 }}</td>{% endfor %}</tr>
+      <tr><th class="text-start">Omzet</th>{% for m in completed_metrics %}<td>{{ m.revenue|rupiah }}</td>{% endfor %}</tr>
+      <tr><th class="text-start">Laba/Rugi</th>{% for m in completed_metrics %}<td>{{ m.profit|rupiah }}</td>{% endfor %}</tr>
+      <tr><th class="text-start">ROI</th>{% for m in completed_metrics %}<td>{{ m.roi_percent|floatformat:2 }}%</td>{% endfor %}</tr>
+    </tbody>
+  </table></div>
+</div>
+{% endif %}
+{% endblock %}

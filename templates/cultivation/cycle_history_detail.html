@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% load currency %}
+{% block title %}Riwayat {{ cycle.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>{{ cycle.name }}</h1><p>{{ cycle.start_date|date:'d M Y' }} s.d. {{ metrics.period_end|date:'d M Y' }} · {{ cycle.get_status_display }}</p></div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a class="btn btn-outline-secondary" href="{% url 'cultivation:history' %}"><i class="fa-solid fa-arrow-left"></i> Riwayat</a>
+    <a class="btn btn-success" href="{% url 'cultivation:history_excel' cycle.id %}"><i class="fa-solid fa-file-excel"></i> Excel</a>
+    {% if cycle.status == 'completed' %}<a class="btn btn-danger" href="{% url 'cultivation:report_pdf' cycle.id %}"><i class="fa-solid fa-file-pdf"></i> PDF</a>{% endif %}
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3"><div class="cardx p-3 h-100"><small class="text-muted">Produksi Riil</small><h3>{{ metrics.total_harvest_kg|floatformat:2 }} kg</h3><small>{{ metrics.harvest_count }} transaksi panen</small></div></div>
+  <div class="col-6 col-lg-3"><div class="cardx p-3 h-100"><small class="text-muted">Omzet</small><h3>{{ metrics.revenue|rupiah }}</h3><small>Harga rata-rata {{ metrics.average_price_per_kg|rupiah }}/kg</small></div></div>
+  <div class="col-6 col-lg-3"><div class="cardx p-3 h-100"><small class="text-muted">Total Biaya</small><h3>{{ metrics.expense|rupiah }}</h3><small>Pakan {{ metrics.total_feed_kg|floatformat:2 }} kg</small></div></div>
+  <div class="col-6 col-lg-3"><div class="cardx p-3 h-100"><small class="text-muted">Laba/Rugi & ROI</small><h3 class="{% if metrics.profit < 0 %}text-danger{% else %}text-success{% endif %}">{{ metrics.profit|rupiah }}</h3><small>ROI {{ metrics.roi_percent|floatformat:2 }}%</small></div></div>
+</div>
+
+<div class="row g-3 mb-4">
+ <div class="col-lg-7"><div class="cardx h-100"><div class="panel-title"><h2>Kinerja Produksi</h2></div>
+  <div class="row g-3 p-3 pt-0">
+   <div class="col-6 col-md-3"><small class="text-muted">Tebar</small><h4>{{ metrics.total_stocking }} ekor</h4></div>
+   <div class="col-6 col-md-3"><small class="text-muted">SR Index</small><h4>{{ metrics.average_sr_index|floatformat:2 }}%</h4></div>
+   <div class="col-6 col-md-3"><small class="text-muted">FCR</small><h4>{{ metrics.average_fcr|floatformat:2 }}</h4></div>
+   <div class="col-6 col-md-3"><small class="text-muted">ADG</small><h4>{{ metrics.average_adg|floatformat:3 }}</h4></div>
+   <div class="col-6 col-md-3"><small class="text-muted">ABW Akhir</small><h4>{{ metrics.average_abw_g|floatformat:2 }} g</h4></div>
+   <div class="col-6 col-md-3"><small class="text-muted">Mortalitas</small><h4>{{ metrics.mortality_total }}</h4></div>
+   <div class="col-6 col-md-3"><small class="text-muted">Durasi</small><h4>{{ metrics.duration_days }} hari</h4></div>
+   <div class="col-6 col-md-3"><small class="text-muted">Sampling Akhir</small><h4>{{ metrics.latest_sampling_date|date:'d/m/Y'|default:'-' }}</h4></div>
+  </div></div></div>
+ <div class="col-lg-5"><div class="cardx h-100"><div class="panel-title"><h2>Kelengkapan Data</h2></div>
+  <div class="p-3 pt-0">
+   <div class="d-flex justify-content-between py-2 border-bottom"><span>Sampling</span><b>{{ metrics.sampling_count }}</b></div>
+   <div class="d-flex justify-content-between py-2 border-bottom"><span>Cek Anco</span><b>{{ metrics.anco_count }}</b></div>
+   <div class="d-flex justify-content-between py-2 border-bottom"><span>Parameter Harian</span><b>{{ metrics.parameter_count }}</b></div>
+   <div class="d-flex justify-content-between py-2 border-bottom"><span>Siphon</span><b>{{ metrics.siphon_count }}</b></div>
+   <div class="d-flex justify-content-between py-2"><span>Panen</span><b>{{ metrics.harvest_count }}</b></div>
+  </div></div></div>
+</div>
+
+<div class="cardx mb-4"><div class="panel-title"><h2>Rekap Produksi per Kolam</h2></div>
+<div class="table-responsive"><table class="table app-table align-middle">
+<thead><tr><th>Kolam</th><th>Tebar</th><th>Total Panen</th><th>Jumlah Panen</th><th>ABW</th><th>Size</th><th>ADG</th><th>FCR</th><th>SR Index</th><th>Biomassa FR</th><th>Biomassa Index</th></tr></thead>
+<tbody>{% for r in metrics.pond_rows %}<tr><td><b>{{ r.pond_name }}</b></td><td>{{ r.seed_count }}</td><td>{{ r.harvest_total_kg|floatformat:2 }} kg</td><td>{{ r.harvest_count }}</td><td>{{ r.abw_g|floatformat:2 }} g</td><td>{{ r.size|floatformat:0 }}</td><td>{{ r.adg|floatformat:3 }}</td><td>{{ r.fcr|floatformat:2 }}</td><td>{{ r.sr_index|floatformat:2 }}%</td><td>{{ r.biomass_fr_kg|floatformat:2 }} kg</td><td>{{ r.biomass_index_kg|floatformat:2 }} kg</td></tr>{% empty %}<tr><td colspan="11" class="text-center text-muted">Belum ada data per kolam.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+
+<div class="cardx"><div class="panel-title"><h2>Komposisi Biaya Siklus</h2></div>
+<div class="table-responsive"><table class="table app-table"><thead><tr><th>Kategori</th><th class="text-end">Jumlah</th></tr></thead><tbody>
+{% for row in metrics.expense_categories %}<tr><td>{{ row.category }}</td><td class="text-end">{{ row.total|rupiah }}</td></tr>{% empty %}<tr><td colspan="2" class="text-center text-muted">Belum ada pengeluaran.</td></tr>{% endfor %}
+<tr class="fw-bold"><td>Total Biaya</td><td class="text-end">{{ metrics.expense|rupiah }}</td></tr></tbody></table></div></div>
+{% endblock %}

@@ -233,3 +233,78 @@ def select_cycle(request):
     request.session["selected_cycle_id"] = cycle.pk
     messages.success(request, f"Siklus aktif tampilan: {cycle.name}.")
     return redirect(request.META.get("HTTP_REFERER") or "core:dashboard")
+
+@login_required
+def cycle_history(request):
+    """Pusat arsip semua siklus, termasuk perbandingan KPI."""
+    from .services import build_cycle_history_metrics
+    cycles = list(CultivationCycle.objects.all().order_by('-start_date', '-id'))
+    metrics = [build_cycle_history_metrics(c) for c in cycles]
+    completed = [m for m in metrics if m['cycle'].status == CultivationCycle.STATUS_COMPLETED]
+    summary = {
+        'cycle_count': len(completed),
+        'production_kg': sum((m['total_harvest_kg'] for m in completed), 0),
+        'revenue': sum((m['revenue'] for m in completed), 0),
+        'profit': sum((m['profit'] for m in completed), 0),
+        'avg_fcr': (sum((m['average_fcr'] for m in completed), 0) / len(completed)) if completed else 0,
+        'avg_sr': (sum((m['average_sr_index'] for m in completed), 0) / len(completed)) if completed else 0,
+        'avg_roi': (sum((m['roi_percent'] for m in completed), 0) / len(completed)) if completed else 0,
+    }
+    return render(request, 'cultivation/cycle_history.html', {
+        'metrics': metrics, 'completed_metrics': completed, 'summary': summary,
+    })
+
+
+@login_required
+def cycle_history_detail(request, pk):
+    from .services import build_cycle_history_metrics
+    cycle = get_object_or_404(CultivationCycle, pk=pk)
+    metrics = build_cycle_history_metrics(cycle)
+    return render(request, 'cultivation/cycle_history_detail.html', {
+        'cycle': cycle, 'metrics': metrics,
+    })
+
+
+@login_required
+def cycle_history_excel(request, pk):
+    from django.http import HttpResponse
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from .services import build_cycle_history_metrics
+    cycle = get_object_or_404(CultivationCycle, pk=pk)
+    m = build_cycle_history_metrics(cycle)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Ringkasan Siklus'
+    ws.append(['SMART SHRIMP FARM - RIWAYAT SIKLUS'])
+    ws.append([cycle.name])
+    ws.append([])
+    ws.append(['Indikator', 'Nilai'])
+    rows = [
+        ('Periode', f"{cycle.start_date:%d/%m/%Y} - {(cycle.actual_end_date or cycle.target_end_date):%d/%m/%Y}"),
+        ('Status', cycle.get_status_display()), ('Tebar', m['total_stocking']),
+        ('Produksi/Panen (kg)', float(m['total_harvest_kg'])), ('Pakan (kg)', float(m['total_feed_kg'])),
+        ('SR Index (%)', float(m['average_sr_index'])), ('FCR', float(m['average_fcr'])),
+        ('ADG (g/hari)', float(m['average_adg'])), ('ABW akhir (g)', float(m['average_abw_g'])),
+        ('Omzet', float(m['revenue'])), ('Biaya', float(m['expense'])),
+        ('Laba/Rugi', float(m['profit'])), ('ROI (%)', float(m['roi_percent'])),
+    ]
+    for row in rows: ws.append(row)
+    ws2 = wb.create_sheet('Per Kolam')
+    ws2.append(['Kolam','Tebar','Panen kg','Jumlah Panen','ABW','Size','ADG','FCR','SR Index','Biomassa FR','Biomassa Index'])
+    for r in m['pond_rows']:
+        ws2.append([r['pond_name'], r['seed_count'], float(r['harvest_total_kg']), r['harvest_count'],
+                    float(r['abw_g']), float(r['size']), float(r['adg']), float(r['fcr']),
+                    float(r['sr_index']), float(r['biomass_fr_kg']), float(r['biomass_index_kg'])])
+    for sheet in (ws, ws2):
+        sheet.freeze_panes = 'A4' if sheet is ws else 'A2'
+        for cell in sheet[1]:
+            cell.font = Font(bold=True, color='FFFFFF')
+            cell.fill = PatternFill('solid', fgColor='0B376B')
+        for col in sheet.columns:
+            width = max(len(str(c.value or '')) for c in col) + 2
+            sheet.column_dimensions[col[0].column_letter].width = min(max(width, 12), 38)
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="riwayat_{cycle.name.lower().replace(" ", "_")}.xlsx"'
+    wb.save(response)
+    return response

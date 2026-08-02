@@ -48,6 +48,7 @@
       {% if IS_OWNER %}
       <p>SIKLUS</p>
       <a class="{% if request.path|slice:':8' == '/cycles/' %}active{% endif %}" href="{% url 'cultivation:list' %}"><i class="fa-solid fa-arrows-rotate"></i><span>Siklus Budidaya</span></a>
+      <a class="{% if request.path|slice:':16' == '/cycles/history/' %}active{% endif %}" href="{% url 'cultivation:history' %}"><i class="fa-solid fa-clock-rotate-left"></i><span>Riwayat Siklus</span></a>
       {% endif %}
       <p>AKUN</p>
       <a class="{% if request.path == '/accounts/profile/' %}active{% endif %}" href="/accounts/profile/"><i class="fa-solid fa-user-pen"></i><span>Edit Profil</span></a>
