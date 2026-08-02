@@ -727,6 +727,35 @@ def production_dashboard(request):
         sum((_float(x.abw_g) for x in latest_samples), 0.0) / len(latest_samples)
         if latest_samples else 0
     )
+    # SR pada dashboard dipisahkan menjadi dua metode agar pengguna dapat
+    # membandingkan estimasi populasi berdasarkan Index dan berdasarkan FCR.
+    #
+    # SR Index = Populasi Index / Tebar x 100
+    # SR FCR   = ((Pakan Kumulatif / FCR) x 1000 / ABW) / Tebar x 100
+    def calculate_sr_metrics(sample):
+        stocking = _float(getattr(sample, 'stocking_count', 0))
+        abw = _float(getattr(sample, 'abw_g', 0))
+        population_index = _float(getattr(sample, 'population_index', 0))
+        sr_index = _float(getattr(sample, 'sr_index_percent', 0))
+        if sr_index <= 0 and stocking > 0 and population_index > 0:
+            sr_index = population_index / stocking * 100.0
+
+        cumulative_feed = _float(getattr(sample, 'cumulative_feed_kg', 0))
+        fcr = _float(getattr(sample, 'fcr', 0))
+        sr_fcr = 0.0
+        population_fcr = 0.0
+        biomass_fcr = 0.0
+        if stocking > 0 and abw > 0 and cumulative_feed > 0 and fcr > 0:
+            biomass_fcr = cumulative_feed / fcr
+            population_fcr = biomass_fcr * 1000.0 / abw
+            sr_fcr = population_fcr / stocking * 100.0
+
+        sample.dashboard_sr_index = sr_index
+        sample.dashboard_sr_fcr = sr_fcr
+        sample.dashboard_population_fcr = population_fcr
+        sample.dashboard_biomass_fcr = biomass_fcr
+        return sr_index, sr_fcr
+
     # Gunakan nilai tersimpan bila tersedia. Untuk data lama/import yang belum
     # menyimpan hasil turunan, hitung ulang FCR dan biomassa dari data dasar.
     def effective_sampling_metrics(sample):
@@ -758,6 +787,7 @@ def production_dashboard(request):
         # Atribut runtime untuk digunakan langsung di template dashboard.
         sample.dashboard_biomass_kg = biomass
         sample.dashboard_fcr = fcr
+        calculate_sr_metrics(sample)
         return biomass, fcr
 
     effective_metrics = [effective_sampling_metrics(x) for x in latest_samples]
@@ -894,7 +924,7 @@ def production_dashboard(request):
         bucket = history_by_date.setdefault(sample.date, {
             'date': sample.date,
             'docs': [], 'biomass_kg': 0.0, 'abw': [], 'adg': [],
-            'fcr': [], 'sr': [], 'population': 0,
+            'fcr': [], 'sr_index': [], 'sr_fcr': [], 'population': 0,
         })
         bucket['docs'].append(int(sample.doc or 0))
         bucket['biomass_kg'] += max(biomass, 0.0)
@@ -904,9 +934,11 @@ def production_dashboard(request):
             bucket['adg'].append(_float(sample.adg_weekly))
         if fcr > 0:
             bucket['fcr'].append(fcr)
-        sr_value = _float(sample.estimated_sr) or _float(sample.sr_index_percent)
-        if sr_value > 0:
-            bucket['sr'].append(sr_value)
+        sr_index, sr_fcr = calculate_sr_metrics(sample)
+        if sr_index > 0:
+            bucket['sr_index'].append(sr_index)
+        if sr_fcr > 0:
+            bucket['sr_fcr'].append(sr_fcr)
         bucket['population'] += int(sample.population or sample.population_index or 0)
 
     # Satu DOC hanya boleh memiliki satu titik aktual. Apabila terdapat
@@ -926,7 +958,11 @@ def production_dashboard(request):
             'abw': round(sum(bucket['abw']) / len(bucket['abw']), 2) if bucket['abw'] else 0,
             'adg': round(sum(bucket['adg']) / len(bucket['adg']), 3) if bucket['adg'] else 0,
             'fcr': round(sum(bucket['fcr']) / len(bucket['fcr']), 2) if bucket['fcr'] else 0,
-            'sr': round(sum(bucket['sr']) / len(bucket['sr']), 2) if bucket['sr'] else 0,
+            # `sr` dipertahankan sebagai alias SR Index untuk kompatibilitas
+            # grafik lama, sedangkan SR FCR tersedia sebagai seri pembanding.
+            'sr': round(sum(bucket['sr_index']) / len(bucket['sr_index']), 2) if bucket['sr_index'] else 0,
+            'sr_index': round(sum(bucket['sr_index']) / len(bucket['sr_index']), 2) if bucket['sr_index'] else 0,
+            'sr_fcr': round(sum(bucket['sr_fcr']) / len(bucket['sr_fcr']), 2) if bucket['sr_fcr'] else 0,
             'population': bucket['population'],
             'size': round(1000.0 / (sum(bucket['abw']) / len(bucket['abw'])), 2) if bucket['abw'] and (sum(bucket['abw']) / len(bucket['abw'])) > 0 else 0,
         }
@@ -952,10 +988,20 @@ def production_dashboard(request):
     avg_adg_values = [safe_actual_adg(x) for x in latest_samples]
     avg_adg_values = [x for x in avg_adg_values if x > 0]
     avg_adg = sum(avg_adg_values) / len(avg_adg_values) if avg_adg_values else 0
-    avg_sr_values = [(_float(x.estimated_sr) or _float(x.sr_index_percent)) for x in latest_samples]
-    avg_sr_values = [x for x in avg_sr_values if x > 0]
-    avg_sr = sum(avg_sr_values) / len(avg_sr_values) if avg_sr_values else 0
-    current_population = sum(int(x.population or x.population_index or 0) for x in latest_samples)
+    sr_pairs = [calculate_sr_metrics(x) for x in latest_samples]
+    avg_sr_index_values = [index for index, _ in sr_pairs if index > 0]
+    avg_sr_fcr_values = [fcr_sr for _, fcr_sr in sr_pairs if fcr_sr > 0]
+    avg_sr_index = (
+        sum(avg_sr_index_values) / len(avg_sr_index_values)
+        if avg_sr_index_values else 0
+    )
+    avg_sr_fcr = (
+        sum(avg_sr_fcr_values) / len(avg_sr_fcr_values)
+        if avg_sr_fcr_values else 0
+    )
+    # Alias lama diarahkan ke SR Index agar komponen lama tetap kompatibel.
+    avg_sr = avg_sr_index
+    current_population = sum(int(x.population_index or x.population or 0) for x in latest_samples)
     # Size adalah jumlah ekor per kilogram. Gunakan ABW rata-rata sampling
     # terakhir per kolam agar konsisten dengan KPI ABW pada dashboard.
     current_size = (1000.0 / avg_abw) if avg_abw > 0 else 0
@@ -1144,6 +1190,8 @@ def production_dashboard(request):
         'biomass_progress': biomass_progress,
         'avg_adg': avg_adg,
         'avg_sr': avg_sr,
+        'avg_sr_index': avg_sr_index,
+        'avg_sr_fcr': avg_sr_fcr,
         'current_population': current_population,
         'current_size': current_size,
         'projected_size_doc': projected_size_doc,
