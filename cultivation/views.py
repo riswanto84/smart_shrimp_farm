@@ -297,6 +297,24 @@ def cycle_history_excel(request, pk):
                     r['last_sampling_date'].strftime('%d/%m/%Y') if r['last_sampling_date'] else '', r['last_sampling_doc'],
                     float(r['abw_g']), float(r['size']), float(r['adg']), float(r['fcr']),
                     float(r['sr_index']), float(r['biomass_fr_kg']), float(r['biomass_index_kg'])])
+    # Format angka Excel agar mudah dibaca dengan pemisah ribuan dan desimal.
+    for row in range(5, ws.max_row + 1):
+        label = str(ws.cell(row, 1).value or '')
+        cell = ws.cell(row, 2)
+        if isinstance(cell.value, (int, float)):
+            if any(key in label for key in ('Tebar',)):
+                cell.number_format = '#,##0'
+            elif any(key in label for key in ('Omzet', 'Biaya', 'Laba/Rugi')):
+                cell.number_format = 'Rp #,##0.00;[Red]-Rp #,##0.00'
+            else:
+                cell.number_format = '#,##0.00'
+    for row in range(2, ws2.max_row + 1):
+        ws2.cell(row, 2).number_format = '#,##0'
+        ws2.cell(row, 4).number_format = '#,##0.00'
+        ws2.cell(row, 5).number_format = '#,##0'
+        for col in (8, 9, 10, 11, 12, 13, 14):
+            ws2.cell(row, col).number_format = '#,##0.00'
+
     for sheet in (ws, ws2):
         sheet.freeze_panes = 'A4' if sheet is ws else 'A2'
         for cell in sheet[1]:
