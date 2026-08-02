@@ -37,14 +37,17 @@
     <div class="balance-actions">
       <a class="btn btn-outline-primary" href="{% url 'finance:opening_balance' %}?as_of={{ as_of|date:'Y-m-d' }}"><i class="fa-solid fa-vault"></i> Saldo Awal</a>
       <a class="btn btn-outline-secondary" href="{% url 'finance:balance_entries' %}"><i class="fa-solid fa-list"></i> Kelola Pos</a>
-      <a class="btn btn-danger" href="{% url 'finance:export_balance_sheet_pdf' %}?as_of={{ as_of|date:'Y-m-d' }}"><i class="fa-solid fa-file-pdf"></i> PDF</a>
+      <a class="btn btn-danger" href="{% url 'finance:export_balance_sheet_pdf' %}?{{ request.GET.urlencode }}"><i class="fa-solid fa-file-pdf"></i> PDF</a>
     </div>
   </div>
 
-  <form class="balance-filter">
-    <input type="date" name="as_of" value="{{ as_of|date:'Y-m-d' }}" class="form-control">
+  <form class="balance-filter" style="display:grid;grid-template-columns:minmax(190px,1fr) minmax(230px,1.3fr) minmax(180px,1fr) auto;gap:10px;align-items:end">
+    <div><label class="form-label fw-semibold">Mode Laporan</label><select class="form-select" name="report_mode" id="reportMode"><option value="cycle" {% if report_mode == 'cycle' %}selected{% endif %}>Berdasarkan Siklus</option><option value="period" {% if report_mode == 'period' %}selected{% endif %}>Berdasarkan Tanggal</option></select></div>
+    <div class="scope-cycle"><label class="form-label fw-semibold">Siklus</label><select class="form-select" name="cycle">{% for item in cycles %}<option value="{{ item.id }}" {% if selected_cycle and item.id == selected_cycle.id %}selected{% endif %}>{{ item.name }} — {{ item.get_status_display }}</option>{% endfor %}</select></div>
+    <div><label class="form-label fw-semibold">Posisi per Tanggal</label><input type="date" name="as_of" value="{{ as_of|date:'Y-m-d' }}" class="form-control"></div>
     <button class="btn btn-primary"><i class="fa-solid fa-filter"></i> Tampilkan</button>
   </form>
+  <script>document.addEventListener('DOMContentLoaded',function(){const m=document.getElementById('reportMode');const sync=()=>document.querySelectorAll('.scope-cycle').forEach(x=>x.style.display=m.value==='cycle'?'':'none');m.addEventListener('change',sync);sync()});</script>
 
   <div class="neraca-kpi-grid">
     <div class="neraca-kpi-card"><div class="neraca-kpi-label">TOTAL ASET</div><div class="neraca-kpi-value">{{ total_assets|rupiah }}</div><div class="neraca-kpi-sub">Aset lancar dan aset tetap bersih</div></div>

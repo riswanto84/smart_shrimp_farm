@@ -8,11 +8,11 @@
 </div>
 
 <div class="row g-3 mb-4">
-  <div class="col-6 col-xl"><div class="cardx p-3 h-100"><small class="text-muted">Siklus Selesai</small><h3>{{ summary.cycle_count|angka0 }}</h3></div></div>
+  <div class="col-6 col-xl"><div class="cardx p-3 h-100"><small class="text-muted">Siklus Selesai</small><h3>{{ summary.cycle_count }}</h3></div></div>
   <div class="col-6 col-xl"><div class="cardx p-3 h-100"><small class="text-muted">Total Produksi</small><h3>{{ summary.production_kg|angka2 }} kg</h3></div></div>
   <div class="col-6 col-xl"><div class="cardx p-3 h-100"><small class="text-muted">Total Omzet</small><h3>{{ summary.revenue|rupiah }}</h3></div></div>
   <div class="col-6 col-xl"><div class="cardx p-3 h-100"><small class="text-muted">Total Laba/Rugi</small><h3 class="{% if summary.profit < 0 %}text-danger{% else %}text-success{% endif %}">{{ summary.profit|rupiah }}</h3></div></div>
-  <div class="col-6 col-xl"><div class="cardx p-3 h-100"><small class="text-muted">Rata-rata FCR / SR</small><h3>{{ summary.avg_fcr|angka2 }} / {{ summary.avg_sr|persen:1 }}</h3></div></div>
+  <div class="col-6 col-xl"><div class="cardx p-3 h-100"><small class="text-muted">Rata-rata FCR / SR</small><h3>{{ summary.avg_fcr|angka2 }} / {{ summary.avg_sr|angka:1 }}%</h3></div></div>
 </div>
 
 <div class="cardx mb-4">
@@ -27,10 +27,10 @@
         <td>{{ m.cycle.start_date|date:'d/m/Y' }}<br><small class="text-muted">s.d. {{ m.period_end|date:'d/m/Y' }}</small></td>
         <td>{% if m.cycle.status == 'completed' %}<span class="badge bg-secondary">Selesai</span>{% else %}<span class="badge bg-success">{{ m.cycle.get_status_display }}</span>{% endif %}</td>
         <td><b>{{ m.total_harvest_kg|angka2 }} kg</b><br><small>{{ m.harvest_count|angka0 }} panen</small></td>
-        <td>{{ m.average_sr_index|persen }}</td><td>{{ m.average_fcr|angka2 }}</td>
+        <td>{{ m.average_sr_index|angka2 }}%</td><td>{{ m.average_fcr|angka2 }}</td>
         <td>{{ m.revenue|rupiah }}</td><td>{{ m.expense|rupiah }}</td>
         <td class="{% if m.profit < 0 %}text-danger{% else %}text-success{% endif %}"><b>{{ m.profit|rupiah }}</b></td>
-        <td>{{ m.roi_percent|persen }}</td>
+        <td>{{ m.roi_percent|angka2 }}%</td>
         <td class="text-nowrap">
           <a class="btn btn-sm btn-primary" href="{% url 'cultivation:history_detail' m.cycle.id %}"><i class="fa-solid fa-eye"></i> Detail</a>
           <a class="btn btn-sm btn-success" href="{% url 'cultivation:history_excel' m.cycle.id %}"><i class="fa-solid fa-file-excel"></i></a>
@@ -50,12 +50,12 @@
     <thead><tr><th class="text-start">Parameter</th>{% for m in completed_metrics %}<th>{{ m.cycle.name }}</th>{% endfor %}</tr></thead>
     <tbody>
       <tr><th class="text-start">Produksi (kg)</th>{% for m in completed_metrics %}<td>{{ m.total_harvest_kg|angka2 }}</td>{% endfor %}</tr>
-      <tr><th class="text-start">SR Index</th>{% for m in completed_metrics %}<td>{{ m.average_sr_index|persen }}</td>{% endfor %}</tr>
+      <tr><th class="text-start">SR Index</th>{% for m in completed_metrics %}<td>{{ m.average_sr_index|angka2 }}%</td>{% endfor %}</tr>
       <tr><th class="text-start">FCR</th>{% for m in completed_metrics %}<td>{{ m.average_fcr|angka2 }}</td>{% endfor %}</tr>
-      <tr><th class="text-start">ADG</th>{% for m in completed_metrics %}<td>{{ m.average_adg|angka3 }}</td>{% endfor %}</tr>
+      <tr><th class="text-start">ADG</th>{% for m in completed_metrics %}<td>{{ m.average_adg|angka:3 }}</td>{% endfor %}</tr>
       <tr><th class="text-start">Omzet</th>{% for m in completed_metrics %}<td>{{ m.revenue|rupiah }}</td>{% endfor %}</tr>
       <tr><th class="text-start">Laba/Rugi</th>{% for m in completed_metrics %}<td>{{ m.profit|rupiah }}</td>{% endfor %}</tr>
-      <tr><th class="text-start">ROI</th>{% for m in completed_metrics %}<td>{{ m.roi_percent|persen }}</td>{% endfor %}</tr>
+      <tr><th class="text-start">ROI</th>{% for m in completed_metrics %}<td>{{ m.roi_percent|angka2 }}%</td>{% endfor %}</tr>
     </tbody>
   </table></div>
 </div>

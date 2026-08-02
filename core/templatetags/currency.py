@@ -64,23 +64,6 @@ def angka2(value):
     return _format_id_number(value, decimals=2, strip_zero=True)
 
 
-
-
-@register.filter(name='angka1')
-def angka1(value):
-    return _format_id_number(value, decimals=1, strip_zero=False)
-
-
-@register.filter(name='angka3')
-def angka3(value):
-    return _format_id_number(value, decimals=3, strip_zero=False)
-
-
-@register.filter(name='persen')
-def persen(value, decimals=2):
-    return f"{_format_id_number(value, decimals=decimals, strip_zero=False)}%"
-
-
 @register.filter(name='rupiah')
 def rupiah(value):
     """Format Rupiah Indonesia dengan maksimal 2 desimal bila diperlukan."""

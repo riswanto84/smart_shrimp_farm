@@ -12,7 +12,7 @@ from django.db.models import Sum, Count, Min, Max, Q
 from django.db.models.functions import TruncDate, TruncWeek, TruncMonth
 from django.utils import timezone
 from django.utils.dateparse import parse_date
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 import json
@@ -25,6 +25,7 @@ from core.reporting import get_date_range, filter_by_date_range, format_date_ran
 from core.utils import parse_rupiah
 from core.pagination import paginate_queryset
 from cultivation.utils import get_selected_cycle, filter_selected_cycle
+from cultivation.models import CultivationCycle
 from finance.services.profit_loss import calculate_profit_loss
 
 
@@ -196,55 +197,91 @@ def add_expense(request):
     return render(request, 'finance/expense_form.html', {'ponds': ponds, 'categories': OperationalExpense.CATEGORIES, 'fixed_assets': FixedAsset.objects.order_by('code')})
 
 
+def _financial_report_scope(request, *, balance=False):
+    """Resolve cycle-based or cross-cycle period reporting consistently."""
+    today = timezone.localdate()
+    mode = (request.GET.get('report_mode') or 'cycle').strip().lower()
+    if mode not in ('cycle', 'period'):
+        mode = 'cycle'
+    cycles = CultivationCycle.objects.all().order_by('-start_date', '-id')
+    cycle = get_selected_cycle(request) if mode == 'cycle' else None
+
+    if balance:
+        as_of = parse_date(request.GET.get('as_of') or request.GET.get('date_to') or '')
+        if not as_of:
+            if cycle and cycle.status == CultivationCycle.STATUS_COMPLETED and cycle.actual_end_date:
+                as_of = cycle.actual_end_date
+            else:
+                as_of = today
+        if as_of > today:
+            as_of = today
+        date_from = None
+        if mode == 'period':
+            date_from = parse_date(request.GET.get('date_from') or '') or date(as_of.year, 1, 1)
+        return {
+            'report_mode': mode, 'selected_cycle': cycle, 'cycles': cycles,
+            'date_from': date_from, 'date_to': as_of, 'as_of': as_of,
+        }
+
+    if mode == 'period':
+        date_from, date_to = _date_period(request)
+    else:
+        date_from = parse_date(request.GET.get('date_from') or '')
+        date_to = parse_date(request.GET.get('date_to') or '') or today
+    return {
+        'report_mode': mode, 'selected_cycle': cycle, 'cycles': cycles,
+        'date_from': date_from, 'date_to': date_to,
+    }
+
+
+def _scope_subtitle(scope, *, balance=False):
+    if scope['report_mode'] == 'cycle' and scope.get('selected_cycle'):
+        cycle = scope['selected_cycle']
+        return f"Siklus: {cycle.name}"
+    if balance:
+        return f"Posisi per {scope['as_of'].strftime('%d/%m/%Y')}"
+    return f"Periode: {format_date_range(scope.get('date_from'), scope.get('date_to'))}"
+
+
 def _profit_loss_data(request):
-    date_from, date_to = get_date_range(request)
-    cycle = get_selected_cycle(request)
-    # Tanpa tanggal akhir eksplisit, batasi sampai hari ini agar angka identik
-    # dengan Dashboard dan tidak memasukkan transaksi bertanggal masa depan.
-    effective_date_to = date_to or timezone.localdate()
+    scope = _financial_report_scope(request)
     result = calculate_profit_loss(
-        cycle=cycle,
-        date_from=date_from,
-        date_to=effective_date_to,
+        cycle=scope['selected_cycle'],
+        date_from=scope['date_from'],
+        date_to=scope['date_to'],
     )
-    return date_from, date_to, result['revenue'], result['expense_total'], result['profit']
+    return scope, result
 
 
 @login_required
 @permission_required('finance.profit_loss')
 def profit_loss(request):
-    date_from, date_to, revenue, expense_total, profit = _profit_loss_data(request)
-    return render(request, 'finance/profit_loss.html', {
-        'date_from': date_from,
-        'date_to': date_to,
-        'revenue': revenue,
-        'expense_total': expense_total,
-        'profit': profit,
-    })
+    scope, result = _profit_loss_data(request)
+    return render(request, 'finance/profit_loss.html', {**scope, **result})
 
 
 @login_required
 @permission_required('finance.profit_loss')
 def export_profit_loss_excel(request):
-    date_from, date_to, revenue, expense_total, profit = _profit_loss_data(request)
+    scope, result = _profit_loss_data(request)
     rows = [
-        ['Pendapatan Penjualan', rupiah(revenue)],
-        ['Pengeluaran Operasional', rupiah(expense_total)],
-        ['Laba/Rugi Bersih', rupiah(profit)],
+        ['Pendapatan Penjualan dan Lainnya', rupiah(result['revenue'])],
+        ['Pengeluaran Operasional', rupiah(result['expense_total'])],
+        ['Laba/Rugi Bersih', rupiah(result['profit'])],
     ]
-    return export_excel('laporan_laba_rugi', 'Laporan Laba Rugi', f'Periode: {format_date_range(date_from, date_to)}', ['Uraian', 'Jumlah'], rows)
+    return export_excel('laporan_laba_rugi', 'Laporan Laba Rugi', _scope_subtitle(scope), ['Uraian', 'Jumlah'], rows)
 
 
 @login_required
 @permission_required('finance.profit_loss')
 def export_profit_loss_pdf(request):
-    date_from, date_to, revenue, expense_total, profit = _profit_loss_data(request)
+    scope, result = _profit_loss_data(request)
     rows = [
-        ['Pendapatan Penjualan', rupiah(revenue)],
-        ['Pengeluaran Operasional', rupiah(expense_total)],
-        ['Laba/Rugi Bersih', rupiah(profit)],
+        ['Pendapatan Penjualan dan Lainnya', rupiah(result['revenue'])],
+        ['Pengeluaran Operasional', rupiah(result['expense_total'])],
+        ['Laba/Rugi Bersih', rupiah(result['profit'])],
     ]
-    return export_pdf('laporan_laba_rugi', 'Laporan Laba Rugi', f'Periode: {format_date_range(date_from, date_to)}', ['Uraian', 'Jumlah'], rows)
+    return export_pdf('laporan_laba_rugi', 'Laporan Laba Rugi', _scope_subtitle(scope), ['Uraian', 'Jumlah'], rows)
 
 
 # -----------------------------------------------------------------------------
@@ -998,9 +1035,18 @@ def _calculate_profit_loss_period(date_from, date_to, cycle=None):
 
 
 def _gross_turnover_data(request):
-    date_from, date_to = _date_period(request)
-    sales = Sale.objects.filter(date__date__range=(date_from, date_to)).exclude(status__in=['Gagal','Expired','Dibatalkan','Refund'])
-    other = OtherRevenue.objects.filter(date__range=(date_from, date_to))
+    scope = _financial_report_scope(request)
+    sales = Sale.objects.exclude(status__in=['Gagal','Expired','Dibatalkan','Refund'])
+    other = OtherRevenue.objects.all()
+    if scope['selected_cycle'] is not None:
+        sales = sales.filter(cycle=scope['selected_cycle'])
+        other = other.filter(cycle=scope['selected_cycle'])
+    if scope['date_from']:
+        sales = sales.filter(date__date__gte=scope['date_from'])
+        other = other.filter(date__gte=scope['date_from'])
+    if scope['date_to']:
+        sales = sales.filter(date__date__lte=scope['date_to'])
+        other = other.filter(date__lte=scope['date_to'])
     rows = []
     for item in sales.select_related('customer').order_by('date'):
         rows.append({'date': item.date.date(), 'document': item.invoice_no, 'customer': item.customer.name if item.customer else '-', 'source': 'Penjualan Udang', 'amount': item.total_amount, 'kind': 'sale'})
@@ -1010,16 +1056,18 @@ def _gross_turnover_data(request):
     total = sum((r['amount'] for r in rows), Decimal('0'))
     monthly = []
     for month in range(1,13):
-        value = sum((r['amount'] for r in rows if r['date'].year == date_from.year and r['date'].month == month), Decimal('0'))
+        value = sum((r['amount'] for r in rows if scope['date_from'] and r['date'].year == scope['date_from'].year and r['date'].month == month), Decimal('0'))
         monthly.append({'month': month, 'label': timezone.datetime(2000,month,1).strftime('%B'), 'amount': value})
-    return date_from, date_to, rows, total, monthly
+    return scope, rows, total, monthly
 
 
 @login_required
 @permission_required('finance.tax_reports')
 def tax_dashboard(request):
     date_from, date_to = _date_period(request)
-    _, _, _, turnover, _ = _gross_turnover_data(request)
+    sale_turnover = Sale.objects.filter(date__date__range=(date_from, date_to)).exclude(status__in=['Gagal','Expired','Dibatalkan','Refund']).aggregate(s=Sum('total_amount'))['s'] or Decimal('0')
+    other_turnover = OtherRevenue.objects.filter(date__range=(date_from, date_to)).aggregate(s=Sum('gross_amount'))['s'] or Decimal('0')
+    turnover = sale_turnover + other_turnover
     expenses = OperationalExpense.objects.filter(date__range=(date_from,date_to))
     expense_total = expenses.aggregate(s=Sum('amount'))['s'] or Decimal('0')
     fiscal_expense = expenses.filter(is_fiscal_deductible=True).aggregate(s=Sum('amount'))['s'] or Decimal('0')
@@ -1041,8 +1089,8 @@ def tax_dashboard(request):
 @login_required
 @permission_required('finance.tax_reports')
 def gross_turnover(request):
-    date_from,date_to,rows,total,monthly=_gross_turnover_data(request)
-    return render(request,'finance/gross_turnover.html',{'date_from':date_from,'date_to':date_to,'rows':rows,'total':total,'monthly':monthly})
+    scope,rows,total,monthly=_gross_turnover_data(request)
+    return render(request,'finance/gross_turnover.html',{**scope,'rows':rows,'total':total,'monthly':monthly})
 
 
 @login_required
@@ -1062,17 +1110,17 @@ def add_other_revenue(request):
 @login_required
 @permission_required('finance.tax_reports')
 def export_gross_turnover_excel(request):
-    date_from,date_to,rows,total,_=_gross_turnover_data(request)
+    scope,rows,total,_=_gross_turnover_data(request)
     data=[[r['date'].strftime('%d/%m/%Y'),r['document'],r['customer'],r['source'],rupiah(r['amount'])] for r in rows]
-    return export_excel('peredaran_bruto','Laporan Peredaran Bruto',f'Periode: {format_date_range(date_from,date_to)}',['Tanggal','Nomor Bukti','Pelanggan','Sumber Pendapatan','Peredaran Bruto'],data,[['','','','TOTAL',rupiah(total)]])
+    return export_excel('peredaran_bruto','Laporan Peredaran Bruto',_scope_subtitle(scope),['Tanggal','Nomor Bukti','Pelanggan','Sumber Pendapatan','Peredaran Bruto'],data,[['','','','TOTAL',rupiah(total)]])
 
 
 @login_required
 @permission_required('finance.tax_reports')
 def export_gross_turnover_pdf(request):
-    date_from,date_to,rows,total,_=_gross_turnover_data(request)
+    scope,rows,total,_=_gross_turnover_data(request)
     data=[[r['date'].strftime('%d/%m/%Y'),r['document'],r['customer'],r['source'],rupiah(r['amount'])] for r in rows]
-    return export_pdf('peredaran_bruto','Laporan Peredaran Bruto',f'Periode: {format_date_range(date_from,date_to)}',['Tanggal','Nomor Bukti','Pelanggan','Sumber Pendapatan','Peredaran Bruto'],data,[['','','','TOTAL',rupiah(total)]])
+    return export_pdf('peredaran_bruto','Laporan Peredaran Bruto',_scope_subtitle(scope),['Tanggal','Nomor Bukti','Pelanggan','Sumber Pendapatan','Peredaran Bruto'],data,[['','','','TOTAL',rupiah(total)]])
 
 
 def _profit_loss_tax_data(request):
@@ -1312,7 +1360,9 @@ def _balance_sheet_data(request):
     """
     from .receivable_sync import sync_all_sales
 
-    as_of = _as_date(request)
+    scope = _financial_report_scope(request, balance=True)
+    as_of = scope['as_of']
+    selected_cycle = scope['selected_cycle']
     sync_all_sales()
 
     latest = {}
@@ -1445,6 +1495,10 @@ def _balance_sheet_data(request):
 
     # Dashboard dan Neraca memakai snapshot biomassa INDEX yang sama.
     index_snapshot = calculate_index_biomass_snapshot(as_of=as_of)
+    if selected_cycle is not None:
+        index_snapshot['rows'] = [row for row in index_snapshot['rows'] if row.cycle and row.cycle.pk == selected_cycle.pk]
+        index_snapshot['excluded'] = [row for row in index_snapshot['excluded'] if row.cycle and row.cycle.pk == selected_cycle.pk]
+        index_snapshot['total_kg'] = sum((row.biomass_index_kg for row in index_snapshot['rows']), Decimal('0'))
     pond_assets = []
     excluded_pond_assets = [
         {'pond': row.pond, 'reason': row.exclusion_reason}
@@ -1518,7 +1572,6 @@ def _balance_sheet_data(request):
             'biomass_method': 'INDEX',
         })
 
-    selected_cycle = get_selected_cycle(request)
     # Gunakan konteks yang sama persis dengan Dashboard: seluruh transaksi yang
     # terhubung ke siklus terpilih sampai tanggal posisi neraca. Jangan memakai
     # tanggal mulai siklus sebagai filter tambahan karena transaksi yang sudah
@@ -1527,7 +1580,7 @@ def _balance_sheet_data(request):
     if selected_cycle is not None:
         profit_loss = _calculate_profit_loss_period(None, as_of, cycle=selected_cycle)
     else:
-        start = timezone.datetime(as_of.year, 1, 1).date()
+        start = scope.get('date_from') or timezone.datetime(as_of.year, 1, 1).date()
         profit_loss = _calculate_profit_loss_period(start, as_of, cycle=None)
     sales_revenue = profit_loss['sales_revenue']
     other_revenue = profit_loss['other_revenue']
@@ -1666,6 +1719,7 @@ def _balance_sheet_data(request):
     ]
 
     return {
+        **scope,
         'as_of': as_of, 'assets': assets, 'liabilities': liabilities, 'equities': equities,
         'fixed_assets': fixed_assets, 'receivable_total': receivable_total, 'payable_total': payable_total,
         'fixed_cost': fixed_cost, 'accumulated': accumulated, 'net_fixed_assets': net_fixed_assets,
@@ -1737,7 +1791,7 @@ def export_balance_sheet_pdf(request):
     rows.append(['TOTAL KEWAJIBAN',rupiah(d['total_liabilities'])])
     for e in d['equities']: rows.append([f"EKUITAS - {e.account_name}",rupiah(e.amount)])
     rows += [['Laba/Rugi Operasional Tahun Berjalan',rupiah(d['operating_profit'])],['Cadangan Pengakuan Awal Aset Biologis',rupiah(d['biological_opening_reserve'])],['Perubahan Nilai Wajar Aset Biologis',rupiah(d['biological_fair_value_change_cumulative'])],['Laba/Rugi Tahun Berjalan Setelah Penilaian Biologis',rupiah(d['current_profit'])],['TOTAL EKUITAS',rupiah(d['total_equity_with_profit'])],['SELISIH NERACA',rupiah(d['difference'])]]
-    return export_pdf('neraca','Laporan Neraca',f"Posisi per {d['as_of'].strftime('%d/%m/%Y')}",['Uraian','Jumlah'],rows)
+    return export_pdf('neraca','Laporan Neraca',_scope_subtitle(d, balance=True),['Uraian','Jumlah'],rows)
 
 
 @login_required
