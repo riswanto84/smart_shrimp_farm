@@ -1205,6 +1205,18 @@ def production_dashboard(request):
     size_target_after_target_doc = bool(
         estimated_size30_date and target_doc_date and estimated_size30_date > target_doc_date
     )
+    # Untuk dashboard, jangan menampilkan tanggal jauh setelah batas DOC target
+    # sebagai seolah-olah merupakan estimasi panen yang direkomendasikan. Bila
+    # target size belum tercapai sampai DOC target, tampilkan status eksplisit
+    # dan pertahankan tanggal proyeksi mentah hanya sebagai informasi tambahan.
+    estimated_size30_raw_date = estimated_size30_date
+    estimated_size30_display_date = (
+        None if size_target_after_target_doc else estimated_size30_date
+    )
+    size30_status = (
+        'after_target_doc' if size_target_after_target_doc
+        else ('reached' if estimated_size30_date else 'insufficient_data')
+    )
 
     # ---------------------------------------------------------------
     # Analisis pakan dari P/H pada menu Cek Anco.
@@ -1309,7 +1321,9 @@ def production_dashboard(request):
         'current_size': current_size,
         'projected_size_doc': projected_size_doc,
         'projected_abw_doc': projected_abw_doc,
-        'estimated_size30_date': estimated_size30_date,
+        'estimated_size30_date': estimated_size30_display_date,
+        'estimated_size30_raw_date': estimated_size30_raw_date,
+        'size30_status': size30_status,
         'estimated_size30_days': estimated_size30_days,
         'size_target_after_target_doc': size_target_after_target_doc,
         'target_doc_date': target_doc_date,
@@ -1343,6 +1357,7 @@ def production_dashboard(request):
         'feed_previous_total': feed_previous_total,
         'feed_change_kg': feed_change_kg,
         'feed_change_pct': feed_change_pct,
+        'dashboard_build': '2026.08.02-harvest-size30-v2',
         'ollama_health': ollama_health(),
     }
     return render(request, 'operations/production_dashboard.html', context)
