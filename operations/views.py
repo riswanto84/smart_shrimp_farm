@@ -861,6 +861,34 @@ def production_dashboard(request):
     parameter_map = latest_per_pond(cycle_qs(DailyParameter.objects.all()))
     feedlog_map = latest_per_pond(cycle_qs(FeedLog.objects.all()))
 
+    # Ringkasan hasil panen per kolam untuk siklus terpilih. Data ini tetap
+    # ditampilkan baik untuk kolam yang baru panen parsial maupun yang sudah
+    # selesai panen total, sehingga histori produksi tidak hilang dari tabel.
+    harvest_map = {}
+    harvest_qs = cycle_qs(Harvest.objects.all()).select_related('pond').order_by('pond_id', 'date', 'id')
+    for harvest in harvest_qs:
+        bucket = harvest_map.setdefault(harvest.pond_id, {
+            'total_harvest_kg': Decimal('0'),
+            'partial_harvest_kg': Decimal('0'),
+            'final_harvest_kg': Decimal('0'),
+            'harvest_count': 0,
+            'partial_count': 0,
+            'final_count': 0,
+            'latest_harvest': None,
+            'is_completed': False,
+        })
+        amount = Decimal(str(harvest.total_kg or 0))
+        bucket['total_harvest_kg'] += amount
+        bucket['harvest_count'] += 1
+        bucket['latest_harvest'] = harvest
+        if _is_total_harvest(harvest.harvest_type):
+            bucket['final_harvest_kg'] += amount
+            bucket['final_count'] += 1
+            bucket['is_completed'] = True
+        else:
+            bucket['partial_harvest_kg'] += amount
+            bucket['partial_count'] += 1
+
     pond_cards = []
     for pond in ponds:
         sample = sampling_map.get(pond.id)
@@ -895,6 +923,26 @@ def production_dashboard(request):
         cc_fr = (biomass_fr / pond_area).quantize(Decimal('0.01')) if pond_area > 0 else Decimal('0')
         cc_index = (biomass_index / pond_area).quantize(Decimal('0.01')) if pond_area > 0 else Decimal('0')
 
+        harvest_summary = harvest_map.get(pond.id, {
+            'total_harvest_kg': Decimal('0'),
+            'partial_harvest_kg': Decimal('0'),
+            'final_harvest_kg': Decimal('0'),
+            'harvest_count': 0,
+            'partial_count': 0,
+            'final_count': 0,
+            'latest_harvest': None,
+            'is_completed': False,
+        })
+        if harvest_summary['is_completed']:
+            harvest_status = 'Selesai panen'
+            harvest_status_class = 'harvest-complete'
+        elif harvest_summary['partial_harvest_kg'] > 0:
+            harvest_status = 'Panen parsial'
+            harvest_status_class = 'harvest-partial'
+        else:
+            harvest_status = 'Belum panen'
+            harvest_status_class = 'harvest-none'
+
         pond_cards.append({
             'pond': pond,
             'sample': sample,
@@ -906,6 +954,9 @@ def production_dashboard(request):
             'latest_doc': latest_doc,
             'cc_fr': cc_fr,
             'cc_index': cc_index,
+            'harvest': harvest_summary,
+            'harvest_status': harvest_status,
+            'harvest_status_class': harvest_status_class,
         })
 
     # ---------------------------------------------------------------
