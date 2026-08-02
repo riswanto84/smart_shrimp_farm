@@ -889,6 +889,24 @@ def production_dashboard(request):
             bucket['partial_harvest_kg'] += amount
             bucket['partial_count'] += 1
 
+    # Ringkasan panen untuk kartu utama Dashboard Produksi. Total panen riil
+    # mencakup seluruh panen parsial dan panen akhir pada siklus terpilih.
+    total_real_harvest_kg = sum(
+        (item['total_harvest_kg'] for item in harvest_map.values()),
+        Decimal('0'),
+    )
+    total_partial_harvest_kg = sum(
+        (item['partial_harvest_kg'] for item in harvest_map.values()),
+        Decimal('0'),
+    )
+    total_final_harvest_kg = sum(
+        (item['final_harvest_kg'] for item in harvest_map.values()),
+        Decimal('0'),
+    )
+    total_harvest_transactions = sum(item['harvest_count'] for item in harvest_map.values())
+    total_partial_transactions = sum(item['partial_count'] for item in harvest_map.values())
+    harvested_pond_count = sum(1 for item in harvest_map.values() if item['total_harvest_kg'] > 0)
+
     pond_cards = []
     for pond in ponds:
         sample = sampling_map.get(pond.id)
@@ -1131,18 +1149,62 @@ def production_dashboard(request):
         projected_abw_doc = projected_total_kg * 1000.0 / current_population
         projected_size_doc = 1000.0 / projected_abw_doc if projected_abw_doc > 0 else 0
 
-    # Estimasi tanggal target size siklus diringkas dari estimasi seluruh kolam.
-    size30_dates = []
+    # Estimasi tanggal target size menggunakan kondisi agregat kolam yang masih
+    # aktif. Implementasi lama memakai tanggal TERLAMBAT dari setiap kolam; satu
+    # kolam dengan ADG sangat rendah dapat menarik tanggal sampai berbulan-bulan
+    # dan menghasilkan estimasi tidak representatif (misalnya April 2027).
+    #
+    # Metode baru:
+    # 1. keluarkan kolam yang sudah panen total;
+    # 2. proyeksikan ABW masing-masing sampel hingga hari ini;
+    # 3. hitung ABW rata-rata tertimbang populasi Index;
+    # 4. gunakan median ADG valid sebagai laju pertumbuhan yang tahan pencilan.
+    active_projection_samples = [
+        sample for sample in latest_samples
+        if not harvest_map.get(sample.pond_id, {}).get('is_completed', False)
+    ] or latest_samples
     target_abw = 1000.0 / target_size if target_size > 0 else 0
-    for sample in latest_samples:
+    weighted_abw_sum = 0.0
+    population_weight_sum = 0.0
+    size_adgs = []
+    for sample in active_projection_samples:
         abw = _float(sample.abw_g)
-        adg = _float(sample.adg_weekly)
-        if abw >= target_abw:
-            size30_dates.append(sample.date)
-        elif abw > 0 and adg > 0:
-            days = math.ceil((target_abw - abw) / adg)
-            size30_dates.append(sample.date + timedelta(days=max(days, 0)))
-    estimated_size30_date = max(size30_dates) if size30_dates else None
+        adg = safe_actual_adg(sample)
+        if abw <= 0:
+            continue
+        elapsed_days = max((today - sample.date).days, 0) if sample.date else 0
+        projected_today_abw = abw + (adg * elapsed_days if adg > 0 else 0)
+        population_weight = _float(sample.population_index or sample.population or 0)
+        if population_weight <= 0:
+            population_weight = 1.0
+        weighted_abw_sum += projected_today_abw * population_weight
+        population_weight_sum += population_weight
+        if adg > 0:
+            size_adgs.append(adg)
+
+    current_projection_abw = (
+        weighted_abw_sum / population_weight_sum if population_weight_sum > 0 else avg_abw
+    )
+    size_adgs.sort()
+    projection_adg = (
+        size_adgs[len(size_adgs) // 2] if size_adgs else fallback_adg
+    )
+    estimated_size30_date = None
+    estimated_size30_days = None
+    if target_abw > 0 and current_projection_abw > 0:
+        if current_projection_abw >= target_abw:
+            estimated_size30_days = 0
+            estimated_size30_date = today
+        elif projection_adg > 0:
+            estimated_size30_days = math.ceil((target_abw - current_projection_abw) / projection_adg)
+            estimated_size30_date = today + timedelta(days=max(estimated_size30_days, 0))
+
+    target_doc_date = None
+    if selected_cycle and getattr(selected_cycle, 'start_date', None):
+        target_doc_date = selected_cycle.start_date + timedelta(days=max(target_doc - 1, 0))
+    size_target_after_target_doc = bool(
+        estimated_size30_date and target_doc_date and estimated_size30_date > target_doc_date
+    )
 
     # ---------------------------------------------------------------
     # Analisis pakan dari P/H pada menu Cek Anco.
@@ -1248,6 +1310,15 @@ def production_dashboard(request):
         'projected_size_doc': projected_size_doc,
         'projected_abw_doc': projected_abw_doc,
         'estimated_size30_date': estimated_size30_date,
+        'estimated_size30_days': estimated_size30_days,
+        'size_target_after_target_doc': size_target_after_target_doc,
+        'target_doc_date': target_doc_date,
+        'total_real_harvest_kg': total_real_harvest_kg,
+        'total_partial_harvest_kg': total_partial_harvest_kg,
+        'total_final_harvest_kg': total_final_harvest_kg,
+        'total_harvest_transactions': total_harvest_transactions,
+        'total_partial_transactions': total_partial_transactions,
+        'harvested_pond_count': harvested_pond_count,
         'feed_today': feed_value,
         'feed_date': feed_date,
         'feed_source': feed_source,

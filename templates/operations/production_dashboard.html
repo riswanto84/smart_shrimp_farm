@@ -18,11 +18,13 @@
 
   <div class="metric-grid">
     <div class="metric"><div class="icon"><i class="fa-solid fa-weight-hanging"></i></div><span>Biomassa Saat Ini</span><strong>{{ estimated_biomass|angka2 }} kg</strong><small>Sampling terbaru per kolam</small></div>
+    <div class="metric"><div class="icon"><i class="fa-solid fa-boxes-stacked"></i></div><span>Total Panen Riil</span><strong>{{ total_real_harvest_kg|angka2 }} kg</strong><small>{{ total_harvest_transactions|angka0 }} transaksi pada {{ harvested_pond_count|angka0 }} kolam</small></div>
+    <div class="metric"><div class="icon"><i class="fa-solid fa-layer-group"></i></div><span>Total Panen Parsial</span><strong>{{ total_partial_harvest_kg|angka2 }} kg</strong><small>{{ total_partial_transactions|angka0 }} kali panen parsial</small></div>
     <div class="metric"><div class="icon"><i class="fa-solid fa-shrimp"></i></div><span>Size Saat Ini</span><strong>{% if current_size %}{{ current_size|floatformat:0 }}/kg{% else %}-{% endif %}</strong><small>Setara {{ avg_abw|floatformat:2 }} g/ekor</small></div>
     <div class="metric"><div class="icon"><i class="fa-solid fa-bullseye"></i></div><span>Target Panen</span><strong>{{ target_harvest_ton|floatformat:2 }} ton</strong><small>Progress {{ biomass_progress|floatformat:1 }}%</small><div class="progress-track"><div class="progress-fill" style="width:{{ biomass_progress|floatformat:0 }}%"></div></div></div>
     <div class="metric"><div class="icon"><i class="fa-solid fa-chart-line"></i></div><span>Estimasi DOC {{ target_doc }}</span><strong>{% if doc120_projection_ton %}{{ doc120_projection_ton|angka2 }} ton{% else %}-{% endif %}</strong><small>Proyeksi berdasarkan data sampling</small></div>
     <div class="metric"><div class="icon"><i class="fa-solid fa-fish-fins"></i></div><span>Prediksi Size DOC {{ target_doc }}</span><strong>{% if projected_size_doc %}{{ projected_size_doc|floatformat:0 }}/kg{% else %}-{% endif %}</strong><small>{% if projected_abw_doc %}ABW ±{{ projected_abw_doc|floatformat:2 }} g{% else %}Belum cukup data{% endif %}</small></div>
-    <div class="metric"><div class="icon"><i class="fa-solid fa-calendar-check"></i></div><span>Estimasi Size {{ target_size|floatformat:0 }}</span><strong>{% if estimated_size30_date %}{{ estimated_size30_date|date:"d M Y" }}{% else %}-{% endif %}</strong><small>Target {{ target_size|floatformat:0 }} ekor/kg</small></div>
+    <div class="metric"><div class="icon"><i class="fa-solid fa-calendar-check"></i></div><span>Estimasi Size {{ target_size|floatformat:0 }}</span><strong>{% if estimated_size30_date %}{{ estimated_size30_date|date:"d M Y" }}{% else %}-{% endif %}</strong><small>{% if estimated_size30_date %}± {{ estimated_size30_days|angka0 }} hari dari hari ini{% if size_target_after_target_doc %} · melewati target DOC {{ target_doc }}{% endif %}{% else %}Belum cukup data ADG{% endif %}</small></div>
     <div class="metric"><div class="icon"><i class="fa-solid fa-scale-balanced"></i></div><span>FCR Saat Ini</span><strong>{{ avg_fcr|floatformat:2 }}</strong><small>Rata-rata sampling terakhir</small></div>
     <div class="metric"><div class="icon"><i class="fa-solid fa-chart-pie"></i></div><span>SR Index</span><strong>{{ avg_sr_index|floatformat:2 }}%</strong><small>Populasi Index ÷ jumlah tebar</small></div>
     <div class="metric"><div class="icon"><i class="fa-solid fa-bowl-food"></i></div><span>SR FCR</span><strong>{% if avg_sr_fcr %}{{ avg_sr_fcr|floatformat:2 }}%{% else %}-{% endif %}</strong><small>Estimasi dari pakan kumulatif, FCR, dan ABW</small></div>
@@ -98,7 +100,7 @@
         <div class="summary-list">
           <div class="summary-row"><span>Biomassa saat ini</span><b>{{ estimated_biomass|angka2 }} kg</b></div>
           <div class="summary-row"><span>Target produksi</span><b>{{ target_harvest_ton|floatformat:2 }} ton</b></div>
-          <div class="summary-row"><span>Estimasi size {{ target_size|floatformat:0 }}</span><b>{% if estimated_size30_date %}{{ estimated_size30_date|date:"d M Y" }}{% else %}Belum cukup data{% endif %}</b></div>
+          <div class="summary-row"><span>Estimasi size {{ target_size|floatformat:0 }}</span><b>{% if estimated_size30_date %}{{ estimated_size30_date|date:"d M Y" }}{% if size_target_after_target_doc %}<small class="status-warn d-block">Melewati target DOC {{ target_doc }}</small>{% endif %}{% else %}Belum cukup data{% endif %}</b></div>
         </div>
       </div>
     </section>
