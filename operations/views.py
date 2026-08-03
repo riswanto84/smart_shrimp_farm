@@ -548,6 +548,10 @@ def growth_prediction_dashboard(request):
             if biomass <= 0:
                 pop = int(sample.population or sample.population_index or 0)
                 biomass = pop * abw / 1000.0 if pop and abw else 0
+            sample_population = int(sample.population_index or sample.population or 0)
+            sample_sr_index = _float(sample.sr_index_percent)
+            if sample_sr_index <= 0 and sample_population and int(sample.stocking_count or 0):
+                sample_sr_index = sample_population / int(sample.stocking_count) * 100
             actual.append({
                 'doc': int(sample.doc or 0),
                 'date': sample.date.strftime('%d %b %Y'),
@@ -556,6 +560,9 @@ def growth_prediction_dashboard(request):
                 'biomass_ton': round(biomass / 1000.0, 3),
                 'adg': round(_float(sample.adg_weekly) or _float(sample.adg_cumulative), 3),
                 'fcr': round(_float(sample.fcr), 3),
+                'population': sample_population,
+                'sr_index': round(sample_sr_index, 2),
+                'source': 'Sampling aktual',
             })
 
         projection = []
@@ -568,12 +575,21 @@ def growth_prediction_dashboard(request):
             size = 1000.0 / abw if abw > 0 else 0
             biomass_kg = population * abw / 1000.0 if population else 0
             predicted_date = date_for_doc(doc, latest)
+            projected_sr_index = 0.0
+            stocking_count = int(latest.stocking_count or 0)
+            if stocking_count and population:
+                projected_sr_index = population / stocking_count * 100
             row = {
                 'doc': doc,
                 'date': predicted_date.strftime('%d %b %Y') if predicted_date else '',
                 'abw': round(abw, 2),
                 'size': round(size, 1),
                 'biomass_ton': round(biomass_kg / 1000.0, 3),
+                'adg': round(adg, 3),
+                'fcr': round(latest_fcr, 3),
+                'population': population,
+                'sr_index': round(projected_sr_index, 2),
+                'source': 'Proyeksi berdasarkan ADG',
             }
             projection.append(row)
             all_chart_rows.setdefault(doc, {'doc': doc})[f'p{pond.id}'] = round(size, 1)
@@ -604,6 +620,37 @@ def growth_prediction_dashboard(request):
                 'status': status,
             })
 
+        harvest_markers = []
+        for harvest in [row for row in harvest_qs if row.pond_id == pond.id]:
+            if cycle_start:
+                harvest_doc = max(0, (harvest.date - cycle_start).days)
+            else:
+                harvest_doc = latest_doc + (harvest.date - latest.date).days
+            harvest_markers.append({
+                'doc': int(harvest_doc),
+                'date': harvest.date.strftime('%d %b %Y'),
+                'type': 'Panen total' if _is_total_harvest(harvest.harvest_type) else 'Panen parsial',
+                'weight_kg': round(_float(harvest.total_kg), 2),
+                'size': round(_harvest_size_number(harvest.size_text) or 0, 1),
+            })
+        milestone_markers = [
+            {
+                'doc': int(item['doc']),
+                'date': item['date'].strftime('%d %b %Y') if item.get('date') else '',
+                'label': f"Target Size {item['size']}",
+                'size': item['size'],
+                'status': item['status'],
+            }
+            for item in milestones if item.get('doc') is not None
+        ]
+        milestone_markers.append({
+            'doc': int(target_doc),
+            'date': '',
+            'label': f'DOC {target_doc}',
+            'size': None,
+            'status': 'Target siklus',
+        })
+
         if adg >= target_adg * 1.05:
             growth_status, status_class = 'Lebih cepat dari target', 'good'
         elif adg >= target_adg * 0.85:
@@ -632,6 +679,8 @@ def growth_prediction_dashboard(request):
             'projected_abw': target_projection['abw'],
             'projected_biomass_ton': target_projection['biomass_ton'],
             'milestones': milestones,
+            'harvest_markers': harvest_markers,
+            'milestone_markers': milestone_markers,
             'growth_status': growth_status,
             'status_class': status_class,
             'is_completed': False,
