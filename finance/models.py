@@ -14,6 +14,7 @@ class OperationalExpense(models.Model):
     document_number=models.CharField(max_length=80, blank=True, verbose_name='Nomor bukti')
     is_capital_expenditure=models.BooleanField(default=False, verbose_name='Pembelian aset/kapitalisasi')
     fixed_asset=models.ForeignKey('FixedAsset', on_delete=models.SET_NULL, null=True, blank=True, related_name='source_expenses', verbose_name='Aset terkait')
+    trade_payment=models.OneToOneField('TradePayment', on_delete=models.CASCADE, null=True, blank=True, related_name='operational_expense', verbose_name='Pembayaran utang sumber')
 
     class Meta:
         ordering = ['-date', '-id']
@@ -181,6 +182,60 @@ class TradePayment(models.Model):
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    @staticmethod
+    def infer_expense_category(description):
+        text = (description or '').lower()
+        mapping = [
+            (('pakan', 'feed'), 'Pakan'),
+            (('benur', 'bibit'), 'Benur'),
+            (('probiotik', 'obat', 'mineral', 'vitamin'), 'Obat & Probiotik'),
+            (('listrik', 'pln'), 'Listrik'),
+            (('bbm', 'solar', 'bensin'), 'BBM'),
+            (('gaji', 'upah', 'tenaga kerja'), 'Tenaga Kerja'),
+            (('peralatan', 'alat', 'freezer', 'mesin'), 'Peralatan'),
+            (('perbaikan', 'service', 'servis'), 'Perbaikan'),
+            (('transport', 'ongkir'), 'Transportasi'),
+            (('panen',), 'Panen'),
+            (('pajak',), 'Pajak'),
+            (('administrasi', 'admin'), 'Administrasi'),
+        ]
+        for keywords, category in mapping:
+            if any(keyword in text for keyword in keywords):
+                return category
+        return 'Lain-lain'
+
+    def sync_operational_expense(self):
+        """Basis kas: pembayaran utang diakui sebagai beban pada tanggal dibayar."""
+        if self.trade_account.account_type != TradeAccount.PAYABLE:
+            return None
+        description = self.trade_account.description or 'Utang Usaha'
+        defaults = {
+            'cycle': self.trade_account.cycle,
+            'date': self.payment_date,
+            'category': self.infer_expense_category(description),
+            'pond': None,
+            'name': f'Pelunasan Utang - {description}'[:150],
+            'amount': self.amount,
+            'payment_method': self.payment_method or 'Transfer',
+            'notes': (
+                f'Beban basis kas dari pembayaran utang kepada {self.trade_account.partner_name}. '
+                f'Dokumen utang: {self.trade_account.document_number or "-"}. '
+                f'Bukti pembayaran: {self.document_number or "-"}.'
+            ),
+            'is_fiscal_deductible': True,
+            'document_number': self.document_number or self.trade_account.document_number or '',
+            'is_capital_expenditure': False,
+            'fixed_asset': None,
+        }
+        expense, _ = OperationalExpense.objects.update_or_create(
+            trade_payment=self, defaults=defaults
+        )
+        return expense
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.sync_operational_expense()
+
     class Meta:
         ordering = ['payment_date', 'id']
 
@@ -222,6 +277,60 @@ class BiologicalAssetValuation(models.Model):
     notes = models.TextField(blank=True)
     created_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='biological_valuations')
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @staticmethod
+    def infer_expense_category(description):
+        text = (description or '').lower()
+        mapping = [
+            (('pakan', 'feed'), 'Pakan'),
+            (('benur', 'bibit'), 'Benur'),
+            (('probiotik', 'obat', 'mineral', 'vitamin'), 'Obat & Probiotik'),
+            (('listrik', 'pln'), 'Listrik'),
+            (('bbm', 'solar', 'bensin'), 'BBM'),
+            (('gaji', 'upah', 'tenaga kerja'), 'Tenaga Kerja'),
+            (('peralatan', 'alat', 'freezer', 'mesin'), 'Peralatan'),
+            (('perbaikan', 'service', 'servis'), 'Perbaikan'),
+            (('transport', 'ongkir'), 'Transportasi'),
+            (('panen',), 'Panen'),
+            (('pajak',), 'Pajak'),
+            (('administrasi', 'admin'), 'Administrasi'),
+        ]
+        for keywords, category in mapping:
+            if any(keyword in text for keyword in keywords):
+                return category
+        return 'Lain-lain'
+
+    def sync_operational_expense(self):
+        """Basis kas: pembayaran utang diakui sebagai beban pada tanggal dibayar."""
+        if self.trade_account.account_type != TradeAccount.PAYABLE:
+            return None
+        description = self.trade_account.description or 'Utang Usaha'
+        defaults = {
+            'cycle': self.trade_account.cycle,
+            'date': self.payment_date,
+            'category': self.infer_expense_category(description),
+            'pond': None,
+            'name': f'Pelunasan Utang - {description}'[:150],
+            'amount': self.amount,
+            'payment_method': self.payment_method or 'Transfer',
+            'notes': (
+                f'Beban basis kas dari pembayaran utang kepada {self.trade_account.partner_name}. '
+                f'Dokumen utang: {self.trade_account.document_number or "-"}. '
+                f'Bukti pembayaran: {self.document_number or "-"}.'
+            ),
+            'is_fiscal_deductible': True,
+            'document_number': self.document_number or self.trade_account.document_number or '',
+            'is_capital_expenditure': False,
+            'fixed_asset': None,
+        }
+        expense, _ = OperationalExpense.objects.update_or_create(
+            trade_payment=self, defaults=defaults
+        )
+        return expense
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.sync_operational_expense()
 
     class Meta:
         ordering = ['valuation_date', 'id']
