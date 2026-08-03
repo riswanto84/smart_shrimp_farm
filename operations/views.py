@@ -694,11 +694,32 @@ def growth_prediction_dashboard(request):
             selected_payload = next((x for x in pond_payloads if not x.get('is_completed')), pond_payloads[0])
         pond_id_int = selected_payload['pond'].id
 
-    all_series = [
-        {'key': f"p{x['pond'].id}", 'label': x['pond'].name}
-        for x in pond_payloads
-    ]
     all_chart = [all_chart_rows[d] for d in sorted(all_chart_rows)]
+    all_chart_docs = [row['doc'] for row in all_chart]
+    all_series = []
+    for payload in pond_payloads:
+        # Metadata per titik digunakan oleh tooltip interaktif grafik semua kolam.
+        # Titik aktual diprioritaskan apabila DOC aktual dan proyeksi berimpit.
+        point_map = {}
+        for point in payload.get('projection', []):
+            point_map[int(point.get('doc') or 0)] = {
+                **point,
+                'pond_name': payload['pond'].name,
+                'status_pond': 'Selesai panen' if payload.get('is_completed') else 'Aktif',
+            }
+        for point in payload.get('actual', []):
+            point_map[int(point.get('doc') or 0)] = {
+                **point,
+                'pond_name': payload['pond'].name,
+                'status_pond': 'Selesai panen' if payload.get('is_completed') else 'Aktif',
+                'source': point.get('source') or 'Sampling aktual',
+            }
+        all_series.append({
+            'key': f"p{payload['pond'].id}",
+            'label': payload['pond'].name,
+            'status': 'Selesai panen' if payload.get('is_completed') else 'Aktif',
+            'rows': [point_map.get(doc) for doc in all_chart_docs],
+        })
 
     active_payloads = [x for x in pond_payloads if not x.get('is_completed')]
     completed_payloads = [x for x in pond_payloads if x.get('is_completed')]
