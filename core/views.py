@@ -7,7 +7,7 @@ from ponds.models import Pond
 from operations.models import DailyParameter, SamplingRecord, Harvest, SiphonRecord
 from operations.services.biomass import calculate_index_biomass_snapshot
 from sales.models import Sale, SaleItem
-from finance.models import OperationalExpense
+from finance.models import OperationalExpense, TradeAccount
 from finance.services.profit_loss import calculate_profit_loss
 from django.db.models import Sum
 from django.utils import timezone
@@ -108,6 +108,35 @@ def dashboard(request):
         profit_loss_status = 'Rugi'
     else:
         profit_loss_status = 'Impas'
+
+    # Ringkasan utang usaha untuk Dashboard owner. Utang merupakan kewajiban
+    # lintas siklus sehingga seluruh akun utang yang masih memiliki saldo
+    # ditampilkan, tidak hanya utang pada siklus yang sedang dipilih.
+    payable_accounts = list(
+        TradeAccount.objects.filter(account_type=TradeAccount.PAYABLE)
+        .prefetch_related('payments')
+        .order_by('due_date', 'id')
+    )
+    unpaid_payables = [account for account in payable_accounts if account.outstanding_amount > 0]
+    unpaid_payables_total = sum(
+        (account.outstanding_amount for account in unpaid_payables), Decimal('0')
+    )
+    unpaid_payables_count = len(unpaid_payables)
+
+    month_start = today.replace(day=1)
+    if month_start.month == 12:
+        next_month_start = month_start.replace(year=month_start.year + 1, month=1)
+    else:
+        next_month_start = month_start.replace(month=month_start.month + 1)
+    due_this_month = [
+        account for account in unpaid_payables
+        if month_start <= account.due_date < next_month_start
+    ]
+    due_this_month_total = sum(
+        (account.outstanding_amount for account in due_this_month), Decimal('0')
+    )
+    due_this_month_count = len(due_this_month)
+    nearest_due_payable = due_this_month[0] if due_this_month else None
 
     # Realisasi panen riil diambil langsung dari menu Panen pada siklus terpilih.
     harvest_qs = filter_selected_cycle(
@@ -544,6 +573,11 @@ def dashboard(request):
         'profit_loss_total': profit_loss_total,
         'profit_margin_percent': profit_margin_percent,
         'profit_loss_status': profit_loss_status,
+        'unpaid_payables_total': unpaid_payables_total,
+        'unpaid_payables_count': unpaid_payables_count,
+        'due_this_month_total': due_this_month_total,
+        'due_this_month_count': due_this_month_count,
+        'nearest_due_payable': nearest_due_payable,
         'selected_cycle': selected_cycle,
         'harvest_total_kg': harvest_total_kg,
         'harvest_total_ton': harvest_total_ton,
