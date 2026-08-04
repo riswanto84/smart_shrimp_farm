@@ -952,6 +952,12 @@ from calendar import monthrange
 from django.db.models import Q
 from django.http import HttpResponse
 from .models import OtherRevenue, BalanceEntry, FixedAsset, TradeAccount, TradePayment
+from finance.services.depreciation import (
+    calculate_asset_depreciation,
+    calculate_depreciation_summary,
+    fiscal_life_years,
+    months_used,
+)
 
 
 def _as_date(request):
@@ -987,42 +993,15 @@ def _date_period(request):
 
 
 def _fiscal_life(group):
-    return {
-        'group_1': 4,
-        'group_2': 8,
-        'group_3': 16,
-        'group_4': 20,
-        'permanent_building': 20,
-        'non_permanent_building': 10,
-    }.get(group)
+    return fiscal_life_years(group)
 
 
 def _months_used(asset, as_of):
-    if asset.use_date > as_of or asset.fiscal_group == 'non_depreciable':
-        return 0
-    months = (as_of.year - asset.use_date.year) * 12 + as_of.month - asset.use_date.month + 1
-    life = _fiscal_life(asset.fiscal_group)
-    if life:
-        months = min(months, life * 12)
-    return max(months, 0)
+    return months_used(asset, as_of)
 
 
 def _asset_depreciation(asset, as_of):
-    cost = asset.total_cost
-    life = _fiscal_life(asset.fiscal_group)
-    if not life or asset.fiscal_group == 'non_depreciable':
-        annual = Decimal('0')
-        accumulated = Decimal('0')
-    else:
-        depreciable = max(cost - (asset.residual_value or Decimal('0')), Decimal('0'))
-        annual = depreciable / Decimal(life)
-        accumulated = min((annual / Decimal('12')) * Decimal(_months_used(asset, as_of)), depreciable)
-    return {
-        'annual': annual,
-        'accumulated': accumulated,
-        'book_value': max(cost - accumulated, Decimal('0')),
-        'life': life,
-    }
+    return calculate_asset_depreciation(asset, as_of)
 
 
 def _calculate_profit_loss_period(date_from, date_to, cycle=None):
@@ -1829,25 +1808,40 @@ def edit_asset(request,pk):
 @login_required
 @permission_required('finance.tax_reports')
 def depreciation_report(request):
-    as_of=_as_date(request); year=as_of.year; rows=[]
-    total_cost=total_year=total_accumulated=total_book=Decimal('0')
-    for a in FixedAsset.objects.exclude(status='disposed'):
-        dep=_asset_depreciation(a,as_of)
-        year_start=timezone.datetime(year,1,1).date()
-        before=_asset_depreciation(a,year_start-timedelta(days=1))['accumulated']
-        current=max(dep['accumulated']-before,Decimal('0'))
-        row={'asset':a,**dep,'current_year':current}; rows.append(row)
-        total_cost+=a.total_cost; total_year+=current; total_accumulated+=dep['accumulated']; total_book+=dep['book_value']
-    return render(request,'finance/depreciation.html',locals())
+    as_of = _as_date(request)
+    summary = calculate_depreciation_summary(as_of=as_of)
+    rows = summary['rows']
+    total_cost = summary['total_cost']
+    total_year = summary['period_depreciation']
+    total_accumulated = summary['accumulated_depreciation']
+    total_book = summary['book_value']
+    asset_count = summary['asset_count']
+    return render(request, 'finance/depreciation.html', locals())
 
 
 @login_required
 @permission_required('finance.tax_reports')
 def export_depreciation_pdf(request):
-    as_of=_as_date(request); rows=[]; tc=ta=tb=Decimal('0')
-    for a in FixedAsset.objects.exclude(status='disposed'):
-        d=_asset_depreciation(a,as_of); tc+=a.total_cost; ta+=d['accumulated']; tb+=d['book_value']; rows.append([a.code,a.name,a.get_fiscal_group_display(),rupiah(a.total_cost),rupiah(d['annual']),rupiah(d['accumulated']),rupiah(d['book_value'])])
-    return export_pdf('daftar_aset_penyusutan','Daftar Aset dan Penyusutan Fiskal',f"Posisi per {as_of.strftime('%d/%m/%Y')}",['Kode','Nama Aset','Kelompok','Perolehan','Penyusutan/Tahun','Akumulasi','Nilai Buku'],rows,[['','','TOTAL',rupiah(tc),'',rupiah(ta),rupiah(tb)]])
+    as_of = _as_date(request)
+    summary = calculate_depreciation_summary(as_of=as_of)
+    rows = []
+    for item in summary['rows']:
+        asset = item['asset']
+        rows.append([
+            asset.code, asset.name, asset.get_fiscal_group_display(),
+            rupiah(asset.total_cost), rupiah(item['period_depreciation']),
+            rupiah(item['accumulated']), rupiah(item['book_value']),
+        ])
+    totals = [['', '', 'TOTAL', rupiah(summary['total_cost']),
+               rupiah(summary['period_depreciation']),
+               rupiah(summary['accumulated_depreciation']),
+               rupiah(summary['book_value'])]]
+    return export_pdf(
+        'daftar_aset_penyusutan', 'Daftar Aset dan Penyusutan Fiskal',
+        f"Posisi per {as_of.strftime('%d/%m/%Y')}",
+        ['Kode','Nama Aset','Kelompok','Perolehan','Penyusutan Tahun Ini','Akumulasi','Nilai Buku'],
+        rows, totals,
+    )
 
 
 

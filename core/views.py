@@ -9,6 +9,7 @@ from operations.services.biomass import calculate_index_biomass_snapshot
 from sales.models import Sale, SaleItem
 from finance.models import OperationalExpense, TradeAccount
 from finance.services.profit_loss import calculate_profit_loss
+from finance.services.depreciation import calculate_depreciation_summary
 from django.db.models import Sum
 from django.utils import timezone
 from decimal import Decimal
@@ -90,6 +91,9 @@ def dashboard(request):
     category_totals = finance_result['category_totals']
     payroll_total = category_totals.get('Tenaga Kerja', Decimal('0'))
     depreciation_total = category_totals.get('Penyusutan', Decimal('0'))
+    depreciation_summary = finance_result.get('depreciation_summary') or calculate_depreciation_summary(as_of=today)
+    depreciation_asset_count = depreciation_summary['asset_count']
+    depreciation_book_value = depreciation_summary['book_value']
     administration_total = category_totals.get('Administrasi', Decimal('0'))
     production_operational_total = max(
         expense_total - payroll_total - depreciation_total - administration_total,
@@ -569,6 +573,8 @@ def dashboard(request):
         'production_operational_total': production_operational_total,
         'payroll_total': payroll_total,
         'depreciation_total': depreciation_total,
+        'depreciation_asset_count': depreciation_asset_count,
+        'depreciation_book_value': depreciation_book_value,
         'administration_total': administration_total,
         'profit_loss_total': profit_loss_total,
         'profit_margin_percent': profit_margin_percent,
