@@ -1889,6 +1889,10 @@ def _trade_queryset(request, account_type):
     for item in items:
         if status == 'open' and item.outstanding_amount <= 0:
             continue
+        if status == 'unpaid' and not (item.paid_amount <= 0 and item.outstanding_amount > 0):
+            continue
+        if status == 'partial' and not (item.paid_amount > 0 and item.outstanding_amount > 0):
+            continue
         if status == 'paid' and item.outstanding_amount > 0:
             continue
         if status == 'overdue' and not item.is_overdue:
@@ -1900,7 +1904,13 @@ def _trade_queryset(request, account_type):
             elif age_days <= 60: bucket = '31–60 hari'
             elif age_days <= 90: bucket = '61–90 hari'
             else: bucket = '> 90 hari'
-        rows.append({'item': item, 'paid': item.paid_amount, 'outstanding': item.outstanding_amount, 'age_days': age_days, 'bucket': bucket})
+        progress = Decimal('0')
+        if item.original_amount and item.original_amount > 0:
+            progress = min((item.paid_amount / item.original_amount) * Decimal('100'), Decimal('100'))
+        rows.append({
+            'item': item, 'paid': item.paid_amount, 'outstanding': item.outstanding_amount,
+            'age_days': age_days, 'bucket': bucket, 'progress': progress,
+        })
     return rows
 
 
@@ -1993,10 +2003,29 @@ def receivables(request):
 def payables(request):
     rows = _trade_queryset(request, TradeAccount.PAYABLE)
     original, paid, outstanding, overdue = _trade_summary(rows)
+    today = timezone.localdate()
+    month_end = (today.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+    week_end = today + timedelta(days=7)
+    partial_rows = [r for r in rows if r['paid'] > 0 and r['outstanding'] > 0]
+    unpaid_rows = [r for r in rows if r['paid'] <= 0 and r['outstanding'] > 0]
+    due_week_rows = [r for r in rows if r['outstanding'] > 0 and today <= r['item'].due_date <= week_end]
+    due_month_rows = [r for r in rows if r['outstanding'] > 0 and today <= r['item'].due_date <= month_end]
+    aging = {
+        'not_due': sum((r['outstanding'] for r in rows if r['outstanding'] > 0 and not r['item'].is_overdue), Decimal('0')),
+        'd1_30': sum((r['outstanding'] for r in rows if 1 <= r['age_days'] <= 30), Decimal('0')),
+        'd31_60': sum((r['outstanding'] for r in rows if 31 <= r['age_days'] <= 60), Decimal('0')),
+        'd61_90': sum((r['outstanding'] for r in rows if 61 <= r['age_days'] <= 90), Decimal('0')),
+        'd90_plus': sum((r['outstanding'] for r in rows if r['age_days'] > 90), Decimal('0')),
+    }
+    overall_progress = (paid / original * Decimal('100')) if original else Decimal('0')
     return render(request, 'finance/trade_accounts.html', {
         'rows': rows, 'account_type': TradeAccount.PAYABLE, 'title': 'Utang Usaha',
         'partner_label': 'Supplier/Pemasok', 'original': original, 'paid': paid,
         'outstanding': outstanding, 'overdue': overdue,
+        'partial_count': len(partial_rows), 'unpaid_count': len(unpaid_rows),
+        'due_week_count': len(due_week_rows), 'due_week_amount': sum((r['outstanding'] for r in due_week_rows), Decimal('0')),
+        'due_month_count': len(due_month_rows), 'due_month_amount': sum((r['outstanding'] for r in due_month_rows), Decimal('0')),
+        'aging': aging, 'overall_progress': overall_progress,
     })
 
 
@@ -2095,9 +2124,12 @@ def edit_trade_account(request, pk):
 @permission_required('finance.tax_reports')
 def trade_detail(request, pk):
     obj = get_object_or_404(TradeAccount.objects.prefetch_related('payments__documents', 'documents'), pk=pk)
+    paid = obj.paid_amount
+    outstanding = obj.outstanding_amount
+    payment_progress = (paid / obj.original_amount * Decimal('100')) if obj.original_amount else Decimal('0')
     return render(request, 'finance/trade_account_detail.html', {
-        'obj':obj, 'payments':obj.payments.all(), 'paid':obj.paid_amount,
-        'outstanding':obj.outstanding_amount,
+        'obj':obj, 'payments':obj.payments.all(), 'paid':paid,
+        'outstanding':outstanding, 'payment_progress':payment_progress,
         'account_documents': obj.documents.filter(payment__isnull=True),
     })
 
@@ -2136,7 +2168,7 @@ def delete_trade_payment(request, pk):
     account = payment.trade_account
     payment.delete()
     _sync_sale_status_from_receivable(account)
-    messages.success(request, 'Pembayaran berhasil dihapus dan saldo piutang diperbarui.')
+    messages.success(request, 'Pembayaran berhasil dihapus dan saldo utang/piutang diperbarui.')
     return redirect('finance:trade_detail', pk=account_pk)
 
 
