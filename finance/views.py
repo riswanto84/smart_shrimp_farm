@@ -27,6 +27,7 @@ from core.pagination import paginate_queryset
 from cultivation.utils import get_selected_cycle, filter_selected_cycle
 from cultivation.models import CultivationCycle
 from finance.services.profit_loss import calculate_profit_loss
+from finance.services.final_cycle_profit import latest_harvest_sale_price
 
 
 EXPENSE_DOCUMENT_EXTENSIONS = {'.pdf', '.jpg', '.jpeg', '.png', '.webp', '.doc', '.docx', '.xls', '.xlsx'}
@@ -1414,7 +1415,9 @@ def _balance_sheet_data(request):
         bucket = sale_price_buckets.setdefault(key, {'weight': Decimal('0'), 'amount': Decimal('0')})
         bucket['weight'] += weight
         bucket['amount'] += weight * price_row
-    average_sale_price = (sold_amount / sold_weight) if sold_weight else Decimal('0')
+    historical_average_sale_price = (sold_amount / sold_weight) if sold_weight else Decimal('0')
+    latest_price_info = latest_harvest_sale_price(cycle=selected_cycle, as_of=as_of)
+    average_sale_price = decimal_value(latest_price_info.get('price'))
 
     def market_price_for_size(current_size, cycle):
         # Kebijakan penilaian biologis: seluruh biomassa aktif memakai harga
@@ -1424,8 +1427,8 @@ def _balance_sheet_data(request):
         if average_sale_price > 0:
             return (
                 average_sale_price,
-                'Harga jual rata-rata tertimbang siklus',
-                {'class': 'green', 'label': 'Rata-rata aktual'},
+                latest_price_info.get('source') or 'Harga jual panen terbaru',
+                {'class': 'green', 'label': 'Harga terbaru'},
             )
         if cycle and decimal_value(getattr(cycle, 'estimated_price_per_kg', 0)) > 0:
             return (
@@ -1710,7 +1713,10 @@ def _balance_sheet_data(request):
         'biological_assets_total': biological_assets_total, 'pond_assets': pond_assets,
         'excluded_pond_assets': excluded_pond_assets,
         'average_sale_price': average_sale_price,
-        'biological_price_source': ('Harga jual rata-rata tertimbang siklus' if average_sale_price > 0 else 'Harga estimasi siklus'),
+        'biological_price_source': (latest_price_info.get('source') if average_sale_price > 0 else 'Harga estimasi siklus'),
+        'biological_price_date': latest_price_info.get('date'),
+        'biological_price_invoice': latest_price_info.get('invoice_no', ''),
+        'historical_average_sale_price': historical_average_sale_price,
         'final_cycle_profit': final_cycle_profit,
         'accounting_current_assets': accounting_current_assets,
         'operational_current_assets': operational_current_assets,

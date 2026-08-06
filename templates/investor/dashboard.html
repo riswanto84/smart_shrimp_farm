@@ -36,7 +36,7 @@
   </div></div></div>
 </div>
 <div class="panel mt-3"><h2>Dasar Perhitungan</h2><div class="table-responsive"><table class="table app-table"><tbody>
-<tr><td>Harga jual rata-rata</td><td class="text-end"><b>{{ final_cycle_profit.average_sale_price|rupiah }}/kg</b></td></tr>
+<tr><td>Harga panen terbaru</td><td class="text-end"><b>{{ final_cycle_profit.price_used|rupiah }}/kg</b><div class="small text-muted">{{ final_cycle_profit.price_source }}{% if final_cycle_profit.latest_harvest_price_date %} · {{ final_cycle_profit.latest_harvest_price_date|date:"d M Y" }}{% endif %}</div></td></tr>
 <tr><td>Harga yang digunakan</td><td class="text-end"><b>{{ final_cycle_profit.price_used|rupiah }}/kg</b></td></tr>
 <tr><td>Biomassa Index tersisa</td><td class="text-end"><b>{{ final_cycle_profit.remaining_biomass_kg|angka:2 }} kg</b></td></tr>
 <tr><td>Saldo utang belum dibayar</td><td class="text-end"><b>{{ final_cycle_profit.unpaid_payables|rupiah }}</b></td></tr>

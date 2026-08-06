@@ -56,6 +56,64 @@ def weighted_average_sale_price(*, cycle=None, as_of=None):
     return ZERO, 'Harga belum tersedia'
 
 
+
+def latest_harvest_sale_price(*, cycle=None, as_of=None):
+    """Harga jual dari transaksi panen/penjualan paling baru yang valid.
+
+    Jika nota terbaru memiliki beberapa item/size, harga dihitung rata-rata
+    tertimbang hanya untuk nota terbaru tersebut. Fallback selanjutnya adalah
+    rata-rata penjualan siklus, lalu harga estimasi siklus.
+    """
+    as_of = as_of or timezone.localdate()
+    valid_items = SaleItem.objects.select_related('sale', 'harvest').filter(
+        sale__date__date__lte=as_of,
+        weight_kg__gt=0,
+        price_per_kg__gt=0,
+    ).exclude(sale__status__in=['Gagal', 'Expired', 'Dibatalkan', 'Refund'])
+    if cycle is not None:
+        valid_items = valid_items.filter(sale__cycle=cycle)
+
+    latest_item = valid_items.order_by('-sale__date', '-sale_id', '-id').first()
+    if latest_item is not None:
+        latest_sale = latest_item.sale
+        latest_items = valid_items.filter(sale=latest_sale)
+        totals = latest_items.aggregate(weight=Sum('weight_kg'), amount=Sum('subtotal'))
+        weight = _decimal(totals.get('weight'))
+        amount = _decimal(totals.get('amount'))
+        if weight > 0 and amount > 0:
+            return {
+                'price': (amount / weight).quantize(Decimal('0.01')),
+                'source': 'Harga jual transaksi panen terbaru',
+                'date': timezone.localtime(latest_sale.date).date() if timezone.is_aware(latest_sale.date) else latest_sale.date.date(),
+                'invoice_no': latest_sale.invoice_no,
+                'sale_id': latest_sale.pk,
+            }
+
+    # Fallback untuk instalasi lama yang belum memiliki SaleItem lengkap.
+    sales = Sale.objects.filter(
+        date__date__lte=as_of, total_kg__gt=0, total_amount__gt=0
+    ).exclude(status__in=['Gagal', 'Expired', 'Dibatalkan', 'Refund'])
+    if cycle is not None:
+        sales = sales.filter(cycle=cycle)
+    latest_sale = sales.order_by('-date', '-id').first()
+    if latest_sale is not None and _decimal(latest_sale.total_kg) > 0:
+        return {
+            'price': (_decimal(latest_sale.total_amount) / _decimal(latest_sale.total_kg)).quantize(Decimal('0.01')),
+            'source': 'Harga nota penjualan terbaru',
+            'date': timezone.localtime(latest_sale.date).date() if timezone.is_aware(latest_sale.date) else latest_sale.date.date(),
+            'invoice_no': latest_sale.invoice_no,
+            'sale_id': latest_sale.pk,
+        }
+
+    average_price, average_source = weighted_average_sale_price(cycle=cycle, as_of=as_of)
+    return {
+        'price': average_price,
+        'source': average_source,
+        'date': None,
+        'invoice_no': '',
+        'sale_id': None,
+    }
+
 def outstanding_payables(*, cycle=None, as_of=None):
     """Saldo utang yang belum dibayar sampai tanggal laporan."""
     as_of = as_of or timezone.localdate()
@@ -101,9 +159,11 @@ def calculate_final_cycle_profit(*, cycle=None, as_of=None, simulated_price=None
         rows = [row for row in rows if getattr(row, 'cycle', None) and row.cycle.id == cycle.id]
     remaining_biomass_kg = sum((_decimal(row.biomass_index_kg) for row in rows), ZERO)
 
-    average_price, price_source = weighted_average_sale_price(cycle=cycle, as_of=as_of)
+    latest_price_info = latest_harvest_sale_price(cycle=cycle, as_of=as_of)
+    latest_price = _decimal(latest_price_info.get('price'))
     simulation_price = _decimal(simulated_price)
-    price_used = simulation_price if simulation_price > 0 else average_price
+    price_used = simulation_price if simulation_price > 0 else latest_price
+    price_source = latest_price_info.get('source') or 'Harga belum tersedia'
     if simulation_price > 0:
         price_source = 'Harga simulasi pengguna'
 
@@ -129,7 +189,10 @@ def calculate_final_cycle_profit(*, cycle=None, as_of=None, simulated_price=None
         'realized_revenue': realized_revenue,
         'current_expenses': current_expenses,
         'remaining_biomass_kg': remaining_biomass_kg.quantize(Decimal('0.01')),
-        'average_sale_price': average_price,
+        'average_sale_price': latest_price,  # kompatibilitas template lama
+        'latest_harvest_price': latest_price,
+        'latest_harvest_price_date': latest_price_info.get('date'),
+        'latest_harvest_invoice_no': latest_price_info.get('invoice_no', ''),
         'price_used': price_used.quantize(Decimal('0.01')),
         'price_source': price_source,
         'remaining_biomass_value': remaining_biomass_value,

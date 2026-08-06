@@ -120,7 +120,7 @@
   <div class="panel-head">
     <div>
       <h2><i class="fa-solid fa-chart-pie"></i> Estimasi Laba Akhir Siklus</h2>
-      <span>Proyeksi memakai Biomassa Index, harga jual rata-rata, pelunasan utang, dan PPh Final 0,5%</span>
+      <span>Proyeksi memakai Biomassa Index, harga panen terbaru, pelunasan utang, dan PPh Final 0,5%</span>
     </div>
     <form method="get" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <input type="number" name="simulation_price" min="0" step="1000" value="{{ final_cycle_profit.price_used|floatformat:0 }}" aria-label="Harga simulasi per kilogram" style="width:160px;padding:10px 12px;border:1px solid #dbe5f1;border-radius:10px;">
@@ -158,9 +158,9 @@
     <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-water"></i></div><div><span>Estimasi Sisa Udang di Kolam (FR)</span><strong>{{ production_total_kg|angka:2 }} kg</strong><small>{{ production_total_ton|floatformat:2 }} ton · biomassa FR setelah panen parsial dan mortalitas</small></div></div>
     <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-calculator"></i></div><div><span>Estimasi Sisa Udang (Index)</span><strong>{{ production_index_total_kg|angka:2 }} kg</strong><small>{{ production_index_total_ton|floatformat:2 }} ton · biomassa index setelah panen parsial dan mortalitas</small></div></div>
     <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-bullseye"></i></div><div><span>Target Produksi</span><strong>{{ target_harvest_ton|floatformat:2 }} ton</strong><small>Sisa target {{ harvest_remaining_kg|angka:2 }} kg</small></div></div>
-    <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-tag"></i></div><div><span>Harga Jual Rata-rata</span><strong>{{ average_sale_price|rupiah }}</strong><small>Omzet ÷ berat penjualan</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-tag"></i></div><div><span>Harga Penilaian Sisa Udang</span><strong>{{ average_sale_price|rupiah }}</strong><small>{{ final_cycle_profit.price_source }}{% if final_cycle_profit.latest_harvest_price_date %} · {{ final_cycle_profit.latest_harvest_price_date|date:"d M Y" }}{% endif %}</small></div></div>
     <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-ruler-combined"></i></div><div><span>Size Panen Riil Terbaru</span><strong>{{ latest_harvest_size }}</strong><small>Berdasarkan detail penjualan/panen terbaru</small></div></div>
-    <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-money-bill-trend-up"></i></div><div><span>Harga Panen Terbaru</span><strong>{% if latest_harvest_price > 0 %}{{ latest_harvest_price|rupiah }}{% else %}—{% endif %}</strong><small>Harga rata-rata tertimbang per kg</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-money-bill-trend-up"></i></div><div><span>Harga Panen Terbaru</span><strong>{% if latest_harvest_price > 0 %}{{ latest_harvest_price|rupiah }}{% else %}—{% endif %}</strong><small>Harga transaksi panen/penjualan paling baru</small></div></div>
   </div>
   {% if partial_harvest_by_pond %}
   <div class="table-responsive" style="margin:4px 0 18px;">
