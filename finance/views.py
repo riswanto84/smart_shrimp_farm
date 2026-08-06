@@ -1392,11 +1392,14 @@ def _balance_sheet_data(request):
     # Peta harga rata-rata tertimbang per size. Ini membuat nilai tiap kolam
     # mengikuti ukuran udang, bukan memakai satu harga rata-rata untuk semua.
     sale_price_buckets = {}
-    sold_items = SaleItem.objects.filter(
+    sold_items_qs = SaleItem.objects.filter(
         sale__date__date__lte=as_of,
         weight_kg__gt=0,
         price_per_kg__gt=0,
-    ).values('size_text', 'weight_kg', 'price_per_kg')
+    ).exclude(sale__status__in=['Gagal', 'Expired', 'Dibatalkan', 'Refund'])
+    if selected_cycle is not None:
+        sold_items_qs = sold_items_qs.filter(sale__cycle=selected_cycle)
+    sold_items = sold_items_qs.values('size_text', 'weight_kg', 'price_per_kg')
     sold_amount = Decimal('0')
     sold_weight = Decimal('0')
     for row in sold_items:
@@ -1414,27 +1417,21 @@ def _balance_sheet_data(request):
     average_sale_price = (sold_amount / sold_weight) if sold_weight else Decimal('0')
 
     def market_price_for_size(current_size, cycle):
-        if current_size and sale_price_buckets:
-            nearest = min(sale_price_buckets, key=lambda key: abs(Decimal(key) - current_size))
-            distance = abs(Decimal(nearest) - current_size)
-            bucket = sale_price_buckets[nearest]
-            if distance <= Decimal('15') and bucket['weight'] > 0:
-                return (
-                    bucket['amount'] / bucket['weight'],
-                    f'Penjualan aktual size {nearest}',
-                    {'class': 'green', 'label': 'Aktual sesuai size'},
-                )
-        if cycle and decimal_value(getattr(cycle, 'estimated_price_per_kg', 0)) > 0:
-            return (
-                decimal_value(cycle.estimated_price_per_kg),
-                'Estimasi siklus',
-                {'class': 'amber', 'label': 'Harga estimasi'},
-            )
+        # Kebijakan penilaian biologis: seluruh biomassa aktif memakai harga
+        # jual rata-rata tertimbang aktual pada siklus yang dipilih. Size tetap
+        # ditampilkan sebagai informasi biologis, tetapi tidak lagi membuat
+        # nilai antar-kolam memakai sumber harga berbeda.
         if average_sale_price > 0:
             return (
                 average_sale_price,
-                'Rata-rata seluruh penjualan',
-                {'class': 'amber', 'label': 'Harga rata-rata'},
+                'Harga jual rata-rata tertimbang siklus',
+                {'class': 'green', 'label': 'Rata-rata aktual'},
+            )
+        if cycle and decimal_value(getattr(cycle, 'estimated_price_per_kg', 0)) > 0:
+            return (
+                decimal_value(cycle.estimated_price_per_kg),
+                'Estimasi harga siklus',
+                {'class': 'amber', 'label': 'Harga estimasi'},
             )
         return Decimal('0'), 'Belum tersedia', {'class': 'red', 'label': 'Harga belum ada'}
 
@@ -1689,6 +1686,13 @@ def _balance_sheet_data(request):
         {'label': 'Aset Tetap Bersih', 'amount': net_fixed_assets, 'percent': percentage(net_fixed_assets, total_assets)},
     ]
 
+    from finance.services.final_cycle_profit import calculate_final_cycle_profit
+    final_cycle_profit = calculate_final_cycle_profit(
+        cycle=selected_cycle,
+        as_of=as_of,
+        simulated_price=request.GET.get('simulation_price'),
+    )
+
     validation_checks = [
         {'label': 'Persamaan neraca seimbang', 'ok': difference == 0},
         {'label': 'Baseline aset biologis telah ditetapkan', 'ok': not biological_valuation_is_provisional},
@@ -1706,6 +1710,8 @@ def _balance_sheet_data(request):
         'biological_assets_total': biological_assets_total, 'pond_assets': pond_assets,
         'excluded_pond_assets': excluded_pond_assets,
         'average_sale_price': average_sale_price,
+        'biological_price_source': ('Harga jual rata-rata tertimbang siklus' if average_sale_price > 0 else 'Harga estimasi siklus'),
+        'final_cycle_profit': final_cycle_profit,
         'accounting_current_assets': accounting_current_assets,
         'operational_current_assets': operational_current_assets,
         'current_assets': current_assets, 'total_assets': total_assets,
@@ -2123,14 +2129,23 @@ def edit_trade_account(request, pk):
 @login_required
 @permission_required('finance.tax_reports')
 def trade_detail(request, pk):
-    obj = get_object_or_404(TradeAccount.objects.prefetch_related('payments__documents', 'documents'), pk=pk)
+    obj = get_object_or_404(
+        TradeAccount.objects.prefetch_related('payments__documents', 'documents__uploaded_by'),
+        pk=pk,
+    )
     paid = obj.paid_amount
     outstanding = obj.outstanding_amount
     payment_progress = (paid / obj.original_amount * Decimal('100')) if obj.original_amount else Decimal('0')
+    all_documents = list(obj.documents.select_related('payment', 'uploaded_by').all())
+    account_documents = [doc for doc in all_documents if doc.payment_id is None]
+    payment_documents = [doc for doc in all_documents if doc.payment_id is not None]
     return render(request, 'finance/trade_account_detail.html', {
-        'obj':obj, 'payments':obj.payments.all(), 'paid':paid,
-        'outstanding':outstanding, 'payment_progress':payment_progress,
-        'account_documents': obj.documents.filter(payment__isnull=True),
+        'obj': obj, 'payments': obj.payments.all(), 'paid': paid,
+        'outstanding': outstanding, 'payment_progress': payment_progress,
+        'account_documents': account_documents,
+        'payment_documents': payment_documents,
+        'all_documents': all_documents,
+        'document_count': len(all_documents),
     })
 
 
@@ -2183,6 +2198,38 @@ def upload_trade_documents(request, pk):
     elif not request.FILES.getlist('documents'):
         messages.error(request, 'Pilih minimal satu dokumen untuk diunggah.')
     return redirect('finance:trade_detail', pk=obj.pk)
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def preview_trade_document(request, pk):
+    document = get_object_or_404(TradeDocument.objects.select_related('trade_account'), pk=pk)
+    if not document.file:
+        raise Http404('File tidak tersedia.')
+    try:
+        file_handle = document.file.open('rb')
+    except (FileNotFoundError, OSError):
+        raise Http404('File tidak ditemukan pada penyimpanan.')
+    filename = document.original_name or Path(document.file.name).name
+    content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+    response = FileResponse(file_handle, as_attachment=False, filename=filename, content_type=content_type)
+    response['Content-Disposition'] = f'inline; filename="{filename.replace(chr(34), "")}"'
+    return response
+
+
+@login_required
+@permission_required('finance.tax_reports')
+def download_trade_document(request, pk):
+    document = get_object_or_404(TradeDocument.objects.select_related('trade_account'), pk=pk)
+    if not document.file:
+        raise Http404('File tidak tersedia.')
+    try:
+        file_handle = document.file.open('rb')
+    except (FileNotFoundError, OSError):
+        raise Http404('File tidak ditemukan pada penyimpanan.')
+    filename = document.original_name or Path(document.file.name).name
+    content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
+    return FileResponse(file_handle, as_attachment=True, filename=filename, content_type=content_type)
 
 
 @login_required

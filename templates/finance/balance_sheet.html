@@ -140,7 +140,7 @@
           {% for e in equities %}<tr><td>{{ e.account_name }}</td><td>{{ e.amount|rupiah }}</td></tr>{% endfor %}
           <tr><td>Laba/Rugi Operasional Tahun Berjalan</td><td class="{% if operating_profit < 0 %}negative{% endif %}">{{ operating_profit|rupiah }}</td></tr>
           <tr><td>Cadangan Pengakuan Awal Aset Biologis<div class="small">Baseline {{ biological_baseline_date|date:"d/m/Y" }}{% if biological_valuation_is_provisional %} · sementara{% endif %}</div></td><td>{{ biological_opening_reserve|rupiah }}</td></tr>
-          <tr><td>Perubahan Nilai Wajar Aset Biologis<div class="small">Kenaikan/penurunan kumulatif dibanding baseline</div></td><td class="{% if biological_fair_value_change_cumulative < 0 %}negative{% endif %}">{{ biological_fair_value_change_cumulative|rupiah }}</td></tr>
+          <tr><td>Perubahan Nilai Wajar Aset Biologis<div class="small">Kenaikan/penurunan kumulatif dibanding baseline · harga penilaian {{ average_sale_price|rupiah }}/kg</div></td><td class="{% if biological_fair_value_change_cumulative < 0 %}negative{% endif %}">{{ biological_fair_value_change_cumulative|rupiah }}</td></tr>
           <tr><td><strong>Laba/Rugi Setelah Penilaian Biologis</strong></td><td class="{% if current_profit < 0 %}negative{% endif %}"><strong>{{ current_profit|rupiah }}</strong></td></tr>
           <tr class="grand"><th>Total Ekuitas</th><th>{{ total_equity_with_profit|rupiah }}</th></tr>
         </table>
@@ -171,8 +171,28 @@
         <div class="health-card {{ biomass_value_health.class }}"><div class="health-name"><span>Nilai Biomassa Aktif</span><span class="health-badge">{{ biomass_value_health.label }}</span></div><strong class="health-value">{{ biological_assets_total|rupiah }}</strong><span class="health-desc">Status berdasarkan coverage biomassa terhadap kewajiban: sehat ≥2,00x; waspada 1,00–&lt;2,00x; kritis &lt;1,00x.</span><span class="health-data-note {{ biomass_data_health.class }}">Kualitas data: {{ biomass_data_health.label }}</span></div>
         <div class="health-card {{ working_capital_health.class }}"><div class="health-name"><span>Modal Kerja Operasional</span><span class="health-badge">{{ working_capital_health.label }}</span></div><strong class="health-value">{{ operational_working_capital|rupiah }}</strong><span class="health-desc">Aset lancar akuntansi + biomassa aktif − kewajiban.</span></div>
       </div>
-      <div class="health-note"><i class="fa-solid fa-circle-info"></i> Biomassa merupakan estimasi aset biologis aktif. Sistem memproyeksikan pertumbuhan ABW sampai tanggal neraca, mengurangi populasi karena panen parsial dan mortalitas, serta memilih harga berdasarkan size penjualan aktual terdekat. Kolam panen total/siklus selesai otomatis dikeluarkan.</div>
+      <div class="health-note"><i class="fa-solid fa-circle-info"></i> Biomassa merupakan estimasi aset biologis aktif. Sistem memproyeksikan pertumbuhan ABW sampai tanggal neraca, mengurangi panen parsial dan mortalitas, lalu menilai seluruh biomassa menggunakan harga jual rata-rata tertimbang siklus. Kolam panen total/siklus selesai otomatis dikeluarkan.</div>
     </div>
+  </div>
+
+  <div class="panel" style="margin-top:16px">
+    <div class="panel-head">
+      <div><h2><i class="fa-solid fa-chart-line"></i> Estimasi Laba Akhir Siklus</h2><span>Proyeksi jika seluruh Biomassa Index dipanen, utang dilunasi, dan PPh Final 0,5% dibayar.</span></div>
+      <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        {% if report_mode %}<input type="hidden" name="mode" value="{{ report_mode }}">{% endif %}
+        {% if selected_cycle %}<input type="hidden" name="cycle" value="{{ selected_cycle.id }}">{% endif %}
+        {% if as_of %}<input type="hidden" name="as_of" value="{{ as_of|date:'Y-m-d' }}">{% endif %}
+        <input type="number" name="simulation_price" min="0" step="1000" value="{{ final_cycle_profit.price_used|floatformat:0 }}" style="width:160px;padding:9px 12px;border:1px solid #dbe5f1;border-radius:10px;">
+        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-calculator"></i> Simulasikan</button>
+      </form>
+    </div>
+    <div class="health-grid">
+      <div class="health-card"><div class="health-name"><span>Omzet Terealisasi</span></div><strong class="health-value">{{ final_cycle_profit.realized_revenue|rupiah }}</strong><span class="health-desc">Penjualan yang sudah tercatat.</span></div>
+      <div class="health-card"><div class="health-name"><span>Nilai Sisa Udang</span></div><strong class="health-value">{{ final_cycle_profit.remaining_biomass_value|rupiah }}</strong><span class="health-desc">{{ final_cycle_profit.remaining_biomass_kg|angka:2 }} kg × {{ final_cycle_profit.price_used|rupiah }}/kg.</span></div>
+      <div class="health-card"><div class="health-name"><span>Estimasi Total Biaya</span></div><strong class="health-value">{{ final_cycle_profit.projected_expenses|rupiah }}</strong><span class="health-desc">Termasuk saldo utang {{ final_cycle_profit.unpaid_payables|rupiah }}.</span></div>
+      <div class="health-card {% if final_cycle_profit.final_net_profit >= 0 %}green{% else %}red{% endif %}"><div class="health-name"><span>Laba Bersih Akhir</span><span class="health-badge">Margin {{ final_cycle_profit.final_margin_percent|floatformat:2 }}%</span></div><strong class="health-value">{{ final_cycle_profit.final_net_profit|rupiah }}</strong><span class="health-desc">Setelah pajak {{ final_cycle_profit.estimated_tax|rupiah }}.</span></div>
+    </div>
+    <div class="health-note"><i class="fa-solid fa-circle-info"></i> Harga penilaian: {{ final_cycle_profit.price_used|rupiah }}/kg ({{ final_cycle_profit.price_source }}). Proyeksi berubah mengikuti biomassa, harga, mortalitas, dan transaksi baru.</div>
   </div>
 
   <div class="panel" style="margin-top:16px">

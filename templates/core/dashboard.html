@@ -116,6 +116,37 @@
   </a>
   <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-water"></i></div><div><span>Kolam Aktif</span><strong>{{ active_pond_count }}</strong><small>{{ completed_pond_count }} kolam selesai panen</small></div></div>
 </div>
+<section class="panel final-profit-panel" style="margin-bottom:20px;">
+  <div class="panel-head">
+    <div>
+      <h2><i class="fa-solid fa-chart-pie"></i> Estimasi Laba Akhir Siklus</h2>
+      <span>Proyeksi memakai Biomassa Index, harga jual rata-rata, pelunasan utang, dan PPh Final 0,5%</span>
+    </div>
+    <form method="get" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <input type="number" name="simulation_price" min="0" step="1000" value="{{ final_cycle_profit.price_used|floatformat:0 }}" aria-label="Harga simulasi per kilogram" style="width:160px;padding:10px 12px;border:1px solid #dbe5f1;border-radius:10px;">
+      <button class="btn btn-primary" type="submit"><i class="fa-solid fa-calculator"></i> Simulasikan Harga</button>
+    </form>
+  </div>
+  <div class="kpi-grid" style="margin-bottom:16px;">
+    <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-receipt"></i></div><div><span>Omzet Terealisasi</span><strong>{{ final_cycle_profit.realized_revenue|rupiah }}</strong><small>Penjualan yang sudah tercatat</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-shrimp"></i></div><div><span>Nilai Sisa Udang</span><strong>{{ final_cycle_profit.remaining_biomass_value|rupiah }}</strong><small>{{ final_cycle_profit.remaining_biomass_kg|angka:2 }} kg × {{ final_cycle_profit.price_used|rupiah }}/kg</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-sack-dollar"></i></div><div><span>Potensi Omzet Akhir</span><strong>{{ final_cycle_profit.projected_revenue|rupiah }}</strong><small>{{ final_cycle_profit.price_source }}</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-file-invoice-dollar"></i></div><div><span>Utang Belum Dibayar</span><strong>{{ final_cycle_profit.unpaid_payables|rupiah }}</strong><small>{{ final_cycle_profit.unpaid_payables_count }} dokumen akan dibebankan saat dibayar</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-landmark"></i></div><div><span>Estimasi Pajak 0,5%</span><strong>{{ final_cycle_profit.estimated_tax|rupiah }}</strong><small>Dihitung dari potensi omzet akhir</small></div></div>
+    <div class="kpi-card"><div class="kpi-icon {% if final_cycle_profit.final_net_profit >= 0 %}green{% else %}red{% endif %}"><i class="fa-solid {% if final_cycle_profit.final_net_profit >= 0 %}fa-arrow-trend-up{% else %}fa-arrow-trend-down{% endif %}"></i></div><div><span>Estimasi Laba Bersih Akhir</span><strong>{{ final_cycle_profit.final_net_profit|rupiah }}</strong><small>Margin {{ final_cycle_profit.final_margin_percent|floatformat:2 }}%</small></div></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table app-table align-middle">
+      <thead><tr><th>Pembagian Laba Bersih</th><th class="text-end">Persentase</th><th class="text-end">Estimasi Nilai</th></tr></thead>
+      <tbody>
+        <tr><td><b>Pemilik</b></td><td class="text-end">{{ final_cycle_profit.owner_share_percent|floatformat:0 }}%</td><td class="text-end"><b>{{ final_cycle_profit.owner_amount|rupiah }}</b></td></tr>
+        <tr><td><b>Disimpan sebagai Kas/Laba Ditahan</b></td><td class="text-end">{{ final_cycle_profit.retained_share_percent|floatformat:0 }}%</td><td class="text-end"><b>{{ final_cycle_profit.retained_amount|rupiah }}</b></td></tr>
+        <tr><td><b>Pengelola Tambak</b></td><td class="text-end">{{ final_cycle_profit.manager_share_percent|floatformat:0 }}%</td><td class="text-end"><b>{{ final_cycle_profit.manager_amount|rupiah }}</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <small class="text-muted">Estimasi dapat berubah karena mortalitas, perubahan biomassa, harga jual, pakan, listrik, gaji, biaya panen, dan transaksi tambahan sebelum siklus ditutup.</small>
+</section>
 <section class="panel real-harvest-panel" style="margin-bottom:20px;">
   <div class="panel-head">
     <div><h2>Realisasi Panen Riil</h2><span>{% if selected_cycle %}Siklus {{ selected_cycle.name }}{% else %}Belum ada siklus terpilih{% endif %}</span></div>

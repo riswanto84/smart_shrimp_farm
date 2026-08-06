@@ -1,3 +1,45 @@
 {% extends 'base.html' %}
 {% load currency %}
-{% block content %}<div class="page-head"><div><h1>Dashboard Investor</h1><p>Ringkasan produksi, penjualan, pengeluaran, ROI, dan performa siklus berjalan.</p></div></div><div class="kpi-grid"><div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-coins"></i></div><div><span>Modal Investor</span><strong>{{ modal_investor|rupiah }}</strong><small>Skema 5 tahun</small></div></div><div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-shrimp"></i></div><div><span>Target Produksi</span><strong>± 25 Ton</strong><small>Per siklus</small></div></div><div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-chart-line"></i></div><div><span>Omzet Berjalan</span><strong>{{ sales_total|rupiah }}</strong><small>Data penjualan berjalan</small></div></div><div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-percent"></i></div><div><span>ROI Estimasi</span><strong>16,25%</strong><small>Simulasi siklus</small></div></div></div><div class="row g-3 mt-1"><div class="col-lg-7"><div class="panel"><h2>Produksi per Kolam</h2><div class="fake-chart mt-3"><svg viewBox="0 0 600 220" preserveAspectRatio="none"><path d="M0 180 L100 140 L200 125 L300 90 L400 110 L500 75 L600 65" fill="none" stroke="#0d6efd" stroke-width="5"/></svg></div></div></div><div class="col-lg-5"><div class="panel"><h2>Transparansi Investor</h2><div class="activity-list"><div><i class="fa-solid fa-eye"></i><p><b>Read Only</b><small>Investor tidak bisa mengubah data.</small></p></div><div><i class="fa-solid fa-file-pdf"></i><p><b>Laporan PDF/Excel</b><small>Produksi, penjualan, dan keuangan dapat diunduh.</small></p></div><div><i class="fa-solid fa-camera"></i><p><b>Dokumentasi Kolam</b><small>Foto/video tambak dapat ditampilkan.</small></p></div></div></div></div></div>{% endblock %}
+{% block content %}
+<style>
+.investor-hero{background:linear-gradient(135deg,#082d59,#12658c);color:#fff;border-radius:22px;padding:28px;margin-bottom:20px;display:flex;justify-content:space-between;gap:20px;align-items:center;box-shadow:0 18px 40px rgba(8,45,89,.18)}
+.investor-hero h1{margin:0 0 6px}.investor-hero p{margin:0;color:#d9eefb}.investor-price-form{display:flex;gap:8px;flex-wrap:wrap}.investor-price-form input{min-width:180px;border:0;border-radius:12px;padding:12px 14px}
+.profit-highlight{border:1px solid #d9e8f7;border-radius:18px;padding:20px;background:linear-gradient(145deg,#fff,#f6fbff)}
+.profit-highlight strong{font-size:30px;color:#0b3768}.profit-highlight.positive{border-left:5px solid #16a34a}.profit-highlight.negative{border-left:5px solid #dc2626}
+@media(max-width:760px){.investor-hero{align-items:flex-start;flex-direction:column}.investor-price-form{width:100%}.investor-price-form input,.investor-price-form button{width:100%}}
+</style>
+<div class="investor-hero">
+  <div><small>PROYEKSI KEUANGAN SIKLUS</small><h1>Dashboard Investor</h1><p>{% if selected_cycle %}{{ selected_cycle.name }}{% else %}Siklus aktif{% endif %} · transparansi produksi, nilai biologis, laba, pajak, dan pembagian hasil.</p></div>
+  <form method="get" class="investor-price-form"><input type="number" name="simulation_price" min="0" step="1000" value="{{ final_cycle_profit.price_used|floatformat:0 }}" placeholder="Harga udang per kg"><button class="btn btn-warning" type="submit"><i class="fa-solid fa-calculator"></i> Simulasikan</button></form>
+</div>
+<div class="kpi-grid">
+  <div class="kpi-card"><div class="kpi-icon blue"><i class="fa-solid fa-coins"></i></div><div><span>Modal Investor</span><strong>{{ modal_investor|rupiah }}</strong><small>Skema investasi</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-shrimp"></i></div><div><span>Biomassa Index Tersisa</span><strong>{{ final_cycle_profit.remaining_biomass_kg|angka:2 }} kg</strong><small>Kolam aktif pada tanggal laporan</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon purple"><i class="fa-solid fa-tag"></i></div><div><span>Harga Penilaian</span><strong>{{ final_cycle_profit.price_used|rupiah }}/kg</strong><small>{{ final_cycle_profit.price_source }}</small></div></div>
+  <div class="kpi-card"><div class="kpi-icon gold"><i class="fa-solid fa-chart-line"></i></div><div><span>Potensi Omzet Akhir</span><strong>{{ final_cycle_profit.projected_revenue|rupiah }}</strong><small>Omzet berjalan + nilai sisa udang</small></div></div>
+</div>
+<div class="row g-3 mt-1">
+  <div class="col-lg-8"><div class="panel">
+    <div class="panel-head"><div><h2>Estimasi Laba Akhir Siklus</h2><span>Setelah pelunasan utang dan PPh Final 0,5%</span></div></div>
+    <div class="row g-3">
+      <div class="col-md-6"><div class="profit-highlight"><small>Omzet Terealisasi</small><strong class="d-block">{{ final_cycle_profit.realized_revenue|rupiah }}</strong></div></div>
+      <div class="col-md-6"><div class="profit-highlight"><small>Nilai Sisa Udang</small><strong class="d-block">{{ final_cycle_profit.remaining_biomass_value|rupiah }}</strong></div></div>
+      <div class="col-md-6"><div class="profit-highlight"><small>Estimasi Total Biaya</small><strong class="d-block">{{ final_cycle_profit.projected_expenses|rupiah }}</strong><small>Termasuk utang {{ final_cycle_profit.unpaid_payables|rupiah }}</small></div></div>
+      <div class="col-md-6"><div class="profit-highlight"><small>PPh Final 0,5%</small><strong class="d-block">{{ final_cycle_profit.estimated_tax|rupiah }}</strong></div></div>
+      <div class="col-12"><div class="profit-highlight {% if final_cycle_profit.final_net_profit >= 0 %}positive{% else %}negative{% endif %}"><small>ESTIMASI LABA BERSIH AKHIR SIKLUS</small><strong class="d-block">{{ final_cycle_profit.final_net_profit|rupiah }}</strong><span>Margin {{ final_cycle_profit.final_margin_percent|floatformat:2 }}%</span></div></div>
+    </div>
+  </div></div>
+  <div class="col-lg-4"><div class="panel h-100"><h2>Pembagian Laba</h2><div class="activity-list">
+    <div><i class="fa-solid fa-user-tie"></i><p><b>Pemilik 30%</b><small>{{ final_cycle_profit.owner_amount|rupiah }}</small></p></div>
+    <div><i class="fa-solid fa-vault"></i><p><b>Kas Ditahan 40%</b><small>{{ final_cycle_profit.retained_amount|rupiah }}</small></p></div>
+    <div><i class="fa-solid fa-people-roof"></i><p><b>Pengelola 30%</b><small>{{ final_cycle_profit.manager_amount|rupiah }}</small></p></div>
+  </div></div></div>
+</div>
+<div class="panel mt-3"><h2>Dasar Perhitungan</h2><div class="table-responsive"><table class="table app-table"><tbody>
+<tr><td>Harga jual rata-rata</td><td class="text-end"><b>{{ final_cycle_profit.average_sale_price|rupiah }}/kg</b></td></tr>
+<tr><td>Harga yang digunakan</td><td class="text-end"><b>{{ final_cycle_profit.price_used|rupiah }}/kg</b></td></tr>
+<tr><td>Biomassa Index tersisa</td><td class="text-end"><b>{{ final_cycle_profit.remaining_biomass_kg|angka:2 }} kg</b></td></tr>
+<tr><td>Saldo utang belum dibayar</td><td class="text-end"><b>{{ final_cycle_profit.unpaid_payables|rupiah }}</b></td></tr>
+<tr><td>Pajak</td><td class="text-end"><b>0,5% dari omzet estimasi</b></td></tr>
+</tbody></table></div><small class="text-muted">Nilai ini merupakan simulasi dan akan berubah mengikuti biomassa, mortalitas, transaksi, harga, dan biaya tambahan.</small></div>
+{% endblock %}

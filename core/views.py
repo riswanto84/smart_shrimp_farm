@@ -10,6 +10,7 @@ from sales.models import Sale, SaleItem
 from finance.models import OperationalExpense, TradeAccount
 from finance.services.profit_loss import calculate_profit_loss
 from finance.services.depreciation import calculate_depreciation_summary
+from finance.services.final_cycle_profit import calculate_final_cycle_profit
 from django.db.models import Sum
 from django.utils import timezone
 from decimal import Decimal
@@ -562,6 +563,15 @@ def dashboard(request):
     # Ambil cuaca langsung pada view dashboard. Nilai context view mengungguli
     # context processor sehingga dashboard selalu memakai service cuaca terbaru.
     live_weather = get_farm_weather()
+
+    # Estimasi laba akhir siklus: omzet berjalan + nilai Biomassa Index dengan
+    # harga jual rata-rata aktual, dikurangi biaya berjalan, saldo utang, dan
+    # PPh Final 0,5%. Parameter ?simulation_price= dapat dipakai untuk simulasi.
+    simulated_price = request.GET.get('simulation_price')
+    final_cycle_profit = calculate_final_cycle_profit(
+        cycle=selected_cycle, as_of=today, simulated_price=simulated_price
+    )
+
     context = {
         'ponds': ponds,
         'sales_total': sales_total,
@@ -632,6 +642,7 @@ def dashboard(request):
         'doc120_conservative_ton': doc120_conservative_ton,
         'ollama_status': ollama_status,
         'live_weather': live_weather,
+        'final_cycle_profit': final_cycle_profit,
     }
     return render(request, 'core/dashboard.html', context)
 

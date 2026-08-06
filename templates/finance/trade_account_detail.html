@@ -1,3 +1,156 @@
-{% extends 'base.html' %}{% load currency %}{% block content %}<div class="page-head"><div><h1>{{ obj.get_account_type_display }}</h1><p>{{ obj.customer.name|default:obj.partner_name }} · {{ obj.document_number|default:'Tanpa nomor dokumen' }}</p></div><div class="d-flex gap-2"><a class="btn btn-outline-primary" href="{% url 'finance:edit_trade_account' obj.pk %}"><i class="fa-solid fa-pen"></i> Edit</a><a class="btn btn-outline-secondary" href="{% if obj.account_type == 'receivable' %}{% url 'finance:receivables' %}{% else %}{% url 'finance:payables' %}{% endif %}">Kembali</a></div></div>
-<div class="kpi-grid mb-3"><div class="kpi-card"><div><span>Nilai Awal</span><strong>{{ obj.original_amount|rupiah }}</strong></div></div><div class="kpi-card"><div><span>Total Pembayaran</span><strong>{{ paid|rupiah }}</strong></div></div><div class="kpi-card"><div><span>Sisa Saldo</span><strong>{{ outstanding|rupiah }}</strong></div></div><div class="kpi-card"><div><span>Status</span><strong>{{ obj.payment_status }}</strong><small>Jatuh tempo {{ obj.due_date|date:'d/m/Y' }}</small></div></div></div><div class="cardx mb-3"><div class="d-flex justify-content-between align-items-center mb-2"><div><strong>Progress Pelunasan</strong><div class="small text-muted">{{ paid|rupiah }} dari {{ obj.original_amount|rupiah }}</div></div><strong>{{ payment_progress|floatformat:1 }}%</strong></div><div class="progress" style="height:12px"><div class="progress-bar bg-success" style="width:{{ payment_progress|floatformat:0 }}%"></div></div></div>
-<div class="row g-3"><div class="col-lg-7"><div class="cardx"><h5>Riwayat Pembayaran</h5><div class="table-responsive"><table class="table"><thead><tr><th>Tanggal</th><th>Bukti</th><th>Metode</th><th class="text-end">Jumlah</th><th></th></tr></thead><tbody>{% for p in payments %}<tr><td>{{ p.payment_date|date:'d/m/Y' }}</td><td>{{ p.document_number|default:'-' }}{% if p.documents.all %}<div class="mt-1 d-flex flex-wrap gap-1">{% for doc in p.documents.all %}<a href="{{ doc.file.url }}" target="_blank" class="badge text-bg-light text-decoration-none" title="{{ doc.original_name }}"><i class="fa-solid fa-paperclip"></i> {{ doc.original_name|truncatechars:24 }}</a>{% endfor %}</div>{% endif %}</td><td>{{ p.get_payment_method_display }}</td><td class="text-end">{{ p.amount|rupiah }}</td><td><form method="post" action="{% url 'finance:delete_trade_payment' p.pk %}" onsubmit="return confirm('Hapus pembayaran ini?')">{% csrf_token %}<button class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button></form></td></tr>{% empty %}<tr><td colspan="5" class="text-center">Belum ada pembayaran.</td></tr>{% endfor %}</tbody></table></div></div></div><div class="col-lg-5"><div class="cardx"><h5>Catat Pembayaran Sebagian / Pelunasan</h5><p class="text-muted small">Masukkan nominal yang diterima. Setiap pembayaran tersimpan sebagai riwayat dan otomatis mengurangi saldo utang/piutang.</p>{% if outstanding > 0 %}<form method="post" enctype="multipart/form-data" action="{% url 'finance:add_trade_payment' obj.pk %}">{% csrf_token %}<div class="mb-3"><label class="form-label">Tanggal pembayaran</label><input required type="date" name="payment_date" class="form-control"></div><div class="mb-3"><label class="form-label">Jumlah</label><input required name="amount" inputmode="numeric" class="form-control rupiah-input" placeholder="Maksimal {{ outstanding|rupiah }}"></div><div class="mb-3"><label class="form-label">Metode</label><select name="payment_method" class="form-select"><option>Transfer</option><option value="Cash">Tunai</option><option>Giro</option><option>Lainnya</option></select></div><div class="mb-3"><label class="form-label">Nomor bukti</label><input name="document_number" class="form-control"></div><div class="mb-3"><label class="form-label">Catatan</label><textarea name="notes" class="form-control" rows="2"></textarea></div><div class="mb-3"><label class="form-label">Bukti pembayaran</label><input type="file" name="documents" class="form-control" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"><div class="form-text">Pilih beberapa dokumen sekaligus, maksimal 10 MB per file.</div></div><div class="mb-3"><label class="form-label">Keterangan dokumen</label><input name="document_description" class="form-control" placeholder="Contoh: Bukti transfer dan kuitansi"></div><button class="btn btn-primary w-100"><i class="fa-solid fa-money-bill-transfer me-1"></i> Simpan Pembayaran</button></form>{% else %}<div class="alert alert-success">Saldo telah lunas.</div>{% endif %}</div><div class="cardx mt-3"><h6>Informasi Mitra & Transaksi</h6>{% if obj.customer %}<p class="mb-1"><strong>Pelanggan:</strong> {{ obj.customer.name }}</p><p class="mb-1"><strong>Telepon:</strong> {{ obj.customer.phone|default:'-' }}</p><p class="mb-1"><strong>Alamat:</strong> {{ obj.customer.address|default:'-' }}</p>{% endif %}<p class="mb-1"><strong>Uraian:</strong> {{ obj.description }}</p><p class="mb-1"><strong>Tanggal:</strong> {{ obj.transaction_date|date:'d/m/Y' }}</p><p class="mb-0"><strong>Catatan:</strong> {{ obj.notes|default:'-' }}</p></div><div class="cardx mt-3"><div class="d-flex justify-content-between align-items-center mb-3"><div><h6 class="mb-1">Dokumen Transaksi</h6><small class="text-muted">Invoice, kontrak, surat jalan, kuitansi, foto, dan dokumen pendukung lain.</small></div><span class="badge text-bg-primary">{{ account_documents|length }} file</span></div><form method="post" enctype="multipart/form-data" action="{% url 'finance:upload_trade_documents' obj.pk %}" class="mb-3">{% csrf_token %}<div class="mb-2"><input type="file" name="documents" class="form-control" multiple required accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"></div><div class="mb-2"><input name="document_description" class="form-control" placeholder="Keterangan dokumen (opsional)"></div><button class="btn btn-outline-primary w-100"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Multidokumen</button><div class="form-text">Maksimal 10 MB per file.</div></form><div class="list-group list-group-flush">{% for doc in account_documents %}<div class="list-group-item px-0 d-flex align-items-center justify-content-between gap-2"><div class="text-truncate"><a href="{{ doc.file.url }}" target="_blank" class="fw-semibold text-decoration-none"><i class="fa-solid fa-file-lines me-1"></i>{{ doc.original_name }}</a>{% if doc.description %}<div class="small text-muted">{{ doc.description }}</div>{% endif %}<div class="small text-muted">{{ doc.uploaded_at|date:'d/m/Y H:i' }}{% if doc.uploaded_by %} · {{ doc.uploaded_by.get_full_name|default:doc.uploaded_by.username }}{% endif %}</div></div><form method="post" action="{% url 'finance:delete_trade_document' doc.pk %}" onsubmit="return confirm('Hapus dokumen ini?')">{% csrf_token %}<button class="btn btn-sm btn-outline-danger" title="Hapus"><i class="fa-solid fa-trash"></i></button></form></div>{% empty %}<div class="text-center text-muted py-3">Belum ada dokumen transaksi.</div>{% endfor %}</div></div><form class="mt-3" method="post" action="{% url 'finance:delete_trade_account' obj.pk %}" onsubmit="return confirm('Hapus transaksi beserta seluruh pembayarannya?')">{% csrf_token %}<button class="btn btn-outline-danger w-100">Hapus Transaksi</button></form></div></div>{% endblock %}
+{% extends 'base.html' %}
+{% load currency %}
+
+{% block extra_css %}
+<style>
+.trade-doc-card{border:1px solid #dbe5f2;border-radius:14px;background:#fff;overflow:hidden;height:100%}
+.trade-doc-preview{height:150px;background:#f5f8fc;display:flex;align-items:center;justify-content:center;overflow:hidden;border-bottom:1px solid #e5edf6}
+.trade-doc-preview img{width:100%;height:100%;object-fit:cover}
+.trade-doc-icon{font-size:44px;color:#0b4a83}
+.trade-doc-body{padding:14px}
+.trade-doc-name{font-weight:700;color:#0b2545;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trade-doc-meta{font-size:.78rem;color:#6b7c93}
+.trade-doc-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+.payment-docs{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.payment-doc-chip{max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:767px){.trade-doc-preview{height:125px}.summary-number{font-size:1.25rem}}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-head d-flex justify-content-between align-items-start gap-3 flex-wrap">
+  <div>
+    <h1>{{ obj.get_account_type_display }}</h1>
+    <p>{{ obj.partner_name }} · {{ obj.document_number|default:'Tanpa nomor dokumen' }}</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-primary" href="{% url 'finance:edit_trade_account' obj.pk %}"><i class="fa-solid fa-pen"></i> Edit</a>
+    <a class="btn btn-outline-secondary" href="{% if obj.account_type == 'receivable' %}{% url 'finance:receivables' %}{% else %}{% url 'finance:payables' %}{% endif %}">Kembali</a>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-3"><div class="cardx h-100"><div class="text-muted small fw-semibold">Nilai Awal</div><div class="h4 mb-0 summary-number">{{ obj.original_amount|rupiah }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="cardx h-100"><div class="text-muted small fw-semibold">Total Pembayaran</div><div class="h4 mb-0 summary-number">{{ paid|rupiah }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="cardx h-100"><div class="text-muted small fw-semibold">Sisa Saldo</div><div class="h4 mb-0 summary-number">{{ outstanding|rupiah }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="cardx h-100"><div class="text-muted small fw-semibold">Status</div><div class="h5 mb-1">{{ obj.payment_status }}</div><div class="small text-primary">Jatuh tempo {{ obj.due_date|date:'d/m/Y' }}</div></div></div>
+</div>
+
+<div class="cardx mb-3">
+  <div class="d-flex justify-content-between"><div><strong>Progress Pelunasan</strong><div class="small text-muted">{{ paid|rupiah }} dari {{ obj.original_amount|rupiah }}</div></div><strong>{{ payment_progress|floatformat:1 }}%</strong></div>
+  <div class="progress mt-2" style="height:12px"><div class="progress-bar bg-success" style="width:{{ payment_progress|floatformat:0 }}%"></div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="cardx mb-3">
+      <h5>Riwayat Pembayaran</h5>
+      <div class="table-responsive">
+        <table class="table align-middle">
+          <thead><tr><th>Tanggal</th><th>Bukti & Lampiran</th><th>Metode</th><th class="text-end">Jumlah</th><th></th></tr></thead>
+          <tbody>
+          {% for p in payments %}
+            <tr>
+              <td>{{ p.payment_date|date:'d/m/Y' }}</td>
+              <td>
+                <div>{{ p.document_number|default:'-' }}</div>
+                {% if p.documents.all %}
+                <div class="payment-docs">
+                  {% for doc in p.documents.all %}
+                  <a href="{% url 'finance:preview_trade_document' doc.pk %}" target="_blank" class="badge text-bg-light border text-decoration-none payment-doc-chip" title="{{ doc.original_name }}">
+                    <i class="fa-solid fa-paperclip"></i> {{ doc.original_name }}
+                  </a>
+                  {% endfor %}
+                </div>
+                {% endif %}
+              </td>
+              <td>{{ p.get_payment_method_display }}</td>
+              <td class="text-end">{{ p.amount|rupiah }}</td>
+              <td><form method="post" action="{% url 'finance:delete_trade_payment' p.pk %}" onsubmit="return confirm('Hapus pembayaran ini?')">{% csrf_token %}<button class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button></form></td>
+            </tr>
+          {% empty %}<tr><td colspan="5" class="text-center text-muted py-4">Belum ada pembayaran.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="cardx">
+      <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-3">
+        <div><h5 class="mb-1">Lampiran Dokumen</h5><div class="small text-muted">Seluruh dokumen transaksi dan bukti pembayaran yang sudah diunggah.</div></div>
+        <span class="badge text-bg-primary fs-6">{{ document_count }} file</span>
+      </div>
+      <div class="row g-3">
+        {% for doc in all_documents %}
+        <div class="col-sm-6 col-xl-4">
+          <div class="trade-doc-card">
+            <a class="trade-doc-preview text-decoration-none" href="{% url 'finance:preview_trade_document' doc.pk %}" target="_blank">
+              {% if doc.is_image %}
+                <img src="{% url 'finance:preview_trade_document' doc.pk %}" alt="{{ doc.original_name }}">
+              {% elif doc.is_pdf %}
+                <i class="fa-solid fa-file-pdf trade-doc-icon text-danger"></i>
+              {% elif doc.file_extension == 'doc' or doc.file_extension == 'docx' %}
+                <i class="fa-solid fa-file-word trade-doc-icon text-primary"></i>
+              {% elif doc.file_extension == 'xls' or doc.file_extension == 'xlsx' %}
+                <i class="fa-solid fa-file-excel trade-doc-icon text-success"></i>
+              {% else %}
+                <i class="fa-solid fa-file-lines trade-doc-icon"></i>
+              {% endif %}
+            </a>
+            <div class="trade-doc-body">
+              <div class="trade-doc-name" title="{{ doc.original_name }}">{{ doc.original_name }}</div>
+              <div class="trade-doc-meta">{{ doc.file_extension|upper }} · {{ doc.file_size|filesizeformat }}</div>
+              <div class="trade-doc-meta">{{ doc.uploaded_at|date:'d/m/Y H:i' }}</div>
+              {% if doc.payment %}<div class="mt-2"><span class="badge text-bg-success">Bukti pembayaran {{ doc.payment.payment_date|date:'d/m/Y' }}</span></div>{% else %}<div class="mt-2"><span class="badge text-bg-info">Dokumen transaksi</span></div>{% endif %}
+              {% if doc.description %}<div class="small mt-2">{{ doc.description }}</div>{% endif %}
+              <div class="trade-doc-actions">
+                <a class="btn btn-sm btn-outline-primary" href="{% url 'finance:preview_trade_document' doc.pk %}" target="_blank"><i class="fa-solid fa-eye"></i> Lihat</a>
+                <a class="btn btn-sm btn-outline-secondary" href="{% url 'finance:download_trade_document' doc.pk %}"><i class="fa-solid fa-download"></i> Unduh</a>
+                <form method="post" action="{% url 'finance:delete_trade_document' doc.pk %}" onsubmit="return confirm('Hapus dokumen ini?')">{% csrf_token %}<button class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-trash"></i></button></form>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="col-12"><div class="text-center text-muted border rounded-3 py-5"><i class="fa-solid fa-folder-open fa-2x mb-2"></i><div>Belum ada dokumen yang diunggah.</div></div></div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="cardx">
+      <h5>Catat Pembayaran Sebagian / Pelunasan</h5>
+      <p class="text-muted small">Setiap pembayaran tersimpan sebagai riwayat dan otomatis mengurangi saldo.</p>
+      {% if outstanding > 0 %}
+      <form method="post" enctype="multipart/form-data" action="{% url 'finance:add_trade_payment' obj.pk %}">{% csrf_token %}
+        <div class="mb-3"><label class="form-label">Tanggal pembayaran</label><input required type="date" name="payment_date" class="form-control"></div>
+        <div class="mb-3"><label class="form-label">Jumlah</label><input required name="amount" inputmode="numeric" class="form-control rupiah-input" placeholder="Maksimal {{ outstanding|rupiah }}"></div>
+        <div class="mb-3"><label class="form-label">Metode</label><select name="payment_method" class="form-select"><option>Transfer</option><option value="Cash">Tunai</option><option>Giro</option><option>Lainnya</option></select></div>
+        <div class="mb-3"><label class="form-label">Nomor bukti</label><input name="document_number" class="form-control"></div>
+        <div class="mb-3"><label class="form-label">Catatan</label><textarea name="notes" class="form-control" rows="2"></textarea></div>
+        <div class="mb-3"><label class="form-label">Bukti pembayaran</label><input type="file" name="documents" class="form-control" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"><div class="form-text">Maksimal 10 MB per file.</div></div>
+        <div class="mb-3"><label class="form-label">Keterangan dokumen</label><input name="document_description" class="form-control"></div>
+        <button class="btn btn-primary w-100"><i class="fa-solid fa-money-bill-transfer me-1"></i> Simpan Pembayaran</button>
+      </form>
+      {% else %}<div class="alert alert-success">Saldo telah lunas.</div>{% endif %}
+    </div>
+
+    <div class="cardx mt-3">
+      <h6>Informasi Mitra & Transaksi</h6>
+      {% if obj.customer %}<p class="mb-1"><strong>Pelanggan:</strong> {{ obj.customer.name }}</p><p class="mb-1"><strong>Telepon:</strong> {{ obj.customer.phone|default:'-' }}</p><p class="mb-1"><strong>Alamat:</strong> {{ obj.customer.address|default:'-' }}</p>{% endif %}
+      <p class="mb-1"><strong>Uraian:</strong> {{ obj.description }}</p><p class="mb-1"><strong>Tanggal:</strong> {{ obj.transaction_date|date:'d/m/Y' }}</p><p class="mb-0"><strong>Catatan:</strong> {{ obj.notes|default:'-' }}</p>
+    </div>
+
+    <div class="cardx mt-3">
+      <div class="d-flex justify-content-between align-items-center mb-3"><div><h6 class="mb-1">Tambah Dokumen</h6><small class="text-muted">Invoice, kontrak, surat jalan, kuitansi, atau foto.</small></div><span class="badge text-bg-primary">{{ document_count }} file</span></div>
+      <form method="post" enctype="multipart/form-data" action="{% url 'finance:upload_trade_documents' obj.pk %}">{% csrf_token %}
+        <div class="mb-2"><input type="file" name="documents" class="form-control" multiple required accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"></div>
+        <div class="mb-2"><input name="document_description" class="form-control" placeholder="Keterangan dokumen (opsional)"></div>
+        <button class="btn btn-outline-primary w-100"><i class="fa-solid fa-cloud-arrow-up"></i> Upload Dokumen</button>
+      </form>
+    </div>
+
+    <form class="mt-3" method="post" action="{% url 'finance:delete_trade_account' obj.pk %}" onsubmit="return confirm('Hapus transaksi beserta seluruh pembayarannya?')">{% csrf_token %}<button class="btn btn-outline-danger w-100">Hapus Transaksi</button></form>
+  </div>
+</div>
+{% endblock %}

@@ -42,6 +42,21 @@ class ExpenseDocument(models.Model):
         from pathlib import Path
         return Path(self.original_name or self.file.name).suffix.lower().lstrip('.')
 
+    @property
+    def file_size(self):
+        try:
+            return self.file.size
+        except (FileNotFoundError, OSError, ValueError):
+            return 0
+
+    @property
+    def is_image(self):
+        return self.file_extension in {'jpg', 'jpeg', 'png', 'webp'}
+
+    @property
+    def is_pdf(self):
+        return self.file_extension == 'pdf'
+
 
 class OtherRevenue(models.Model):
     cycle=models.ForeignKey(CultivationCycle,on_delete=models.PROTECT,null=True,blank=True,related_name='other_revenues')
@@ -262,6 +277,21 @@ class TradeDocument(models.Model):
     def file_extension(self):
         from pathlib import Path
         return Path(self.original_name or self.file.name).suffix.lower().lstrip('.')
+
+    @property
+    def file_size(self):
+        try:
+            return self.file.size
+        except (FileNotFoundError, OSError, ValueError):
+            return 0
+
+    @property
+    def is_image(self):
+        return self.file_extension in {'jpg', 'jpeg', 'png', 'webp'}
+
+    @property
+    def is_pdf(self):
+        return self.file_extension == 'pdf'
 
 
 class BiologicalAssetValuation(models.Model):
