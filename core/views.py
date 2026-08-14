@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
-from accounts.rbac import permission_required
+from accounts.rbac import permission_required, has_permission
 from ponds.models import Pond
 from operations.models import DailyParameter, SamplingRecord, Harvest, SiphonRecord
 from operations.services.biomass import calculate_index_biomass_snapshot
@@ -46,102 +46,129 @@ def home(request):
 @permission_required('dashboard')
 def dashboard(request):
     ponds = Pond.objects.all()
+    # Data keuangan dashboard hanya dihitung dan dikirim ke browser untuk role
+    # yang memang memiliki izin modul keuangan. Teknisi tetap mendapatkan
+    # dashboard operasional tanpa angka omzet, biaya, laba, utang, pajak, dll.
+    can_view_financial_dashboard = has_permission(request.user, 'finance.profit_loss')
 
-    # KPI omzet menggunakan tanggal lokal aplikasi (WIB), bukan total seluruh
-    # siklus. Transaksi gagal, kedaluwarsa, dibatalkan, dan refund tidak dihitung.
+    # KPI keuangan hanya untuk role yang memiliki izin keuangan.
     today = timezone.localdate()
     yesterday = today - timedelta(days=1)
-    valid_sales = filter_selected_cycle(
-        request,
-        Sale.objects.exclude(status__in=['Gagal', 'Expired', 'Dibatalkan', 'Refund']),
-    )
-    sales_total = valid_sales.aggregate(s=Sum('total_amount'))['s'] or Decimal('0')
-    yesterday_sales_total = (
-        valid_sales.filter(date__date=yesterday).aggregate(s=Sum('total_amount'))['s']
-        or Decimal('0')
-    )
+    sales_total = Decimal('0')
+    yesterday_sales_total = Decimal('0')
+    sales_change_percent = Decimal('0')
+    sales_change_state = 'neutral'
+    sales_change_text = 'Data keuangan tidak ditampilkan untuk role ini'
 
-    if yesterday_sales_total > 0:
-        sales_change_percent = (
-            (sales_total - yesterday_sales_total) / yesterday_sales_total * Decimal('100')
-        ).quantize(Decimal('0.1'))
-        if sales_change_percent > 0:
+    expense_total = Decimal('0')
+    production_operational_total = Decimal('0')
+    payroll_total = Decimal('0')
+    depreciation_total = Decimal('0')
+    depreciation_asset_count = 0
+    depreciation_book_value = Decimal('0')
+    administration_total = Decimal('0')
+    profit_loss_total = Decimal('0')
+    profit_margin_percent = Decimal('0')
+    profit_loss_status = '—'
+
+    valid_sales = Sale.objects.none()
+    finance_result = {}
+    if can_view_financial_dashboard:
+        valid_sales = filter_selected_cycle(
+            request,
+            Sale.objects.exclude(status__in=['Gagal', 'Expired', 'Dibatalkan', 'Refund']),
+        )
+        sales_total = valid_sales.aggregate(s=Sum('total_amount'))['s'] or Decimal('0')
+        yesterday_sales_total = (
+            valid_sales.filter(date__date=yesterday).aggregate(s=Sum('total_amount'))['s']
+            or Decimal('0')
+        )
+
+        if yesterday_sales_total > 0:
+            sales_change_percent = (
+                (sales_total - yesterday_sales_total) / yesterday_sales_total * Decimal('100')
+            ).quantize(Decimal('0.1'))
+            if sales_change_percent > 0:
+                sales_change_state = 'up'
+                sales_change_text = f'Naik {abs(sales_change_percent)}% dari kemarin'
+            elif sales_change_percent < 0:
+                sales_change_state = 'down'
+                sales_change_text = f'Turun {abs(sales_change_percent)}% dari kemarin'
+            else:
+                sales_change_state = 'neutral'
+                sales_change_text = 'Tidak berubah dari kemarin'
+        elif sales_total > 0:
+            sales_change_percent = None
             sales_change_state = 'up'
-            sales_change_text = f'Naik {abs(sales_change_percent)}% dari kemarin'
-        elif sales_change_percent < 0:
-            sales_change_state = 'down'
-            sales_change_text = f'Turun {abs(sales_change_percent)}% dari kemarin'
+            sales_change_text = 'Baru ada omzet hari ini'
         else:
-            sales_change_state = 'neutral'
-            sales_change_text = 'Tidak berubah dari kemarin'
-    elif sales_total > 0:
-        # Persentase tidak terdefinisi jika pembanding kemarin bernilai nol.
-        sales_change_percent = None
-        sales_change_state = 'up'
-        sales_change_text = 'Baru ada omzet hari ini'
-    else:
-        sales_change_percent = Decimal('0')
-        sales_change_state = 'neutral'
-        sales_change_text = 'Belum ada omzet hari ini maupun kemarin'
+            sales_change_text = 'Belum ada omzet hari ini maupun kemarin'
 
-    # Satu sumber laba/rugi untuk Dashboard, Laporan Laba/Rugi, dan Neraca.
+        selected_cycle = get_selected_cycle(request)
+        finance_result = calculate_profit_loss(cycle=selected_cycle, date_to=today)
+        sales_total = finance_result['revenue']
+        expense_total = finance_result['expense_total']
+        category_totals = finance_result['category_totals']
+        payroll_total = category_totals.get('Tenaga Kerja', Decimal('0'))
+        depreciation_total = category_totals.get('Penyusutan', Decimal('0'))
+        depreciation_summary = finance_result.get('depreciation_summary') or calculate_depreciation_summary(as_of=today)
+        depreciation_asset_count = depreciation_summary['asset_count']
+        depreciation_book_value = depreciation_summary['book_value']
+        administration_total = category_totals.get('Administrasi', Decimal('0'))
+        production_operational_total = max(
+            expense_total - payroll_total - depreciation_total - administration_total,
+            Decimal('0'),
+        )
+        profit_loss_total = finance_result['profit']
+        profit_margin_percent = (
+            (profit_loss_total / sales_total) * Decimal('100')
+            if sales_total > 0
+            else Decimal('0')
+        )
+        if profit_loss_total > 0:
+            profit_loss_status = 'Laba'
+        elif profit_loss_total < 0:
+            profit_loss_status = 'Rugi'
+        else:
+            profit_loss_status = 'Impas'
+
+    # Siklus tetap tersedia untuk dashboard operasional.
     selected_cycle = get_selected_cycle(request)
-    finance_result = calculate_profit_loss(cycle=selected_cycle, date_to=today)
-    sales_total = finance_result['revenue']
-    expense_total = finance_result['expense_total']
-    category_totals = finance_result['category_totals']
-    payroll_total = category_totals.get('Tenaga Kerja', Decimal('0'))
-    depreciation_total = category_totals.get('Penyusutan', Decimal('0'))
-    depreciation_summary = finance_result.get('depreciation_summary') or calculate_depreciation_summary(as_of=today)
-    depreciation_asset_count = depreciation_summary['asset_count']
-    depreciation_book_value = depreciation_summary['book_value']
-    administration_total = category_totals.get('Administrasi', Decimal('0'))
-    production_operational_total = max(
-        expense_total - payroll_total - depreciation_total - administration_total,
-        Decimal('0'),
-    )
 
-    profit_loss_total = finance_result['profit']
-    profit_margin_percent = (
-        (profit_loss_total / sales_total) * Decimal('100')
-        if sales_total > 0
-        else Decimal('0')
-    )
-    if profit_loss_total > 0:
-        profit_loss_status = 'Laba'
-    elif profit_loss_total < 0:
-        profit_loss_status = 'Rugi'
-    else:
-        profit_loss_status = 'Impas'
+    # Ringkasan utang usaha hanya untuk role yang memiliki izin keuangan.
+    unpaid_payables = []
+    unpaid_payables_total = Decimal('0')
+    unpaid_payables_count = 0
+    due_this_month = []
+    due_this_month_total = Decimal('0')
+    due_this_month_count = 0
+    nearest_due_payable = None
+    if can_view_financial_dashboard:
+        payable_accounts = list(
+            TradeAccount.objects.filter(account_type=TradeAccount.PAYABLE)
+            .prefetch_related('payments')
+            .order_by('due_date', 'id')
+        )
+        unpaid_payables = [account for account in payable_accounts if account.outstanding_amount > 0]
+        unpaid_payables_total = sum(
+            (account.outstanding_amount for account in unpaid_payables), Decimal('0')
+        )
+        unpaid_payables_count = len(unpaid_payables)
 
-    # Ringkasan utang usaha untuk Dashboard owner. Utang merupakan kewajiban
-    # lintas siklus sehingga seluruh akun utang yang masih memiliki saldo
-    # ditampilkan, tidak hanya utang pada siklus yang sedang dipilih.
-    payable_accounts = list(
-        TradeAccount.objects.filter(account_type=TradeAccount.PAYABLE)
-        .prefetch_related('payments')
-        .order_by('due_date', 'id')
-    )
-    unpaid_payables = [account for account in payable_accounts if account.outstanding_amount > 0]
-    unpaid_payables_total = sum(
-        (account.outstanding_amount for account in unpaid_payables), Decimal('0')
-    )
-    unpaid_payables_count = len(unpaid_payables)
-
-    month_start = today.replace(day=1)
-    if month_start.month == 12:
-        next_month_start = month_start.replace(year=month_start.year + 1, month=1)
-    else:
-        next_month_start = month_start.replace(month=month_start.month + 1)
-    due_this_month = [
-        account for account in unpaid_payables
-        if month_start <= account.due_date < next_month_start
-    ]
-    due_this_month_total = sum(
-        (account.outstanding_amount for account in due_this_month), Decimal('0')
-    )
-    due_this_month_count = len(due_this_month)
-    nearest_due_payable = due_this_month[0] if due_this_month else None
+        month_start = today.replace(day=1)
+        if month_start.month == 12:
+            next_month_start = month_start.replace(year=month_start.year + 1, month=1)
+        else:
+            next_month_start = month_start.replace(month=month_start.month + 1)
+        due_this_month = [
+            account for account in unpaid_payables
+            if month_start <= account.due_date < next_month_start
+        ]
+        due_this_month_total = sum(
+            (account.outstanding_amount for account in due_this_month), Decimal('0')
+        )
+        due_this_month_count = len(due_this_month)
+        nearest_due_payable = due_this_month[0] if due_this_month else None
 
     # Realisasi panen riil diambil langsung dari menu Panen pada siklus terpilih.
     harvest_qs = filter_selected_cycle(
@@ -568,9 +595,11 @@ def dashboard(request):
     # harga jual rata-rata aktual, dikurangi biaya berjalan, saldo utang, dan
     # PPh Final 0,5%. Parameter ?simulation_price= dapat dipakai untuk simulasi.
     simulated_price = request.GET.get('simulation_price')
-    final_cycle_profit = calculate_final_cycle_profit(
-        cycle=selected_cycle, as_of=today, simulated_price=simulated_price
-    )
+    final_cycle_profit = None
+    if can_view_financial_dashboard:
+        final_cycle_profit = calculate_final_cycle_profit(
+            cycle=selected_cycle, as_of=today, simulated_price=simulated_price
+        )
 
     context = {
         'ponds': ponds,
@@ -643,6 +672,7 @@ def dashboard(request):
         'ollama_status': ollama_status,
         'live_weather': live_weather,
         'final_cycle_profit': final_cycle_profit,
+        'can_view_financial_dashboard': can_view_financial_dashboard,
     }
     return render(request, 'core/dashboard.html', context)
 
