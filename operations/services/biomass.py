@@ -44,14 +44,20 @@ def _size(value) -> Decimal:
 
 
 def _cycle_completed(cycle, as_of: date) -> bool:
+    """Tentukan apakah SIKLUS benar-benar sudah ditutup.
+
+    Jangan memakai ``actual_end_date`` sebagai satu-satunya tanda selesai.
+    Field tersebut pada data lama dapat terisi saat panen/penutupan operasional
+    sebagian kolam, sementara siklus masih memiliki kolam dengan biomassa sisa.
+    Untuk estimasi Nilai Sisa Udang, hanya status siklus yang eksplisit
+    ``completed/selesai/closed`` yang boleh mengosongkan seluruh snapshot.
+    ``as_of`` dipertahankan untuk kompatibilitas signature.
+    """
     if not cycle:
         return False
     completed_value = getattr(cycle, "STATUS_COMPLETED", "completed")
-    status = str(getattr(cycle, "status", "") or "").lower()
-    if status in {str(completed_value).lower(), "completed", "selesai", "closed"}:
-        return True
-    actual_end = getattr(cycle, "actual_end_date", None)
-    return bool(actual_end and actual_end <= as_of)
+    status = str(getattr(cycle, "status", "") or "").strip().lower()
+    return status in {str(completed_value).lower(), "completed", "selesai", "closed"}
 
 
 @dataclass(frozen=True)
