@@ -73,11 +73,56 @@
   .dashboard-balanced .production-panel li{align-items:flex-start;flex-wrap:wrap;}
   .dashboard-balanced .production-panel li span{width:100%;margin-left:18px;white-space:normal;}
 }
+
+/* === DASHBOARD PROFESSIONAL V2 === */
+.dashboard-pro .page-head{margin-bottom:16px}
+.dashboard-pro .page-head h1{font-size:32px;letter-spacing:-.045em}
+.dashboard-pro .page-head p{font-size:14px}
+.dashboard-cycle-chip{display:inline-flex;align-items:center;gap:8px;margin-top:10px;padding:7px 11px;border-radius:999px;background:#eef5ff;border:1px solid #d6e6fb;color:#0b4b91;font-size:12px;font-weight:800}
+.dashboard-cycle-chip i{font-size:11px}
+.dashboard-pro .kpi-grid{gap:12px}
+.dashboard-pro .kpi-card{position:relative;overflow:hidden;min-height:112px;border-radius:18px;padding:16px 17px;box-shadow:0 8px 24px rgba(15,39,74,.055);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.dashboard-pro .kpi-card:hover{transform:translateY(-2px);box-shadow:0 14px 32px rgba(15,39,74,.09);border-color:#cddced}
+.dashboard-pro .kpi-card:after{content:"";position:absolute;right:-24px;bottom:-32px;width:90px;height:90px;border-radius:50%;background:rgba(13,110,253,.035);pointer-events:none}
+.dashboard-pro .kpi-card span{font-size:12px;color:#52627a;letter-spacing:.01em}
+.dashboard-pro .kpi-card strong{font-size:20px;margin-top:3px}
+.dashboard-pro .kpi-card small{display:block;line-height:1.4;margin-top:4px;color:#3974c8;font-size:11px}
+.dashboard-pro .kpi-grid>.kpi-card:nth-child(-n+4){min-height:124px}
+.dashboard-pro .kpi-grid>.kpi-card:nth-child(-n+4) strong{font-size:23px}
+.dashboard-pro .kpi-grid>.kpi-card:nth-child(n+5){min-height:104px}
+.dashboard-pro .kpi-icon{width:46px;height:46px;border-radius:15px;font-size:18px;box-shadow:0 7px 15px rgba(15,23,42,.08)}
+.dashboard-pro .kpi-grid>.kpi-card:nth-child(1){border-top:3px solid #2563eb}
+.dashboard-pro .kpi-grid>.kpi-card:nth-child(2){border-top:3px solid #0d9488}
+.dashboard-pro .kpi-grid>.kpi-card:nth-child(3){border-top:3px solid #7c3aed}
+.dashboard-pro .kpi-grid>.kpi-card:nth-child(4){border-top:3px solid #d89a18}
+.dashboard-pro .final-profit-panel{border-radius:20px;padding:20px;background:linear-gradient(180deg,#fff 0%,#fbfdff 100%);box-shadow:0 12px 34px rgba(15,39,74,.07)}
+.dashboard-pro .final-profit-panel .panel-head{padding-bottom:15px;margin-bottom:16px;border-bottom:1px solid #e8eef6}
+.dashboard-pro .final-profit-panel .panel-head h2{font-size:20px}
+.dashboard-pro .final-profit-panel .panel-head span{display:block;margin-top:4px;font-size:12px;color:#64748b}
+.dashboard-pro .final-profit-panel .kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.dashboard-pro .final-profit-panel .kpi-card{min-height:108px;border-radius:16px;background:#fff}
+.dashboard-pro .final-profit-panel .kpi-card:nth-child(3){background:#f7faff;border-color:#dbe8fa}
+.dashboard-pro .final-profit-panel .kpi-card:nth-child(6){background:linear-gradient(135deg,#effaf4,#f8fffb);border-color:#cceedd}
+.dashboard-pro .final-profit-panel .kpi-card:nth-child(6) strong{font-size:24px;color:#087a48}
+.dashboard-pro .final-profit-panel form{background:#f7faff;padding:6px;border:1px solid #dfeaf7;border-radius:13px}
+.dashboard-pro .final-profit-panel form input{background:#fff!important;border-color:#d5e2f1!important;border-radius:9px!important;height:38px}
+.dashboard-pro .final-profit-panel form .btn{height:38px;border-radius:9px}
+.dashboard-pro .final-profit-panel .table-responsive{margin-top:8px;border:1px solid #e3ebf5;border-radius:14px;overflow:hidden}
+.dashboard-pro .final-profit-panel .app-table{margin-bottom:0}
+.dashboard-pro .final-profit-panel .app-table th{background:#f7faff;padding:12px}
+.dashboard-pro .final-profit-panel .app-table td{padding:12px}
+.dashboard-pro .real-harvest-panel,.dashboard-pro .weather-card-pro,.dashboard-pro .dashboard-balanced .panel{border-radius:18px}
+.dashboard-pro .panel{box-shadow:0 9px 26px rgba(15,39,74,.055)}
+@media(max-width:1100px){.dashboard-pro .final-profit-panel .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:820px){.dashboard-pro .page-head h1{font-size:27px}.dashboard-pro .final-profit-panel .kpi-grid{grid-template-columns:1fr 1fr}.dashboard-pro .final-profit-panel .panel-head{align-items:flex-start;flex-direction:column}.dashboard-pro .final-profit-panel form{width:100%}.dashboard-pro .final-profit-panel form input{flex:1;width:auto!important}}
+@media(max-width:560px){.dashboard-pro .final-profit-panel .kpi-grid{grid-template-columns:1fr}.dashboard-pro .kpi-grid>.kpi-card:nth-child(-n+4) strong{font-size:21px}.dashboard-cycle-chip{font-size:11px}}
 </style>
+<div class="dashboard-pro">
 <div class="page-head">
   <div>
     <h1>Dashboard</h1>
     <p>Selamat datang, <b>{{ user.get_full_name|default:user.username }}</b>! Berikut ringkasan kondisi tambak hari ini.</p>
+    {% if selected_cycle %}<span class="dashboard-cycle-chip"><i class="fa-solid fa-circle-dot"></i> Siklus {{ selected_cycle.name }} · {{ selected_cycle.status|default:"Aktif" }}</span>{% endif %}
   </div>
 </div>
 <div class="kpi-grid">
@@ -481,4 +526,5 @@
   window.setInterval(checkOllama, 30000);
 })();
 </script>
+</div>
 {% endblock %}
