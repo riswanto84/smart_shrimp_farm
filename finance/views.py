@@ -1469,7 +1469,7 @@ def _balance_sheet_data(request):
                 return {'class': 'green', 'label': 'Efisien'}
             if Decimal('1.40') < value <= Decimal('1.70'):
                 return {'class': 'amber', 'label': 'Waspada'}
-            return {'class': 'red', 'label': 'Tidak efisien/data kosong'}
+            return {'class': 'red', 'label': 'Tidak efisien'}
         return {'class': 'gray', 'label': 'Belum dinilai'}
 
     # Dashboard dan Neraca memakai snapshot biomassa INDEX yang sama.
@@ -1529,7 +1529,7 @@ def _balance_sheet_data(request):
 
         healths = [sampling_health, adg_health, sr_health, fcr_health, price_health, biomass_health]
         indicator = 'red' if any(x['class'] == 'red' for x in healths) else ('amber' if any(x['class'] == 'amber' for x in healths) else 'green')
-        indicator_label = 'Kritis · perlu tindakan' if indicator == 'red' else ('Waspada · perlu dipantau' if indicator == 'amber' else 'Sehat · terkendali')
+        indicator_label = 'Perlu validasi data' if indicator == 'red' else ('Waspada · perlu dipantau' if indicator == 'amber' else 'Sehat · terkendali')
 
         pond_assets.append({
             'pond': pond, 'sampling': latest_sampling,
@@ -1595,13 +1595,18 @@ def _balance_sheet_data(request):
         biological_fair_value_change_period = Decimal('0')
         biological_valuation_is_provisional = biological_assets_total != 0
 
-    current_profit = operating_profit + biological_fair_value_change_cumulative
+    # Neraca tidak mengakui aset biologis udang sebagai akun aset.
+    # Perhitungan biomassa tetap tersedia di Estimasi Laba Akhir Siklus,
+    # tetapi tidak dimasukkan ke total aset, ekuitas, rasio, atau komposisi
+    # neraca. Dengan demikian neraca hanya mencerminkan aset yang benar-benar
+    # dicatat dalam pembukuan (kas/bank, piutang, persediaan, dan aset tetap).
+    current_profit = operating_profit
 
     manual_asset_total = sum((e.amount for e in assets), Decimal('0'))
-    total_assets_before = manual_asset_total + receivable_total + biological_assets_total + fixed_cost - accumulated
+    total_assets_before = manual_asset_total + receivable_total + fixed_cost - accumulated
     total_liabilities = sum((e.amount for e in liabilities), Decimal('0')) + payable_total
     total_equity = sum((e.amount for e in equities), Decimal('0'))
-    total_equity_before = total_equity + current_profit + biological_opening_reserve
+    total_equity_before = total_equity + current_profit
     total_assets = total_assets_before
     difference = total_assets - total_liabilities - total_equity_before
     preliminary_difference = difference
@@ -1611,10 +1616,8 @@ def _balance_sheet_data(request):
     capital_expenses = OperationalExpense.objects.filter(date__lte=as_of, is_capital_expenditure=True).aggregate(s=Sum('amount'))['s'] or Decimal('0')
     unlinked_capital_expenses = OperationalExpense.objects.filter(date__lte=as_of, is_capital_expenditure=True, fixed_asset__isnull=True).count()
     warnings = []
-    if biological_valuation_is_provisional:
-        warnings.append('Baseline aset biologis masih bersifat sementara. Jalankan python manage.py initialize_biological_valuation untuk mengunci nilai pengakuan awal.')
     if abs(difference) > Decimal('0.01'):
-        warnings.append('Neraca masih memiliki selisih yang tidak dapat dijelaskan oleh aset biologis. Periksa saldo Kas/Bank, Modal Pemilik, Utang, dan saldo pembukaan.')
+        warnings.append('Neraca masih memiliki selisih. Periksa saldo Kas/Bank, Modal Pemilik, Utang, aset tetap, dan saldo pembukaan.')
     if unlinked_capital_expenses:
         warnings.append(f'{unlinked_capital_expenses} pengeluaran kapital belum ditautkan ke Daftar Aset.')
 
@@ -1622,8 +1625,9 @@ def _balance_sheet_data(request):
     cash_bank_total = sum((e.amount for e in assets if e.group == 'Kas dan Bank'), Decimal('0'))
     other_current_assets = sum((e.amount for e in assets if e.group != 'Kas dan Bank'), Decimal('0'))
     accounting_current_assets = cash_bank_total + other_current_assets + receivable_total
-    operational_current_assets = accounting_current_assets + biological_assets_total
-    current_assets = operational_current_assets
+    # Aset biologis tidak termasuk neraca.
+    operational_current_assets = accounting_current_assets
+    current_assets = accounting_current_assets
     net_fixed_assets = fixed_cost - accumulated
 
     def safe_ratio(numerator, denominator):
@@ -1632,7 +1636,7 @@ def _balance_sheet_data(request):
     current_ratio = safe_ratio(accounting_current_assets, total_liabilities)
     cash_ratio = safe_ratio(cash_bank_total, total_liabilities)
     operational_current_ratio = safe_ratio(operational_current_assets, total_liabilities)
-    biomass_coverage = safe_ratio(biological_assets_total, total_liabilities)
+    biomass_coverage = None
     operational_working_capital = operational_current_assets - total_liabilities
     debt_to_equity = safe_ratio(total_liabilities, total_equity_with_profit) if total_equity_with_profit > 0 else None
     debt_ratio = safe_ratio(total_liabilities, total_assets)
@@ -1657,21 +1661,14 @@ def _balance_sheet_data(request):
     debt_to_equity_health = ratio_health(debt_to_equity, green_max=1.0, amber_max=2.0)
     debt_ratio_health = ratio_health(debt_ratio, green_max=0.5, amber_max=0.7)
     operational_current_health = ratio_health(operational_current_ratio, green_min=1.5, amber_min=1.0)
-    biomass_coverage_health = ratio_health(biomass_coverage, green_min=1.0, amber_min=0.5)
-    # Nilai biomassa aktif tidak boleh dinilai dari nominal rupiah absolut.
+    biomass_coverage_health = {'class': 'gray', 'label': 'Tidak digunakan di neraca'}
+    # Penilaian biomassa tidak digunakan sebagai komponen neraca.
     # Kesehatan finansialnya mengikuti kemampuan nilai biomassa menutup kewajiban:
     # >= 2,00x sehat; 1,00-<2,00x waspada; < 1,00x kritis.
     # Kualitas/kelengkapan data kolam ditampilkan terpisah agar tidak mengubah
     # status finansial hanya karena salah satu parameter operasional perlu validasi.
-    biomass_value_health = ratio_health(
-        biomass_coverage, green_min=2.0, amber_min=1.0
-    )
-    biomass_data_health = (
-        {'class': 'gray', 'label': 'Belum ada data'} if not pond_assets
-        else {'class': 'red', 'label': 'Perlu validasi'} if any(x['indicator'] == 'red' for x in pond_assets)
-        else {'class': 'amber', 'label': 'Perlu dipantau'} if any(x['indicator'] == 'amber' for x in pond_assets)
-        else {'class': 'green', 'label': 'Data memadai'}
-    )
+    biomass_value_health = {'class': 'gray', 'label': 'Tidak digunakan di neraca'}
+    biomass_data_health = {'class': 'gray', 'label': 'Tidak digunakan di neraca'}
     working_capital_health = (
         {'class': 'green', 'label': 'Sehat'} if operational_working_capital > 0
         else {'class': 'amber', 'label': 'Waspada'} if operational_working_capital == 0
@@ -1684,7 +1681,6 @@ def _balance_sheet_data(request):
     asset_composition = [
         {'label': 'Kas & Bank', 'amount': cash_bank_total, 'percent': percentage(cash_bank_total, total_assets)},
         {'label': 'Piutang Usaha', 'amount': receivable_total, 'percent': percentage(receivable_total, total_assets)},
-        {'label': 'Biomassa di Kolam', 'amount': biological_assets_total, 'percent': percentage(biological_assets_total, total_assets)},
         {'label': 'Aset Lancar Lain', 'amount': other_current_assets, 'percent': percentage(other_current_assets, total_assets)},
         {'label': 'Aset Tetap Bersih', 'amount': net_fixed_assets, 'percent': percentage(net_fixed_assets, total_assets)},
     ]
@@ -1697,11 +1693,9 @@ def _balance_sheet_data(request):
     )
 
     validation_checks = [
-        {'label': 'Persamaan neraca seimbang', 'ok': difference == 0},
-        {'label': 'Baseline aset biologis telah ditetapkan', 'ok': not biological_valuation_is_provisional},
+        {'label': 'Persamaan neraca seimbang', 'ok': abs(difference) <= Decimal('0.01')},
         {'label': 'Tidak ada pengeluaran kapital tanpa aset', 'ok': unlinked_capital_expenses == 0},
         {'label': 'Piutang dan nota penjualan tersinkron', 'ok': True},
-        {'label': 'Seluruh kolam aktif memiliki data biomassa dan harga', 'ok': all(x['indicator'] != 'red' for x in pond_assets if x['is_active_pond'])},
     ]
 
     return {
@@ -1750,10 +1744,9 @@ def _balance_sheet_data(request):
         'working_capital_health': working_capital_health,
         'asset_composition': asset_composition, 'validation_checks': validation_checks,
         'is_balanced': difference == 0,
-        'is_reconciled': abs(difference) <= Decimal('0.01') and not biological_valuation_is_provisional,
+        'is_reconciled': abs(difference) <= Decimal('0.01'),
         'balance_status': (
-            'balanced' if abs(difference) <= Decimal('0.01') and not biological_valuation_is_provisional
-            else 'balanced_with_note' if abs(difference) <= Decimal('0.01')
+            'balanced' if abs(difference) <= Decimal('0.01')
             else 'unbalanced'
         ),
     }
@@ -1772,16 +1765,12 @@ def export_balance_sheet_pdf(request):
     rows=[]
     for e in d['assets']: rows.append([f"ASET - {e.account_name}",rupiah(e.amount)])
     rows.append(['ASET - Piutang Usaha',rupiah(d['receivable_total'])])
-    rows.append(['ASET - Biomassa Udang di Kolam', rupiah(d['biological_assets_total'])])
-    for item in d['pond_assets']:
-        if item['asset_value'] > 0:
-            rows.append([f"  {item['pond'].name} - {item['biomass_kg']:,.2f} kg".replace(',', '.'), rupiah(item['asset_value'])])
     rows += [['Aset Tetap - Harga Perolehan',rupiah(d['fixed_cost'])],['Akumulasi Penyusutan',f"({rupiah(d['accumulated'])})"],['TOTAL ASET',rupiah(d['total_assets'])]]
     for e in d['liabilities']: rows.append([f"KEWAJIBAN - {e.account_name}",rupiah(e.amount)])
     rows.append(['KEWAJIBAN - Utang Usaha',rupiah(d['payable_total'])])
     rows.append(['TOTAL KEWAJIBAN',rupiah(d['total_liabilities'])])
     for e in d['equities']: rows.append([f"EKUITAS - {e.account_name}",rupiah(e.amount)])
-    rows += [['Laba/Rugi Operasional Tahun Berjalan',rupiah(d['operating_profit'])],['Cadangan Pengakuan Awal Aset Biologis',rupiah(d['biological_opening_reserve'])],['Perubahan Nilai Wajar Aset Biologis',rupiah(d['biological_fair_value_change_cumulative'])],['Laba/Rugi Tahun Berjalan Setelah Penilaian Biologis',rupiah(d['current_profit'])],['TOTAL EKUITAS',rupiah(d['total_equity_with_profit'])],['SELISIH NERACA',rupiah(d['difference'])]]
+    rows += [['Laba/Rugi Operasional Tahun Berjalan',rupiah(d['operating_profit'])],['TOTAL EKUITAS',rupiah(d['total_equity_with_profit'])],['SELISIH NERACA',rupiah(d['difference'])]]
     return export_pdf('neraca','Laporan Neraca',_scope_subtitle(d, balance=True),['Uraian','Jumlah'],rows)
 
 

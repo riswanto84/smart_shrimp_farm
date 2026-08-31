@@ -56,48 +56,6 @@
     <div class="neraca-kpi-card"><div class="neraca-kpi-label">STATUS NERACA</div><div class="neraca-kpi-value {% if balance_status == 'balanced' %}status-ok{% elif balance_status == 'balanced_with_note' %}status-note{% else %}status-bad{% endif %}">{% if balance_status == 'balanced' %}<i class="fa-solid fa-circle-check"></i> Seimbang{% elif balance_status == 'balanced_with_note' %}<i class="fa-solid fa-circle-exclamation"></i> Seimbang dengan Catatan{% else %}<i class="fa-solid fa-triangle-exclamation"></i> Belum Seimbang{% endif %}</div><div class="neraca-kpi-sub">Selisih {{ difference|rupiah }}{% if not is_reconciled %} · saldo awal belum direkonsiliasi{% endif %}</div></div>
   </div>
 
-  <div class="panel pond-assets-panel">
-    <div class="pond-assets-head">
-      <div><h2 style="margin-bottom:4px"><i class="fa-solid fa-shrimp"></i> Aset Biologis di Kolam</h2><div class="small text-muted">Biomassa aktual = populasi tersisa × proyeksi ABW; nilai mengikuti harga penjualan berdasarkan size</div></div>
-      <div class="pond-assets-summary">{{ biological_assets_total|rupiah }}</div>
-    </div>
-    <div class="pond-assets-grid">
-      {% for item in pond_assets %}
-      <div class="pond-asset-card ind-{{ item.indicator }}">
-        <div class="pond-asset-top">
-          <div><div class="pond-asset-name">{{ item.pond.code }} · {{ item.pond.name }}</div><div class="small text-muted">{{ item.cycle_name }} · DOC {{ item.doc }}</div></div>
-          <span class="pond-indicator {{ item.indicator }}"><i class="fa-solid fa-circle"></i> {{ item.indicator_label }}</span>
-        </div>
-        <div class="pond-asset-value">{{ item.asset_value|rupiah }}</div>
-        <div class="pond-asset-meta">
-          Biomassa aktual: <strong>{{ item.biomass_kg|floatformat:2 }} kg</strong> · Populasi tersisa: <strong>{{ item.remaining_population }} ekor</strong><br>
-          Harga: <strong>{{ item.price_per_kg|rupiah }}/kg</strong> · {{ item.price_source }}<br>
-          ABW sampling: <strong>{{ item.sampling_abw|floatformat:2 }} g</strong> → ABW kini: <strong>{{ item.projected_abw|floatformat:2 }} g</strong> · Size: <strong>{{ item.current_size|floatformat:1 }}</strong><br>
-          {% if item.sampling %}Sampling: <strong>{{ item.sampling.date|date:'d/m/Y' }}</strong> ({{ item.sampling_age }} hari){% endif %}
-        </div>
-        <div class="pond-flow">
-          Sampling <strong>{{ item.raw_biomass_kg|floatformat:2 }} kg</strong>
-          + pertumbuhan <strong>{{ item.growth_kg|floatformat:2 }} kg</strong>
-          − panen parsial <strong>{{ item.partial_harvest_kg|floatformat:2 }} kg</strong>
-          − mortalitas estimasi <strong>{{ item.mortality_kg|floatformat:2 }} kg</strong>
-          = <strong>{{ item.biomass_kg|floatformat:2 }} kg</strong><br>
-          Perubahan bersih: <strong class="{% if item.net_change_kg >= 0 %}positive-change{% else %}negative-change{% endif %}">{% if item.net_change_kg >= 0 %}+{% endif %}{{ item.net_change_kg|floatformat:2 }} kg</strong>
-        </div>
-        <div class="pond-metric-grid">
-          <div class="pond-metric {{ item.biomass_health.class }}"><span class="pond-metric-name">Biomassa</span><span class="pond-metric-value">{{ item.biomass_kg|floatformat:0 }} kg</span><span class="pond-metric-state">{{ item.biomass_health.label }}</span></div>
-          <div class="pond-metric {{ item.sampling_health.class }}"><span class="pond-metric-name">Sampling</span><span class="pond-metric-value">{{ item.sampling_age }} hari</span><span class="pond-metric-state">{{ item.sampling_health.label }}</span></div>
-          <div class="pond-metric {{ item.price_health.class }}"><span class="pond-metric-name">Harga</span><span class="pond-metric-value">{{ item.price_per_kg|rupiah }}</span><span class="pond-metric-state">{{ item.price_health.label }}</span></div>
-          <div class="pond-metric {{ item.sr_health.class }}"><span class="pond-metric-name">SR</span><span class="pond-metric-value">{{ item.sr|floatformat:2 }}%</span><span class="pond-metric-state">{{ item.sr_health.label }}</span></div>
-          <div class="pond-metric {{ item.adg_health.class }}"><span class="pond-metric-name">ADG</span><span class="pond-metric-value">{{ item.adg|floatformat:3 }} g/hari</span><span class="pond-metric-state">{{ item.adg_health.label }}</span></div>
-          <div class="pond-metric {{ item.fcr_health.class }}"><span class="pond-metric-name">FCR</span><span class="pond-metric-value">{{ item.fcr|floatformat:2 }}</span><span class="pond-metric-state">{{ item.fcr_health.label }}</span></div>
-        </div>
-      </div>
-      {% empty %}<div class="text-muted">Belum ada data kolam.</div>{% endfor %}
-    </div>
-    <div class="pond-legend"><span><i class="pond-dot green"></i> Sehat/normal</span><span><i class="pond-dot amber"></i> Waspada/perlu dipantau</span><span><i class="pond-dot red"></i> Kritis/perlu tindakan atau validasi data</span></div>
-    {% if excluded_pond_assets %}<div class="excluded-note"><strong>{{ excluded_pond_assets|length }} kolam tidak ditampilkan</strong> karena sudah panen total, siklus selesai, atau tidak aktif. Data sampling historisnya tidak diakui sebagai aset biologis.</div>{% endif %}
-  </div>
-
   <div class="balance-main">
     <div class="panel">
       <h2><i class="fa-solid fa-wallet"></i> Aset</h2>
@@ -105,7 +63,6 @@
         <tr><td colspan="2" class="section-title">Aset Lancar</td></tr>
         {% for e in assets %}{% if e.group == 'Kas dan Bank' %}<tr><td>{{ e.account_name }}</td><td>{{ e.amount|rupiah }}</td></tr>{% endif %}{% endfor %}
         <tr><td>Piutang Usaha</td><td>{{ receivable_total|rupiah }}</td></tr>
-        <tr><td><strong>Biomassa Udang di Kolam</strong><div class="small text-muted">Rincian berdasarkan sampling terakhir per kolam</div></td><td><strong>{{ biological_assets_total|rupiah }}</strong></td></tr>
         {% for e in assets %}{% if e.group != 'Kas dan Bank' %}<tr><td>{{ e.account_name }}</td><td>{{ e.amount|rupiah }}</td></tr>{% endif %}{% endfor %}
         <tr class="subtotal"><th>Subtotal Aset Lancar</th><th>{{ current_assets|rupiah }}</th></tr>
         <tr><td colspan="2" class="section-title">Aset Tetap</td></tr>
@@ -139,9 +96,6 @@
           <tr><td colspan="2" class="section-title">Ekuitas</td></tr>
           {% for e in equities %}<tr><td>{{ e.account_name }}</td><td>{{ e.amount|rupiah }}</td></tr>{% endfor %}
           <tr><td>Laba/Rugi Operasional Tahun Berjalan</td><td class="{% if operating_profit < 0 %}negative{% endif %}">{{ operating_profit|rupiah }}</td></tr>
-          <tr><td>Cadangan Pengakuan Awal Aset Biologis<div class="small">Baseline {{ biological_baseline_date|date:"d/m/Y" }}{% if biological_valuation_is_provisional %} · sementara{% endif %}</div></td><td>{{ biological_opening_reserve|rupiah }}</td></tr>
-          <tr><td>Perubahan Nilai Wajar Aset Biologis<div class="small">Kenaikan/penurunan kumulatif dibanding baseline · harga panen terbaru {{ average_sale_price|rupiah }}/kg</div></td><td class="{% if biological_fair_value_change_cumulative < 0 %}negative{% endif %}">{{ biological_fair_value_change_cumulative|rupiah }}</td></tr>
-          <tr><td><strong>Laba/Rugi Setelah Penilaian Biologis</strong></td><td class="{% if current_profit < 0 %}negative{% endif %}"><strong>{{ current_profit|rupiah }}</strong></td></tr>
           <tr class="grand"><th>Total Ekuitas</th><th>{{ total_equity_with_profit|rupiah }}</th></tr>
         </table>
       </div>
@@ -149,7 +103,7 @@
   </div>
 
   <div class="status-banner {% if balance_status == 'balanced' %}ok{% elif balance_status == 'balanced_with_note' %}note{% else %}bad{% endif %}">
-    <div><strong>{% if balance_status == 'balanced' %}<i class="fa-solid fa-circle-check"></i> Neraca Seimbang dan Terekonsiliasi{% elif balance_status == 'balanced_with_note' %}<i class="fa-solid fa-circle-exclamation"></i> Neraca Seimbang dengan Catatan{% else %}<i class="fa-solid fa-triangle-exclamation"></i> Neraca Belum Seimbang{% endif %}</strong><div class="small">{% if balance_status == 'balanced_with_note' %}Persamaan neraca terpenuhi, tetapi baseline aset biologis masih bersifat sementara dan perlu dikunci melalui snapshot.{% else %}Persamaan Aset = Kewajiban + Ekuitas{% if is_balanced %} telah terpenuhi{% else %} belum terpenuhi{% endif %}.{% endif %}</div></div>
+    <div><strong>{% if balance_status == 'balanced' %}<i class="fa-solid fa-circle-check"></i> Neraca Seimbang dan Terekonsiliasi{% elif balance_status == 'balanced_with_note' %}<i class="fa-solid fa-circle-exclamation"></i> Neraca Seimbang dengan Catatan{% else %}<i class="fa-solid fa-triangle-exclamation"></i> Neraca Belum Seimbang{% endif %}</strong><div class="small">{% if balance_status == 'balanced_with_note' %}Persamaan neraca terpenuhi dengan catatan.{% else %}Persamaan Aset = Kewajiban + Ekuitas{% if is_balanced %} telah terpenuhi{% else %} belum terpenuhi{% endif %}.{% endif %}</div></div>
     <div class="badge-status">Selisih {{ difference|rupiah }}</div>
   </div>
 
@@ -162,16 +116,6 @@
         <div class="health-card {{ debt_to_equity_health.class }}"><div class="health-name"><span>Debt to Equity</span><span class="health-badge">{{ debt_to_equity_health.label }}</span></div><strong class="health-value">{% if debt_to_equity != None %}{{ debt_to_equity|floatformat:2 }}x{% else %}-{% endif %}</strong><span class="health-desc">Utang dibandingkan dengan ekuitas.</span></div>
         <div class="health-card {{ debt_ratio_health.class }}"><div class="health-name"><span>Debt Ratio</span><span class="health-badge">{{ debt_ratio_health.label }}</span></div><strong class="health-value">{% if debt_ratio != None %}{{ debt_ratio|floatformat:2 }}{% else %}-{% endif %}</strong><span class="health-desc">Porsi aset yang dibiayai utang.</span></div>
       </div>
-    </div>
-    <div class="panel health-panel operational">
-      <h2><i class="fa-solid fa-shrimp"></i> Likuiditas Operasional Tambak</h2>
-      <div class="health-grid">
-        <div class="health-card {{ operational_current_health.class }}"><div class="health-name"><span>Current Ratio Operasional</span><span class="health-badge">{{ operational_current_health.label }}</span></div><strong class="health-value">{% if operational_current_ratio != None %}{{ operational_current_ratio|floatformat:2 }}x{% else %}-{% endif %}</strong><span class="health-desc">Aset lancar akuntansi + biomassa aktif ÷ kewajiban.</span></div>
-        <div class="health-card {{ biomass_coverage_health.class }}"><div class="health-name"><span>Coverage Biomassa</span><span class="health-badge">{{ biomass_coverage_health.label }}</span></div><strong class="health-value">{% if biomass_coverage != None %}{{ biomass_coverage|floatformat:2 }}x{% else %}-{% endif %}</strong><span class="health-desc">Nilai biomassa aktif ÷ kewajiban.</span></div>
-        <div class="health-card {{ biomass_value_health.class }}"><div class="health-name"><span>Nilai Biomassa Aktif</span><span class="health-badge">{{ biomass_value_health.label }}</span></div><strong class="health-value">{{ biological_assets_total|rupiah }}</strong><span class="health-desc">Status berdasarkan coverage biomassa terhadap kewajiban: sehat ≥2,00x; waspada 1,00–&lt;2,00x; kritis &lt;1,00x.</span><span class="health-data-note {{ biomass_data_health.class }}">Kualitas data: {{ biomass_data_health.label }}</span></div>
-        <div class="health-card {{ working_capital_health.class }}"><div class="health-name"><span>Modal Kerja Operasional</span><span class="health-badge">{{ working_capital_health.label }}</span></div><strong class="health-value">{{ operational_working_capital|rupiah }}</strong><span class="health-desc">Aset lancar akuntansi + biomassa aktif − kewajiban.</span></div>
-      </div>
-      <div class="health-note"><i class="fa-solid fa-circle-info"></i> Biomassa merupakan estimasi aset biologis aktif. Sistem memproyeksikan pertumbuhan ABW sampai tanggal neraca, mengurangi panen parsial dan mortalitas, lalu menilai seluruh biomassa menggunakan harga transaksi panen/penjualan terbaru pada siklus. Jika belum tersedia, sistem memakai harga rata-rata atau harga estimasi siklus sebagai fallback. Kolam panen total/siklus selesai otomatis dikeluarkan.</div>
     </div>
   </div>
 
@@ -192,18 +136,7 @@
       <div class="health-card"><div class="health-name"><span>Estimasi Total Biaya</span></div><strong class="health-value">{{ final_cycle_profit.projected_expenses|rupiah }}</strong><span class="health-desc">Termasuk saldo utang {{ final_cycle_profit.unpaid_payables|rupiah }}.</span></div>
       <div class="health-card {% if final_cycle_profit.final_net_profit >= 0 %}green{% else %}red{% endif %}"><div class="health-name"><span>Laba Bersih Akhir</span><span class="health-badge">Margin {{ final_cycle_profit.final_margin_percent|floatformat:2 }}%</span></div><strong class="health-value">{{ final_cycle_profit.final_net_profit|rupiah }}</strong><span class="health-desc">Setelah pajak {{ final_cycle_profit.estimated_tax|rupiah }}.</span></div>
     </div>
-    <div class="health-note"><i class="fa-solid fa-circle-info"></i> Harga penilaian: {{ final_cycle_profit.price_used|rupiah }}/kg ({{ final_cycle_profit.price_source }}). Proyeksi berubah mengikuti biomassa, harga, mortalitas, dan transaksi baru.</div>
-  </div>
-
-  <div class="panel" style="margin-top:16px">
-    <h2><i class="fa-solid fa-arrows-rotate"></i> Rekonsiliasi Nilai Aset Biologis</h2>
-    <div class="health-grid">
-      <div class="health-card"><div class="health-name"><span>Nilai Baseline</span></div><strong class="health-value">{{ biological_opening_reserve|rupiah }}</strong><span class="health-desc">Pengakuan awal per {{ biological_baseline_date|date:"d/m/Y" }}{% if biological_valuation_is_provisional %} · sementara{% endif %}</span></div>
-      <div class="health-card"><div class="health-name"><span>Perubahan Periode</span></div><strong class="health-value {% if biological_fair_value_change_period < 0 %}negative{% endif %}">{{ biological_fair_value_change_period|rupiah }}</strong><span class="health-desc">Dibanding snapshot penilaian sebelumnya.</span></div>
-      <div class="health-card"><div class="health-name"><span>Perubahan Kumulatif</span></div><strong class="health-value {% if biological_fair_value_change_cumulative < 0 %}negative{% endif %}">{{ biological_fair_value_change_cumulative|rupiah }}</strong><span class="health-desc">Kenaikan/penurunan dibanding baseline.</span></div>
-      <div class="health-card"><div class="health-name"><span>Nilai Akhir</span></div><strong class="health-value">{{ biological_assets_total|rupiah }}</strong><span class="health-desc">Nilai aset biologis per {{ as_of|date:"d/m/Y" }}.</span></div>
-    </div>
-    {% if biological_valuation_is_provisional %}<div class="health-note"><i class="fa-solid fa-circle-exclamation"></i> Baseline belum dikunci. Setelah deployment jalankan <code>python manage.py initialize_biological_valuation --date {{ as_of|date:"Y-m-d" }}</code>.</div>{% endif %}
+    <div class="health-note"><i class="fa-solid fa-circle-info"></i> Harga simulasi: {{ final_cycle_profit.price_used|rupiah }}/kg ({{ final_cycle_profit.price_source }}). Proyeksi berubah mengikuti biomassa, harga, mortalitas, dan transaksi baru.</div>
   </div>
 
   <div class="panel" style="margin-top:16px"><h2><i class="fa-solid fa-list-check"></i> Validasi Otomatis</h2><div class="validation-list">
