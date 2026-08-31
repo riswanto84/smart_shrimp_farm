@@ -149,7 +149,7 @@
       <small>{{ unpaid_payables_count }} dokumen masih memiliki saldo</small>
     </div>
   </a>
-  <a class="kpi-card kpi-card-link" href="{% url 'finance:payables' %}?status=open">
+  <a class="kpi-card kpi-card-link kpi-card-wide" href="{% url 'finance:payables' %}?status=open">
     <div class="kpi-icon gold"><i class="fa-solid fa-calendar-day"></i></div>
     <div>
       <span>Jatuh Tempo Bulan Ini</span>
@@ -163,7 +163,7 @@
   
 
   {% endif %}
-  <div class="kpi-card"><div class="kpi-icon green"><i class="fa-solid fa-water"></i></div><div><span>Kolam Aktif</span><strong>{{ active_pond_count }}</strong><small>{{ completed_pond_count }} kolam selesai panen</small></div></div>
+  <div class="kpi-card kpi-card-wide"><div class="kpi-icon green"><i class="fa-solid fa-water"></i></div><div><span>Kolam Aktif</span><strong>{{ active_pond_count }}</strong><small>{{ completed_pond_count }} kolam selesai panen</small></div></div>
 </div>
 {% if can_view_financial_dashboard %}
 <section class="panel final-profit-panel" style="margin-bottom:20px;">
