@@ -228,3 +228,10 @@
   .main{width:calc(100% - 230px)}
   .app-shell.sidebar-collapsed .main{margin-left:78px;width:calc(100% - 78px)}
 }
+
+
+/* KPI wide cards: two cards share a full desktop row. */
+.kpi-grid > .kpi-card-wide { grid-column: span 2; }
+@media (max-width: 1040px) {
+  .kpi-grid > .kpi-card-wide { grid-column: span 1; }
+}
