@@ -30,6 +30,96 @@
 @media(max-width:650px){.balance-head{display:block}.balance-actions{margin-top:12px}.neraca-kpi-grid,.neraca-recon-grid{grid-template-columns:1fr!important}.balance-filter{display:block}.balance-filter button{margin-top:10px}.neraca-composition-row{grid-template-columns:110px 1fr}.neraca-composition-value{grid-column:2}.neraca-ratio-grid{grid-template-columns:1fr}}
 
 .health-data-note{display:block;margin-top:8px;font-size:.78rem;font-weight:700}.health-data-note.green{color:#087a4a}.health-data-note.amber{color:#b77900}.health-data-note.red{color:#c62828}.health-data-note.gray{color:#64748b}
+
+/* ===== Finance Professional UI ===== */
+.balance-page .section-kicker{
+  display:flex;align-items:center;gap:8px;font-size:11px;text-transform:uppercase;
+  letter-spacing:.09em;font-weight:850;color:#6a7c93;margin-bottom:5px
+}
+.balance-page .section-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:16px}
+.balance-page .section-heading h2{margin:0;font-size:21px;letter-spacing:-.02em}
+.balance-page .section-heading p{margin:4px 0 0;color:#72839a;font-size:12px}
+.balance-page .finance-panel{background:#fff;border:1px solid #e3eaf4;border-radius:20px;padding:20px;box-shadow:0 10px 30px rgba(25,55,95,.055)}
+.balance-page .liquidity-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.balance-page .liquidity-card{
+  position:relative;overflow:hidden;border:1px solid #e4eaf2;border-radius:16px;
+  padding:16px;background:linear-gradient(180deg,#fbfdff 0%,#f7faff 100%)
+}
+.balance-page .liquidity-card:after{
+  content:'';position:absolute;right:-28px;top:-28px;width:78px;height:78px;border-radius:50%;
+  background:rgba(23,105,224,.055)
+}
+.balance-page .liquidity-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.balance-page .liquidity-name{font-size:13px;font-weight:800;color:#52657e}
+.balance-page .liquidity-status{font-size:10px;font-weight:850;padding:5px 8px;border-radius:999px}
+.balance-page .liquidity-card.green .liquidity-status{color:#08794d;background:#dcf7eb}
+.balance-page .liquidity-card.amber .liquidity-status{color:#946000;background:#fff1c9}
+.balance-page .liquidity-card.red .liquidity-status{color:#b4232f;background:#ffe1e4}
+.balance-page .liquidity-card.gray .liquidity-status{color:#687386;background:#edf0f4}
+.balance-page .liquidity-value{font-size:28px;line-height:1.05;font-weight:900;color:#102443;margin-top:17px;letter-spacing:-.025em}
+.balance-page .liquidity-card.green .liquidity-value{color:#08794d}
+.balance-page .liquidity-card.amber .liquidity-value{color:#946000}
+.balance-page .liquidity-card.red .liquidity-value{color:#b4232f}
+.balance-page .liquidity-desc{font-size:11px;line-height:1.45;color:#71839a;margin-top:9px;min-height:32px}
+.balance-page .liquidity-meter{height:4px;background:#e9eff6;border-radius:99px;margin-top:14px;overflow:hidden}
+.balance-page .liquidity-meter span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#1769e0,#24b79b);width:72%}
+.balance-page .profit-panel{margin-top:16px;padding:0;overflow:hidden}
+.balance-page .profit-header{
+  padding:19px 20px 15px;border-bottom:1px solid #e8edf4;
+  display:flex;justify-content:space-between;align-items:center;gap:16px
+}
+.balance-page .profit-title{display:flex;align-items:flex-start;gap:12px}
+.balance-page .profit-icon{
+  width:42px;height:42px;flex:0 0 42px;border-radius:13px;display:grid;place-items:center;
+  color:#fff;background:linear-gradient(135deg,#1769e0,#0b4ea2);font-size:17px;
+  box-shadow:0 8px 18px rgba(23,105,224,.18)
+}
+.balance-page .profit-title h2{margin:0;color:#102443;font-size:20px}
+.balance-page .profit-title p{margin:4px 0 0;color:#71839a;font-size:12px}
+.balance-page .profit-controls{display:flex;align-items:center;gap:8px}
+.balance-page .profit-controls input{width:150px!important}
+.balance-page .profit-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:18px 20px}
+.balance-page .profit-card{
+  border:1px solid #e3eaf4;border-radius:16px;padding:16px;background:#fbfcfe;min-height:138px;
+  position:relative
+}
+.balance-page .profit-card.primary{background:linear-gradient(145deg,#f5f9ff,#eef5ff);border-color:#cfe0fb}
+.balance-page .profit-card.success{background:linear-gradient(145deg,#f2fbf6,#eaf8f1);border-color:#bfe4d0}
+.balance-page .profit-label{font-size:12px;color:#687a91;font-weight:750}
+.balance-page .profit-value{font-size:22px;font-weight:900;color:#102443;letter-spacing:-.02em;margin-top:10px;line-height:1.15}
+.balance-page .profit-card.success .profit-value{color:#08794d}
+.balance-page .profit-desc{font-size:11px;line-height:1.45;color:#73849a;margin-top:9px}
+.balance-page .profit-badge{display:inline-flex;align-items:center;gap:5px;margin-top:9px;padding:5px 8px;border-radius:999px;background:#d9f4e7;color:#08794d;font-size:10px;font-weight:850}
+.balance-page .profit-equation{
+  margin:0 20px 18px;padding:13px 15px;border:1px dashed #cfdbea;border-radius:13px;
+  background:#f8fafd;display:flex;justify-content:space-between;gap:15px;align-items:center
+}
+.balance-page .profit-equation span{font-size:11px;color:#6c7e94}
+.balance-page .profit-equation strong{font-size:14px;color:#102443}
+.balance-page .profit-note{
+  margin:0 20px 20px;padding:11px 13px;border-radius:12px;background:#f5f8fc;
+  color:#657890;font-size:11px;line-height:1.5
+}
+.balance-page .compact-panel{margin-top:16px}
+.balance-page .compact-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}
+.balance-page .compact-header h2{margin:0;font-size:18px}
+.balance-page .validation-list.compact{grid-template-columns:repeat(2,minmax(0,1fr));display:grid;gap:8px}
+.balance-page .validation-list.compact .validation-item{padding:10px 12px}
+.balance-page .recon-grid-pro{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.balance-page .recon-card{padding:13px 14px;border:1px solid #e4eaf2;border-radius:13px;background:#f9fbfd}
+.balance-page .recon-card span{display:block;font-size:10px;color:#75869b;text-transform:uppercase;letter-spacing:.04em;font-weight:800}
+.balance-page .recon-card strong{display:block;margin-top:6px;font-size:15px;color:#102443}
+@media(max-width:1050px){
+  .balance-page .liquidity-grid,.balance-page .profit-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .balance-page .recon-grid-pro{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:650px){
+  .balance-page .liquidity-grid,.balance-page .profit-grid,.balance-page .recon-grid-pro,
+  .balance-page .validation-list.compact{grid-template-columns:1fr}
+  .balance-page .profit-header{display:block}.balance-page .profit-controls{margin-top:12px}
+  .balance-page .profit-equation{display:block}.balance-page .profit-equation strong{display:block;margin-top:5px}
+}
+
 </style>
 <div class="balance-page">
   <div class="balance-head">
@@ -107,47 +197,126 @@
     <div class="badge-status">Selisih {{ difference|rupiah }}</div>
   </div>
 
-  <div class="health-panels">
-    <div class="panel health-panel">
-      <h2><i class="fa-solid fa-scale-balanced"></i> Likuiditas Akuntansi</h2>
-      <div class="health-grid">
-        <div class="health-card {{ current_ratio_health.class }}"><div class="health-name"><span>Current Ratio</span><span class="health-badge">{{ current_ratio_health.label }}</span></div><strong class="health-value">{% if current_ratio != None %}{{ current_ratio|floatformat:2 }}x{% else %}-{% endif %}</strong><span class="health-desc">Aset lancar akuntansi ÷ kewajiban. Biomassa tidak dianggap kas siap pakai.</span></div>
-        <div class="health-card {{ cash_ratio_health.class }}"><div class="health-name"><span>Cash Ratio</span><span class="health-badge">{{ cash_ratio_health.label }}</span></div><strong class="health-value">{% if cash_ratio != None %}{{ cash_ratio|floatformat:2 }}x{% else %}-{% endif %}</strong><span class="health-desc">Kas & bank ÷ kewajiban.</span></div>
-        <div class="health-card {{ debt_to_equity_health.class }}"><div class="health-name"><span>Debt to Equity</span><span class="health-badge">{{ debt_to_equity_health.label }}</span></div><strong class="health-value">{% if debt_to_equity != None %}{{ debt_to_equity|floatformat:2 }}x{% else %}-{% endif %}</strong><span class="health-desc">Utang dibandingkan dengan ekuitas.</span></div>
-        <div class="health-card {{ debt_ratio_health.class }}"><div class="health-name"><span>Debt Ratio</span><span class="health-badge">{{ debt_ratio_health.label }}</span></div><strong class="health-value">{% if debt_ratio != None %}{{ debt_ratio|floatformat:2 }}{% else %}-{% endif %}</strong><span class="health-desc">Porsi aset yang dibiayai utang.</span></div>
+  <div class="finance-panel" style="margin-top:16px">
+    <div class="section-heading">
+      <div>
+        <div class="section-kicker"><i class="fa-solid fa-gauge-high"></i> Analisis Keuangan</div>
+        <h2>Likuiditas & Struktur Utang</h2>
+        <p>Indikator kesehatan keuangan berdasarkan posisi Neraca saat ini.</p>
+      </div>
+    </div>
+    <div class="liquidity-grid">
+      <div class="liquidity-card {{ current_ratio_health.class }}">
+        <div class="liquidity-top"><span class="liquidity-name">Current Ratio</span><span class="liquidity-status">{{ current_ratio_health.label }}</span></div>
+        <strong class="liquidity-value">{% if current_ratio != None %}{{ current_ratio|floatformat:2 }}x{% else %}-{% endif %}</strong>
+        <div class="liquidity-desc">Kemampuan aset lancar untuk menutup kewajiban lancar.</div>
+        <div class="liquidity-meter"><span></span></div>
+      </div>
+      <div class="liquidity-card {{ cash_ratio_health.class }}">
+        <div class="liquidity-top"><span class="liquidity-name">Cash Ratio</span><span class="liquidity-status">{{ cash_ratio_health.label }}</span></div>
+        <strong class="liquidity-value">{% if cash_ratio != None %}{{ cash_ratio|floatformat:2 }}x{% else %}-{% endif %}</strong>
+        <div class="liquidity-desc">Kas & bank yang tersedia dibandingkan kewajiban.</div>
+        <div class="liquidity-meter"><span></span></div>
+      </div>
+      <div class="liquidity-card {{ debt_to_equity_health.class }}">
+        <div class="liquidity-top"><span class="liquidity-name">Debt to Equity</span><span class="liquidity-status">{{ debt_to_equity_health.label }}</span></div>
+        <strong class="liquidity-value">{% if debt_to_equity != None %}{{ debt_to_equity|floatformat:2 }}x{% else %}-{% endif %}</strong>
+        <div class="liquidity-desc">Besarnya utang dibandingkan modal dan ekuitas usaha.</div>
+        <div class="liquidity-meter"><span></span></div>
+      </div>
+      <div class="liquidity-card {{ debt_ratio_health.class }}">
+        <div class="liquidity-top"><span class="liquidity-name">Debt Ratio</span><span class="liquidity-status">{{ debt_ratio_health.label }}</span></div>
+        <strong class="liquidity-value">{% if debt_ratio != None %}{{ debt_ratio|floatformat:2 }}{% else %}-{% endif %}</strong>
+        <div class="liquidity-desc">Proporsi aset usaha yang dibiayai oleh kewajiban.</div>
+        <div class="liquidity-meter"><span></span></div>
       </div>
     </div>
   </div>
 
-  <div class="panel" style="margin-top:16px">
-    <div class="panel-head">
-      <div><h2><i class="fa-solid fa-chart-line"></i> Estimasi Laba Akhir Siklus</h2><span>Proyeksi jika seluruh Biomassa Index dipanen, utang dilunasi, dan PPh Final 0,5% dibayar.</span></div>
-      <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+  <div class="finance-panel profit-panel">
+    <div class="profit-header">
+      <div class="profit-title">
+        <div class="profit-icon"><i class="fa-solid fa-chart-line"></i></div>
+        <div>
+          <h2>Estimasi Laba Akhir Siklus</h2>
+          <p>Proyeksi jika biomassa Index dipanen, utang dilunasi, dan PPh Final 0,5% dibayar.</p>
+        </div>
+      </div>
+      <form method="get" class="profit-controls">
         {% if report_mode %}<input type="hidden" name="mode" value="{{ report_mode }}">{% endif %}
         {% if selected_cycle %}<input type="hidden" name="cycle" value="{{ selected_cycle.id }}">{% endif %}
         {% if as_of %}<input type="hidden" name="as_of" value="{{ as_of|date:'Y-m-d' }}">{% endif %}
-        <input type="number" name="simulation_price" min="0" step="1000" value="{{ final_cycle_profit.price_used|floatformat:0 }}" style="width:160px;padding:9px 12px;border:1px solid #dbe5f1;border-radius:10px;">
-        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-calculator"></i> Simulasikan</button>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text">Rp</span>
+          <input type="number" name="simulation_price" min="0" step="1000" value="{{ final_cycle_profit.price_used|floatformat:0 }}" class="form-control">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-calculator"></i> Simulasikan</button>
       </form>
     </div>
-    <div class="health-grid">
-      <div class="health-card"><div class="health-name"><span>Omzet Terealisasi</span></div><strong class="health-value">{{ final_cycle_profit.realized_revenue|rupiah }}</strong><span class="health-desc">Penjualan yang sudah tercatat.</span></div>
-      <div class="health-card"><div class="health-name"><span>Nilai Sisa Udang</span></div><strong class="health-value">{{ final_cycle_profit.remaining_biomass_value|rupiah }}</strong><span class="health-desc">{{ final_cycle_profit.remaining_biomass_kg|angka:2 }} kg × {{ final_cycle_profit.price_used|rupiah }}/kg · {{ final_cycle_profit.price_source }}{% if final_cycle_profit.latest_harvest_price_date %} ({{ final_cycle_profit.latest_harvest_price_date|date:"d M Y" }}){% endif %}.</span></div>
-      <div class="health-card"><div class="health-name"><span>Estimasi Total Biaya</span></div><strong class="health-value">{{ final_cycle_profit.projected_expenses|rupiah }}</strong><span class="health-desc">Termasuk saldo utang {{ final_cycle_profit.unpaid_payables|rupiah }}.</span></div>
-      <div class="health-card {% if final_cycle_profit.final_net_profit >= 0 %}green{% else %}red{% endif %}"><div class="health-name"><span>Laba Bersih Akhir</span><span class="health-badge">Margin {{ final_cycle_profit.final_margin_percent|floatformat:2 }}%</span></div><strong class="health-value">{{ final_cycle_profit.final_net_profit|rupiah }}</strong><span class="health-desc">Setelah pajak {{ final_cycle_profit.estimated_tax|rupiah }}.</span></div>
+
+    <div class="profit-grid">
+      <div class="profit-card primary">
+        <div class="profit-label">Omzet Terealisasi</div>
+        <div class="profit-value">{{ final_cycle_profit.realized_revenue|rupiah }}</div>
+        <div class="profit-desc">Penjualan yang sudah tercatat sampai tanggal laporan.</div>
+      </div>
+      <div class="profit-card">
+        <div class="profit-label">Nilai Sisa Udang</div>
+        <div class="profit-value">{{ final_cycle_profit.remaining_biomass_value|rupiah }}</div>
+        <div class="profit-desc"><strong>{{ final_cycle_profit.remaining_biomass_kg|angka:2 }} kg</strong> × {{ final_cycle_profit.price_used|rupiah }}/kg.</div>
+        <div class="profit-badge"><i class="fa-solid fa-fish"></i> Biomassa Index</div>
+      </div>
+      <div class="profit-card">
+        <div class="profit-label">Estimasi Total Biaya</div>
+        <div class="profit-value">{{ final_cycle_profit.projected_expenses|rupiah }}</div>
+        <div class="profit-desc">Termasuk saldo utang {{ final_cycle_profit.unpaid_payables|rupiah }} yang akan dilunasi.</div>
+      </div>
+      <div class="profit-card success">
+        <div class="profit-label">Laba Bersih Akhir</div>
+        <div class="profit-value">{{ final_cycle_profit.final_net_profit|rupiah }}</div>
+        <div class="profit-badge"><i class="fa-solid fa-arrow-trend-up"></i> Margin {{ final_cycle_profit.final_margin_percent|floatformat:2 }}%</div>
+        <div class="profit-desc">Setelah estimasi pajak {{ final_cycle_profit.estimated_tax|rupiah }}.</div>
+      </div>
     </div>
-    <div class="health-note"><i class="fa-solid fa-circle-info"></i> Harga simulasi: {{ final_cycle_profit.price_used|rupiah }}/kg ({{ final_cycle_profit.price_source }}). Proyeksi berubah mengikuti biomassa, harga, mortalitas, dan transaksi baru.</div>
+
+    <div class="profit-equation">
+      <span><i class="fa-solid fa-calculator"></i> Potensi omzet akhir = omzet terealisasi + nilai sisa udang</span>
+      <strong>{{ final_cycle_profit.projected_revenue|rupiah }}</strong>
+    </div>
+    <div class="profit-note"><i class="fa-solid fa-circle-info"></i> Harga simulasi <strong>{{ final_cycle_profit.price_used|rupiah }}/kg</strong> · {{ final_cycle_profit.price_source }}{% if final_cycle_profit.latest_harvest_price_date %} · harga transaksi terakhir {{ final_cycle_profit.latest_harvest_price_date|date:"d M Y" }}{% endif %}. Proyeksi mengikuti biomassa, harga, mortalitas, dan transaksi baru.</div>
   </div>
 
-  <div class="panel" style="margin-top:16px"><h2><i class="fa-solid fa-list-check"></i> Validasi Otomatis</h2><div class="validation-list">
-    {% for check in validation_checks %}<div class="validation-item {% if check.ok %}ok{% else %}bad{% endif %}"><i class="fa-solid {% if check.ok %}fa-circle-check{% else %}fa-circle-exclamation{% endif %}"></i><span>{{ check.label }}</span></div>{% endfor %}
-  </div></div>
+  <div class="finance-panel compact-panel">
+    <div class="compact-header">
+      <h2><i class="fa-solid fa-list-check"></i> Validasi Otomatis</h2>
+      <span class="text-muted small">Pemeriksaan konsistensi laporan</span>
+    </div>
+    <div class="validation-list compact">
+      {% for check in validation_checks %}
+      <div class="validation-item {% if check.ok %}ok{% else %}bad{% endif %}">
+        <i class="fa-solid {% if check.ok %}fa-circle-check{% else %}fa-circle-exclamation{% endif %}"></i>
+        <span>{{ check.label }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
 
-  <div class="panel" style="margin-top:16px"><h2><i class="fa-solid fa-rotate"></i> Rekonsiliasi Otomatis</h2><div class="neraca-recon-grid">
-    <div class="neraca-recon-item"><span>Pendapatan Penjualan</span><strong>{{ sales_revenue|rupiah }}</strong></div>
-    <div class="neraca-recon-item"><span>Pendapatan Lain</span><strong>{{ other_revenue|rupiah }}</strong></div>
-    <div class="neraca-recon-item"><span>Beban Operasional</span><strong>{{ operating_cost|rupiah }}</strong></div>
-    <div class="neraca-recon-item"><span>Penyusutan Tahun Berjalan</span><strong>{{ current_year_depreciation|rupiah }}</strong></div>
-  </div>{% if warnings %}<div class="warnings">{% for warning in warnings %}<div class="alert alert-warning py-2"><i class="fa-solid fa-triangle-exclamation"></i> {{ warning }}</div>{% endfor %}</div>{% endif %}</div>
+  <div class="finance-panel compact-panel">
+    <div class="compact-header">
+      <h2><i class="fa-solid fa-rotate"></i> Rekonsiliasi Otomatis</h2>
+      <span class="text-muted small">Sumber pembentuk laba/rugi berjalan</span>
+    </div>
+    <div class="recon-grid-pro">
+      <div class="recon-card"><span>Pendapatan Penjualan</span><strong>{{ sales_revenue|rupiah }}</strong></div>
+      <div class="recon-card"><span>Pendapatan Lain</span><strong>{{ other_revenue|rupiah }}</strong></div>
+      <div class="recon-card"><span>Beban Operasional</span><strong>{{ operating_cost|rupiah }}</strong></div>
+      <div class="recon-card"><span>Penyusutan Tahun Berjalan</span><strong>{{ current_year_depreciation|rupiah }}</strong></div>
+    </div>
+    {% if warnings %}
+    <div class="warnings">
+      {% for warning in warnings %}<div class="alert alert-warning py-2 mb-2"><i class="fa-solid fa-triangle-exclamation"></i> {{ warning }}</div>{% endfor %}
+    </div>
+    {% endif %}
+  </div>
 </div>
 {% endblock %}
