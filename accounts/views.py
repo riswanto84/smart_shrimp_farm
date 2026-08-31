@@ -255,10 +255,79 @@ class _CleanupFile:
 
 
 @owner_required
+def _find_pg_dump():
+    """Find pg_dump even when Gunicorn/systemd has a restricted PATH.
+
+    Priority:
+    1. Explicit PG_DUMP_PATH setting.
+    2. pg_dump available on PATH.
+    3. Common PostgreSQL client locations, including versioned Debian/Ubuntu
+       paths such as /usr/lib/postgresql/16/bin/pg_dump.
+    """
+    candidates = []
+
+    # Allow an explicit path from environment/config without changing code.
+    explicit = os.environ.get('PG_DUMP_PATH')
+    if explicit:
+        candidates.append(explicit)
+
+    found = shutil.which('pg_dump')
+    if found:
+        candidates.append(found)
+
+    # The project virtualenv may be used by some deployments.
+    try:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        candidates.extend([
+            os.path.join(project_root, 'venv', 'bin', 'pg_dump'),
+            os.path.join(project_root, '.venv', 'bin', 'pg_dump'),
+        ])
+    except Exception:
+        pass
+
+    candidates.extend([
+        '/usr/bin/pg_dump',
+        '/usr/local/bin/pg_dump',
+        '/usr/local/pgsql/bin/pg_dump',
+        '/opt/postgresql/bin/pg_dump',
+    ])
+
+    # Debian/Ubuntu installs versioned clients here. Prefer the newest
+    # version when several clients are installed.
+    for base in ('/usr/lib/postgresql', '/usr/local/lib/postgresql', '/opt/postgresql'):
+        try:
+            import glob
+            versioned = glob.glob(os.path.join(base, '*', 'bin', 'pg_dump'))
+            def version_key(path):
+                try:
+                    parent = os.path.basename(os.path.dirname(os.path.dirname(path)))
+                    return tuple(int(x) for x in parent.split('.') if x.isdigit())
+                except Exception:
+                    return (0,)
+            candidates.extend(sorted(versioned, key=version_key, reverse=True))
+        except Exception:
+            pass
+
+    seen = set()
+    for candidate in candidates:
+        if not candidate:
+            continue
+        candidate = os.path.expanduser(str(candidate))
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+
+    return None
+
+
 def export_database_sql(request):
     """Download a full SQL database backup for the current application database.
 
     PostgreSQL: uses pg_dump (schema + data, portable without ownership/ACLs).
+    The executable is auto-detected so the feature also works when Gunicorn/
+    systemd does not inherit the same PATH as an interactive SSH shell.
     SQLite: uses the native SQLite iterdump() API (schema + data).
     Only Owner/Root can access this endpoint.
     """
@@ -272,10 +341,11 @@ def export_database_sql(request):
     try:
         if engine == 'postgresql':
             db = connection.settings_dict
-            pg_dump = shutil.which('pg_dump')
+            pg_dump = _find_pg_dump()
             if not pg_dump:
                 return HttpResponse(
-                    'pg_dump tidak ditemukan di server. Install PostgreSQL client (pg_dump) terlebih dahulu.',
+                    'pg_dump tidak ditemukan. Aplikasi sudah mencoba PATH, PG_DUMP_PATH, venv/bin, /usr/bin, /usr/local/bin, dan lokasi PostgreSQL versioned di /usr/lib/postgresql/*/bin. '
+                    'Install PostgreSQL client (pg_dump) terlebih dahulu atau set PG_DUMP_PATH ke lokasi pg_dump.',
                     status=500,
                     content_type='text/plain; charset=utf-8',
                 )
