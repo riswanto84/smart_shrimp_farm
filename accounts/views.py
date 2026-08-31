@@ -254,7 +254,6 @@ class _CleanupFile:
                 pass
 
 
-@owner_required
 def _find_pg_dump():
     """Find pg_dump even when Gunicorn/systemd has a restricted PATH.
 
