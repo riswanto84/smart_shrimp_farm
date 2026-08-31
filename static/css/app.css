@@ -235,3 +235,32 @@
 @media (max-width: 1040px) {
   .kpi-grid > .kpi-card-wide { grid-column: span 1; }
 }
+
+/* === DASHBOARD PREMIUM: BORDERLESS CARDS === */
+.dashboard-pro .kpi-card,
+.dashboard-pro .final-profit-panel .kpi-card {
+  border: 0 !important;
+  box-shadow: 0 8px 24px rgba(15,39,74,.055) !important;
+}
+.dashboard-pro .kpi-card:hover,
+.dashboard-pro .final-profit-panel .kpi-card:hover {
+  border-color: transparent !important;
+  box-shadow: 0 14px 32px rgba(15,39,74,.10) !important;
+}
+.dashboard-pro .kpi-card:nth-child(1),
+.dashboard-pro .kpi-card:nth-child(2),
+.dashboard-pro .kpi-card:nth-child(3),
+.dashboard-pro .kpi-card:nth-child(4) {
+  border-top: 0 !important;
+}
+.dashboard-pro .final-profit-panel {
+  border: 0 !important;
+  box-shadow: 0 12px 34px rgba(15,39,74,.065) !important;
+}
+.dashboard-pro .final-profit-panel .panel-head {
+  border-bottom: 1px solid rgba(226,234,244,.72);
+}
+.dashboard-pro .final-profit-panel .table-responsive {
+  border: 0 !important;
+  box-shadow: 0 6px 18px rgba(15,39,74,.035);
+}
