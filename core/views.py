@@ -514,7 +514,7 @@ def dashboard(request):
     # Sumber tunggal biomassa INDEX untuk Dashboard dan Neraca.
     # Nilai hasil perhitungan lama di atas ditimpa secara sengaja agar semua
     # modul menampilkan angka yang identik.
-    index_snapshot = calculate_index_biomass_snapshot(as_of=today, ponds=ponds)
+    index_snapshot = calculate_index_biomass_snapshot(as_of=today, ponds=ponds, cycle=selected_cycle)
     production_index_items = []
     production_index_total_kg = index_snapshot['total_kg']
     index_by_pond = index_snapshot['by_pond']

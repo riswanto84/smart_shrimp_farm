@@ -81,15 +81,19 @@ class IndexBiomassResult:
         return THOUSAND / self.projected_abw_g if self.projected_abw_g > 0 else ZERO
 
 
-def calculate_pond_index_biomass(pond: Pond, as_of: date | None = None) -> IndexBiomassResult | None:
+def calculate_pond_index_biomass(
+    pond: Pond, as_of: date | None = None, cycle: CultivationCycle | None = None
+) -> IndexBiomassResult | None:
     """Hitung biomassa Index aktual satu kolam pada tanggal tertentu."""
     as_of = as_of or timezone.localdate()
-    sampling = (
-        SamplingRecord.objects.filter(pond=pond, date__lte=as_of)
-        .select_related("cycle")
-        .order_by("-date", "-id")
-        .first()
-    )
+    sampling_qs = SamplingRecord.objects.filter(pond=pond, date__lte=as_of).select_related("cycle")
+    # Jika dashboard sedang menampilkan satu siklus tertentu, JANGAN mengambil
+    # sampling terbaru dari siklus lain. Ini sebelumnya menyebabkan biomassa
+    # menjadi 0 ketika sampling siklus aktif berbeda dengan sampling terakhir
+    # yang tersimpan pada kolam.
+    if cycle is not None:
+        sampling_qs = sampling_qs.filter(cycle=cycle)
+    sampling = sampling_qs.order_by("-date", "-id").first()
     if not sampling:
         return None
 
@@ -187,7 +191,8 @@ def calculate_pond_index_biomass(pond: Pond, as_of: date | None = None) -> Index
 
 
 def calculate_index_biomass_snapshot(
-    *, as_of: date | None = None, ponds: Iterable[Pond] | None = None
+    *, as_of: date | None = None, ponds: Iterable[Pond] | None = None,
+    cycle: CultivationCycle | None = None
 ) -> dict:
     """Hitung snapshot biomassa Index seluruh kolam aktif.
 
@@ -199,7 +204,7 @@ def calculate_index_biomass_snapshot(
     excluded: list[IndexBiomassResult] = []
     total = ZERO
     for pond in ponds:
-        result = calculate_pond_index_biomass(pond, as_of)
+        result = calculate_pond_index_biomass(pond, as_of, cycle=cycle)
         if result is None:
             continue
         if result.excluded:
@@ -210,6 +215,7 @@ def calculate_index_biomass_snapshot(
     return {
         "as_of": as_of,
         "method": "INDEX",
+        "cycle_id": cycle.id if cycle is not None else None,
         "rows": rows,
         "by_pond": {row.pond.id: row for row in rows},
         "excluded": excluded,

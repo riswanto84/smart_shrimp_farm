@@ -153,10 +153,12 @@ def calculate_final_cycle_profit(*, cycle=None, as_of=None, simulated_price=None
     current_expenses = _decimal(finance.get('expense_total'))
     operating_profit = _decimal(finance.get('profit'))
 
-    snapshot = calculate_index_biomass_snapshot(as_of=as_of)
+    # Snapshot harus dihitung langsung untuk siklus terpilih. Sebelumnya
+    # snapshot mengambil sampling terbaru per kolam tanpa filter siklus, lalu
+    # hasilnya baru difilter di sini. Jika sampling terbaru berasal dari siklus
+    # lain, hasil akhir menjadi 0 walaupun siklus terpilih mempunyai biomassa.
+    snapshot = calculate_index_biomass_snapshot(as_of=as_of, cycle=cycle)
     rows = snapshot.get('rows', [])
-    if cycle is not None:
-        rows = [row for row in rows if getattr(row, 'cycle', None) and row.cycle.id == cycle.id]
     remaining_biomass_kg = sum((_decimal(row.biomass_index_kg) for row in rows), ZERO)
 
     latest_price_info = latest_harvest_sale_price(cycle=cycle, as_of=as_of)
@@ -189,6 +191,8 @@ def calculate_final_cycle_profit(*, cycle=None, as_of=None, simulated_price=None
         'realized_revenue': realized_revenue,
         'current_expenses': current_expenses,
         'remaining_biomass_kg': remaining_biomass_kg.quantize(Decimal('0.01')),
+        'biomass_pond_count': len(rows),
+        'biomass_excluded_pond_count': len(snapshot.get('excluded', [])),
         'average_sale_price': latest_price,  # kompatibilitas template lama
         'latest_harvest_price': latest_price,
         'latest_harvest_price_date': latest_price_info.get('date'),
