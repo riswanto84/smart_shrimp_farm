@@ -222,3 +222,132 @@ def activity_logs(request):
 def activity_log_detail(request, log_id):
     log = get_object_or_404(AuditLog.objects.select_related("user", "user__userprofile").prefetch_related("user__userprofile__roles"), id=log_id)
     return render(request, "accounts/activity_log_detail.html", {"log": log})
+
+# ---------------------------------------------------------------------------
+# Database backup/export (Owner/Root only)
+# ---------------------------------------------------------------------------
+import os
+import shutil
+import subprocess
+import tempfile
+from django.db import connection
+from django.http import FileResponse, HttpResponse
+from django.utils import timezone
+
+
+class _CleanupFile:
+    """File wrapper that removes the temporary backup after Django closes it."""
+    def __init__(self, path):
+        self.path = path
+        self.file = open(path, 'rb')
+
+    def __getattr__(self, name):
+        return getattr(self.file, name)
+
+    def close(self):
+        try:
+            self.file.close()
+        finally:
+            try:
+                os.remove(self.path)
+            except FileNotFoundError:
+                pass
+
+
+@owner_required
+def export_database_sql(request):
+    """Download a full SQL database backup for the current application database.
+
+    PostgreSQL: uses pg_dump (schema + data, portable without ownership/ACLs).
+    SQLite: uses the native SQLite iterdump() API (schema + data).
+    Only Owner/Root can access this endpoint.
+    """
+    timestamp = timezone.localtime().strftime('%Y%m%d_%H%M%S')
+    engine = connection.vendor
+    suffix = f"smart_shrimp_farm_backup_{timestamp}.sql"
+    temp = tempfile.NamedTemporaryFile(prefix='smart_shrimp_farm_', suffix='.sql', delete=False)
+    temp_path = temp.name
+    temp.close()
+
+    try:
+        if engine == 'postgresql':
+            db = connection.settings_dict
+            pg_dump = shutil.which('pg_dump')
+            if not pg_dump:
+                return HttpResponse(
+                    'pg_dump tidak ditemukan di server. Install PostgreSQL client (pg_dump) terlebih dahulu.',
+                    status=500,
+                    content_type='text/plain; charset=utf-8',
+                )
+
+            env = os.environ.copy()
+            password = db.get('PASSWORD')
+            if password:
+                env['PGPASSWORD'] = str(password)
+
+            cmd = [pg_dump,
+                   '--host', str(db.get('HOST') or 'localhost'),
+                   '--port', str(db.get('PORT') or '5432'),
+                   '--username', str(db.get('USER') or ''),
+                   '--dbname', str(db.get('NAME') or ''),
+                   '--format=plain',
+                   '--no-owner',
+                   '--no-privileges',
+                   '--encoding=UTF8']
+            with open(temp_path, 'wb') as output:
+                result = subprocess.run(
+                    cmd,
+                    stdout=output,
+                    stderr=subprocess.PIPE,
+                    env=env,
+                    check=False,
+                )
+            if result.returncode != 0:
+                error = result.stderr.decode('utf-8', errors='replace').strip()
+                raise RuntimeError(error or 'pg_dump gagal membuat backup database.')
+
+        elif engine == 'sqlite':
+            # SQLite's iterdump creates executable SQL containing schema + data.
+            with open(temp_path, 'w', encoding='utf-8', newline='\n') as output:
+                output.write('-- SMART SHRIMP FARM DATABASE BACKUP\n')
+                output.write(f'-- Generated: {timezone.localtime().isoformat()}\n')
+                output.write('-- Engine: SQLite\n\n')
+                raw = connection.connection
+                if raw is None:
+                    connection.ensure_connection()
+                    raw = connection.connection
+                for line in raw.iterdump():
+                    output.write(line)
+                    output.write('\n')
+        else:
+            raise RuntimeError(f'Export SQL belum didukung untuk database engine: {engine}')
+
+        # Record the backup event without storing database contents in the log.
+        log_activity(
+            request,
+            action='Export database SQL',
+            action_type='export',
+            module='Database',
+            description=f'Backup SQL database berhasil dibuat ({engine}).',
+            object_repr=suffix,
+        )
+
+        wrapped = _CleanupFile(temp_path)
+        response = FileResponse(
+            wrapped,
+            as_attachment=True,
+            filename=suffix,
+            content_type='application/sql; charset=utf-8',
+        )
+        return response
+
+    except Exception as exc:
+        try:
+            os.remove(temp_path)
+        except FileNotFoundError:
+            pass
+        return HttpResponse(
+            f'Gagal membuat backup database SQL: {exc}',
+            status=500,
+            content_type='text/plain; charset=utf-8',
+        )

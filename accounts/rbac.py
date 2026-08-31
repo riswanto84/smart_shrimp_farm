@@ -72,6 +72,7 @@ MENU_DEFINITIONS = [
     {'type': 'item', 'label': 'Pengguna & Hak Akses', 'url': '/accounts/users/', 'icon': 'fa-solid fa-user-shield', 'perm': 'accounts.users'},
     {'type': 'item', 'label': 'Role & Permission', 'url': '/accounts/roles/', 'icon': 'fa-solid fa-key', 'perm': 'accounts.roles'},
     {'type': 'item', 'label': 'Log Aktivitas', 'url': '/accounts/activity/', 'icon': 'fa-solid fa-clock-rotate-left', 'perm': 'accounts.activity', 'owner_only': True},
+    {'type': 'item', 'label': 'Export Database SQL', 'url': '/accounts/database/export-sql/', 'icon': 'fa-solid fa-database', 'perm': 'accounts.database_export', 'owner_only': True},
 ]
 
 BOTTOM_MENU_DEFINITIONS = [
