@@ -9,6 +9,7 @@ from django.contrib import messages
 from django.views.decorators.http import require_POST
 from accounts.rbac import permission_required
 from django.db.models import Sum, Count, Min, Max, Q
+from django.db import transaction, connection
 from django.db.models.functions import TruncDate, TruncWeek, TruncMonth
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -941,8 +942,36 @@ def delete_expense_document(request, pk):
 @login_required
 @permission_required('finance.expenses')
 @require_POST
+@transaction.atomic
 def delete_expense(request, pk):
-    get_object_or_404(OperationalExpense, pk=pk).delete()
+    """Delete an operational expense and all legacy/current attachments safely.
+
+    Production databases may still contain the legacy
+    ``finance_operationalexpenseattachment`` table from an older version of
+    the application. Its FK can block deletion even though the current Django
+    model uses ``ExpenseDocument``. Remove legacy rows first when that table
+    exists, then let Django cascade current ``ExpenseDocument`` rows.
+    """
+    expense = get_object_or_404(OperationalExpense, pk=pk)
+
+    # Compatibility cleanup for production databases upgraded from the old
+    # attachment implementation. The table is checked dynamically so fresh
+    # installations are unaffected.
+    if connection.vendor == 'postgresql':
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT to_regclass(%s)",
+                ['finance_operationalexpenseattachment'],
+            )
+            legacy_table_exists = cursor.fetchone()[0] is not None
+            if legacy_table_exists:
+                cursor.execute(
+                    'DELETE FROM "finance_operationalexpenseattachment" WHERE "expense_id" = %s',
+                    [expense.pk],
+                )
+
+    expense.delete()
+    messages.success(request, 'Pengeluaran dan dokumen terkait berhasil dihapus.')
     return redirect('finance:expenses')
 
 # =============================================================================
@@ -1876,7 +1905,6 @@ def _save_trade_documents(request, trade_account, payment=None):
 # =============================================================================
 # UTANG DAN PIUTANG USAHA
 # =============================================================================
-from django.db import transaction
 
 
 def _trade_queryset(request, account_type):
