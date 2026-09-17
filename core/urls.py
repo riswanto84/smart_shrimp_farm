@@ -1,3 +1,4 @@
 from django.urls import path
 from . import views
+app_name = "core"
 urlpatterns=[path('',views.home,name='home'),path('dashboard/',views.dashboard,name='dashboard'),path('notifications/read/',views.mark_notifications_read,name='notifications_read'),path('ollama/status/',views.ollama_status_api,name='ollama_status_api'),path('weather/status/',views.weather_status_api,name='weather_status_api')]

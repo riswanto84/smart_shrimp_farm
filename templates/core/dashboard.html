@@ -383,7 +383,7 @@
   const key = 'ssf-weather-recovery-v1';
   if (sessionStorage.getItem(key)) return;
   sessionStorage.setItem(key, '1');
-  fetch('{% url "weather_status_api" %}?refresh=1', {
+  fetch('{% url "core:weather_status_api" %}?refresh=1', {
     credentials: 'same-origin',
     headers: {'X-Requested-With': 'XMLHttpRequest'}
   })
@@ -399,7 +399,7 @@
 {% endif %}
 <script>
 (function () {
-  const endpoint = '{% url "weather_status_api" %}';
+  const endpoint = '{% url "core:weather_status_api" %}';
   const pollMs = 5 * 60 * 1000;
   let requestInFlight = false;
 

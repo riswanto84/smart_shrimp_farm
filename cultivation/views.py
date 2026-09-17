@@ -5,6 +5,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from django.utils import timezone
 from datetime import timedelta
+from django.db.models import Max
 
 from accounts.rbac import owner_required, is_owner
 from core.reporting import export_pdf, angka
@@ -201,7 +202,10 @@ def close_and_create_next_cycle(request, pk):
         transaction.set_rollback(True)
         return redirect("cultivation:list")
 
+    next_cycle_id = (
+    CultivationCycle.objects.aggregate(max_id=Max("id"))["max_id"] or 0) + 1
     next_cycle = CultivationCycle.objects.create(
+        id=next_cycle_id,
         name=requested_name,
         start_date=next_start_date,
         target_duration_days=cycle.target_duration_days,
