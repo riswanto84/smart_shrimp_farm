@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}AI Rekomendasi Pakan Harian{% endblock %}
+{% block content %}
+{% include 'chat_ai/_ai_header.html' with page_title='AI Rekomendasi Pakan Harian' page_subtitle='Ollama menganalisa anco, sampling, biomassa, FR, FCR, dan siphon untuk rekomendasi pakan.' %}
+<div class="ai-kpi-grid three">
+  <div class="ai-kpi"><i class="fa-solid fa-sack-xmark"></i><span>Rekomendasi Pakan</span><b>{{ total_feed|angka:2 }} kg</b><small>Total pakan hari ini</small></div>
+  <div class="ai-kpi success"><i class="fa-solid fa-arrow-trend-up"></i><span>Dasar Biomassa</span><b>{% if ctx.latest_sampling %}{{ ctx.latest_sampling.biomass_kg|angka:2 }} kg{% else %}-{% endif %}</b><small>Sampling terakhir</small></div>
+  <div class="ai-kpi"><i class="fa-solid fa-droplet"></i><span>Feeding Rate</span><b>{% if ctx.latest_sampling %}{{ ctx.latest_sampling.fr_percent|angka:2 }}%{% else %}-{% endif %}</b><small>Dari form sampling</small></div>
+</div>
+<div class="ai-dashboard-grid">
+  <div class="ai-card wide">
+    <div class="ai-section-title"><i class="fa-solid fa-bowl-food"></i><h2>Pembagian Pakan yang Disarankan</h2></div>
+    <div class="ai-feed-schedule">
+      <div><b>Pagi</b><span>06.00–08.00</span><strong>{{ sessions.0|angka:2 }} kg</strong></div>
+      <div><b>Siang</b><span>11.00–13.00</span><strong>{{ sessions.1|angka:2 }} kg</strong></div>
+      <div><b>Sore</b><span>16.00–18.00</span><strong>{{ sessions.2|angka:2 }} kg</strong></div>
+      <div><b>Malam</b><span>21.00–23.00</span><strong>{{ sessions.3|angka:2 }} kg</strong></div>
+    </div>
+    <p class="ai-note"><i class="fa-solid fa-circle-info"></i> {{ reason }}</p>
+  </div>
+  <div class="ai-card">
+    <div class="ai-section-title"><i class="fa-solid fa-shield-check"></i><h2>Alasan Rekomendasi</h2></div>
+    <div class="ai-tags"><span>Cek Anco</span><span>ABW</span><span>Biomassa</span><span>FCR</span><span>Siphon</span></div>
+    <p>Rekomendasi awal dihitung dari biomassa × FR%, kemudian disesuaikan dengan kondisi anco dan siphon.</p>
+  </div>
+</div>
+{% include 'chat_ai/_ai_result.html' %}
+{% include 'chat_ai/_source_data.html' %}
+{% endblock %}

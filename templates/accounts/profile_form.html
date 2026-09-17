@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <span class="badge rounded-pill bg-primary-subtle text-primary mb-2"><i class="fa-solid fa-user-pen"></i> AKUN</span>
+    <h1>Edit Profil</h1>
+    <p>Perbarui identitas akun, email, dan nomor telepon pengguna.</p>
+  </div>
+  <a class="btn btn-outline-primary" href="/dashboard/"><i class="fa-solid fa-arrow-left"></i> Kembali</a>
+</div>
+<div class="row g-3">
+  <div class="col-lg-8">
+    <form method="post" class="cardx">{% csrf_token %}
+      <div class="section-mini"><i class="fa-solid fa-id-card"></i><div><b>Informasi Profil</b><small>Data ini digunakan untuk identitas pengguna aplikasi.</small></div></div>
+      <div class="row g-3 mt-1">
+        <div class="col-md-6"><label class="form-label">Username</label><input class="form-control" value="{{ user.username }}" disabled></div>
+        <div class="col-md-6"><label class="form-label">Role</label><input class="form-control" value="{{ PRIMARY_ROLE_LABEL }}" disabled></div>
+        <div class="col-md-6"><label class="form-label">Nama Depan</label><input class="form-control" name="first_name" value="{{ user.first_name }}" maxlength="150"></div>
+        <div class="col-md-6"><label class="form-label">Nama Belakang</label><input class="form-control" name="last_name" value="{{ user.last_name }}" maxlength="150"></div>
+        <div class="col-md-6"><label class="form-label">Email</label><input class="form-control" type="email" name="email" value="{{ user.email }}" placeholder="nama@email.com"></div>
+        <div class="col-md-6"><label class="form-label">No. HP</label><input class="form-control" name="phone" value="{{ profile.phone }}" placeholder="0812xxxx" maxlength="30"></div>
+      </div>
+      <div class="d-flex gap-2 mt-4"><button class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Simpan Profil</button><a class="btn btn-outline-secondary" href="/accounts/password/">Ubah Password</a></div>
+    </form>
+  </div>
+  <div class="col-lg-4">
+    <div class="cardx bg-primary text-white"><div class="d-flex gap-3"><div class="rounded-3 bg-white bg-opacity-25 p-3"><i class="fa-solid fa-shield-halved"></i></div><div><h5>Keamanan Akun</h5><p class="mb-0 small">Gunakan password kuat dan perbarui data kontak agar akun mudah dipulihkan.</p></div></div></div>
+  </div>
+</div>
+{% endblock %}

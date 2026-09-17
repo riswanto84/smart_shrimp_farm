@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+{% block title %}Siklus Budidaya
+
+{% if can_manage_cycles %}
+{% for c in cycles %}
+  {% if c.status != 'completed' %}
+  <div class="modal fade" id="closeCycle{{ c.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <form method="post" action="{% url 'cultivation:close_and_next' c.id %}">
+          {% csrf_token %}
+          <div class="modal-header">
+            <h5 class="modal-title">Tutup {{ c.name }}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-warning">
+              Siklus lama akan dikunci sebagai arsip. Data produksi, panen, sampling, mortalitas, penjualan, dan pengeluaran tidak dihapus, tetapi tidak akan muncul pada siklus baru.
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Tanggal selesai aktual</label>
+              <input type="date" class="form-control" name="actual_end_date" value="{% now 'Y-m-d' %}" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Nama siklus berikutnya</label>
+              <input type="text" class="form-control" name="next_cycle_name" placeholder="Contoh: Siklus 2">
+              <div class="form-text">Kosongkan agar nama dibuat otomatis.</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Tanggal mulai siklus berikutnya</label>
+              <input type="date" class="form-control" name="next_start_date">
+              <div class="form-text">Kosongkan agar dimulai satu hari setelah siklus lama ditutup.</div>
+            </div>
+            <div class="small text-muted">
+              Target DOC, size, biomassa, SR, FCR, dan ADG disalin sebagai target. Seluruh nilai realisasi siklus baru dimulai dari nol.
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+            <button type="submit" class="btn btn-warning" onclick="return confirm('Yakin menutup siklus ini dan membuat siklus berikutnya?')">
+              <i class="fa-solid fa-lock"></i> Tutup dan Buat Siklus Baru
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+{% endfor %}
+{% endif %}
+
+{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Siklus Budidaya</h1>
+    <p>Siklus selesai menjadi arsip read-only. Laporan akhir dapat dicetak oleh semua role pengguna.</p>
+  </div>
+  {% if can_manage_cycles %}<a class="btn btn-primary" href="{% url 'cultivation:add' %}"><i class="fa-solid fa-plus"></i> Tambah Siklus</a>{% endif %}
+</div>
+<div class="cardx"><div class="table-responsive"><table class="table app-table align-middle"><thead><tr><th>Nama</th><th>Mulai</th><th>Target Selesai</th><th>Selesai Aktual</th><th>Durasi</th><th>Status</th><th>Progres</th><th>Target Produksi</th><th>Ringkasan Akhir</th><th>Aksi</th></tr></thead><tbody>
+{% for c in cycles %}
+<tr>
+  <td><b>{{ c.name }}</b>{% if selected_cycle.id == c.id %}<span class="badge bg-primary ms-1">Dipilih</span>{% endif %}</td>
+  <td>{{ c.start_date|date:'d/m/Y' }}</td>
+  <td>{{ c.target_end_date|date:'d/m/Y' }}</td>
+  <td>{{ c.actual_end_date|date:'d/m/Y'|default:'-' }}</td>
+  <td>{{ c.target_duration_days }} hari</td>
+  <td>{% if c.status == 'completed' %}<span class="badge bg-secondary"><i class="fa-solid fa-lock"></i> Selesai</span>{% else %}<span class="badge bg-success">{{ c.get_status_display }}</span>{% endif %}</td>
+  <td>{{ c.progress_percent }}%</td>
+  <td><small>{{ c.target_biomass_ton|floatformat:2 }} ton · size {{ c.target_size|floatformat:0 }}<br>DOC {{ c.target_doc }} · FCR {{ c.target_fcr|floatformat:2 }} · SR {{ c.target_sr_percent|floatformat:1 }}%</small></td>
+  <td>{% if c.final_snapshot %}<small>Biomassa {{ c.final_snapshot.biomass_fr_kg|floatformat:2 }} kg<br>FCR {{ c.final_snapshot.average_fcr|floatformat:2 }} · Panen {{ c.final_snapshot.harvest_total_kg|floatformat:2 }} kg</small>{% else %}<span class="text-muted">Belum ditutup</span>{% endif %}</td>
+  <td class="text-nowrap">
+    {% if c.status == 'completed' %}<a class="btn btn-sm btn-danger" href="{% url 'cultivation:report_pdf' c.id %}" title="Cetak laporan akhir PDF"><i class="fa-solid fa-file-pdf"></i> PDF</a>{% endif %}
+    {% if can_manage_cycles %}
+      <a class="btn btn-sm btn-outline-primary" href="{% url 'cultivation:edit' c.id %}">Edit</a>
+      {% if c.status != 'completed' %}
+      <button class="btn btn-sm btn-warning" type="button" data-bs-toggle="modal" data-bs-target="#closeCycle{{ c.id }}">
+        <i class="fa-solid fa-lock"></i> Tutup & Siklus Baru
+      </button>
+      {% endif %}
+    {% endif %}
+  </td>
+</tr>
+{% empty %}<tr><td colspan="10" class="text-center text-muted">Belum ada siklus budidaya.</td></tr>{% endfor %}
+</tbody></table></div></div>
+
+
+{% if can_manage_cycles %}
+{% for c in cycles %}
+  {% if c.status != 'completed' %}
+  <div class="modal fade" id="closeCycle{{ c.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <form method="post" action="{% url 'cultivation:close_and_next' c.id %}">
+          {% csrf_token %}
+          <div class="modal-header">
+            <h5 class="modal-title">Tutup {{ c.name }}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-warning">
+              Siklus lama akan dikunci sebagai arsip. Data produksi, panen, sampling, mortalitas, penjualan, dan pengeluaran tidak dihapus, tetapi tidak akan muncul pada siklus baru.
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Tanggal selesai aktual</label>
+              <input type="date" class="form-control" name="actual_end_date" value="{% now 'Y-m-d' %}" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Nama siklus berikutnya</label>
+              <input type="text" class="form-control" name="next_cycle_name" placeholder="Contoh: Siklus 2">
+              <div class="form-text">Kosongkan agar nama dibuat otomatis.</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Tanggal mulai siklus berikutnya</label>
+              <input type="date" class="form-control" name="next_start_date">
+              <div class="form-text">Kosongkan agar dimulai satu hari setelah siklus lama ditutup.</div>
+            </div>
+            <div class="small text-muted">
+              Target DOC, size, biomassa, SR, FCR, dan ADG disalin sebagai target. Seluruh nilai realisasi siklus baru dimulai dari nol.
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>
+            <button type="submit" class="btn btn-warning" onclick="return confirm('Yakin menutup siklus ini dan membuat siklus berikutnya?')">
+              <i class="fa-solid fa-lock"></i> Tutup dan Buat Siklus Baru
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+{% endfor %}
+{% endif %}
+
+{% endblock %}

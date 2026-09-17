@@ -1,0 +1,843 @@
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from accounts.rbac import permission_required
+from django.http import FileResponse, JsonResponse, HttpResponseBadRequest, HttpResponse
+from django.db import transaction
+from django.db.models import Sum, Count, Q
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+import json
+from .models import Customer, Sale, SaleItem, SaleDocument
+from operations.models import Harvest
+from .pdf import build_invoice_pdf, safe_invoice_filename
+from .midtrans import (
+    MidtransError, create_snap_transaction, verify_notification_signature,
+    apply_midtrans_status, get_transaction_status,
+)
+from django.utils import timezone
+from django.utils.dateparse import parse_date
+from datetime import timedelta
+from decimal import Decimal, InvalidOperation
+from core.reporting import get_date_range, filter_by_date_range, format_date_range, export_excel, export_pdf, rupiah
+from core.utils import parse_rupiah
+from core.pagination import paginate_queryset
+
+from cultivation.utils import get_selected_cycle, filter_selected_cycle
+from finance.receivable_sync import sync_sale_receivable
+
+
+
+ALLOWED_SALE_DOCUMENT_EXTENSIONS = {'.pdf','.jpg','.jpeg','.png','.webp','.doc','.docx','.xls','.xlsx'}
+MAX_SALE_DOCUMENT_SIZE = 10 * 1024 * 1024
+
+def _payment_data(request, total_amount):
+    method = request.POST.get('payment_method', 'Cash')
+    cash = parse_rupiah(request.POST.get('cash_amount')) if method == 'Campuran' else Decimal('0')
+    transfer = parse_rupiah(request.POST.get('transfer_amount')) if method == 'Campuran' else Decimal('0')
+    qris = parse_rupiah(request.POST.get('qris_amount')) if method == 'Campuran' else Decimal('0')
+    other = parse_rupiah(request.POST.get('other_payment_amount')) if method in {'Campuran','Lainnya'} else Decimal('0')
+    other_name = (request.POST.get('other_payment_method') or '').strip()
+    if method == 'Cash': cash = total_amount
+    elif method == 'Transfer': transfer = total_amount
+    elif method == 'QRIS': qris = total_amount
+    elif method == 'Lainnya':
+        if not other_name: raise ValueError('Nama metode pembayaran lainnya wajib diisi.')
+        if other <= 0: other = total_amount
+    paid = cash + transfer + qris + other
+    if paid > total_amount: raise ValueError('Total pembayaran tidak boleh melebihi total transaksi.')
+    status = 'Lunas' if paid >= total_amount else 'Belum Lunas'
+    return method, cash, transfer, qris, other, other_name, paid, status
+
+
+def _apply_manual_payment_status(
+    requested_status,
+    payment_method,
+    total_amount,
+    cash,
+    transfer,
+    qris,
+    other,
+    other_name,
+):
+    """Selaraskan rincian pembayaran dengan status yang dipilih saat edit.
+
+    - Belum Lunas: jika sebelumnya pembayaran penuh, pembayaran dikosongkan
+      agar saldo piutang kembali sebesar total nota.
+    - Lunas: pastikan jumlah pembayaran sama dengan total nota.
+    """
+    paid = cash + transfer + qris + other
+
+    if requested_status == 'Belum Lunas':
+        if paid >= total_amount:
+            cash = Decimal('0')
+            transfer = Decimal('0')
+            qris = Decimal('0')
+            other = Decimal('0')
+            paid = Decimal('0')
+        return cash, transfer, qris, other, other_name, paid
+
+    if requested_status == 'Lunas' and paid < total_amount:
+        cash = Decimal('0')
+        transfer = Decimal('0')
+        qris = Decimal('0')
+        other = Decimal('0')
+
+        if payment_method == 'Cash':
+            cash = total_amount
+        elif payment_method == 'Transfer':
+            transfer = total_amount
+        elif payment_method == 'QRIS':
+            qris = total_amount
+        elif payment_method == 'Lainnya':
+            other = total_amount
+            if not other_name:
+                other_name = 'Pelunasan manual'
+        elif payment_method == 'Campuran':
+            # Kekurangan dialokasikan ke kas agar total pembayaran tepat.
+            cash = total_amount
+        else:
+            # Tempo/Midtrans atau metode lain yang ditandai lunas secara manual.
+            other = total_amount
+            if not other_name:
+                other_name = 'Pelunasan manual'
+
+        paid = total_amount
+
+    return cash, transfer, qris, other, other_name, paid
+
+
+def _save_sale_documents(request, sale):
+    from pathlib import Path
+    files = request.FILES.getlist('documents')
+    dtype = request.POST.get('document_type') or 'Bukti Transfer'
+    desc = (request.POST.get('document_description') or '').strip()
+    for uploaded in files:
+        ext = Path(uploaded.name).suffix.lower()
+        if ext not in ALLOWED_SALE_DOCUMENT_EXTENSIONS:
+            raise ValueError(f'Format file {uploaded.name} tidak didukung.')
+        if uploaded.size > MAX_SALE_DOCUMENT_SIZE:
+            raise ValueError(f'File {uploaded.name} melebihi batas 10 MB.')
+        SaleDocument.objects.create(sale=sale, document_type=dtype, file=uploaded, description=desc, uploaded_by=request.user)
+
+def _normalize_decimal_input(value):
+    """Normalisasi angka Indonesia/internasional menjadi format Decimal.
+
+    Contoh yang diterima: 1188,40; 1.188,40; 1188.40; 1,188.40.
+    Pemisah paling kanan dianggap desimal saat titik dan koma sama-sama ada.
+    """
+    raw = str(value or '').strip().replace(' ', '')
+    raw = ''.join(ch for ch in raw if ch.isdigit() or ch in ',.-')
+    if raw.count('-') > 1 or ('-' in raw and not raw.startswith('-')):
+        raise InvalidOperation
+
+    sign = '-' if raw.startswith('-') else ''
+    raw = raw.lstrip('-')
+    if not raw:
+        raise InvalidOperation
+
+    if ',' in raw and '.' in raw:
+        decimal_sep = ',' if raw.rfind(',') > raw.rfind('.') else '.'
+        thousands_sep = '.' if decimal_sep == ',' else ','
+        raw = raw.replace(thousands_sep, '')
+        integer, fraction = raw.rsplit(decimal_sep, 1)
+        normalized = f'{sign}{integer or "0"}.{fraction}'
+    elif ',' in raw:
+        parts = raw.split(',')
+        if len(parts) == 2:
+            normalized = f'{sign}{parts[0] or "0"}.{parts[1]}'
+        else:
+            normalized = sign + ''.join(parts[:-1]) + '.' + parts[-1]
+    elif '.' in raw:
+        parts = raw.split('.')
+        if len(parts) == 2:
+            normalized = f'{sign}{parts[0] or "0"}.{parts[1]}'
+        else:
+            normalized = sign + ''.join(parts[:-1]) + '.' + parts[-1]
+    else:
+        normalized = sign + raw
+    return normalized
+
+
+def _parse_decimal_field(value, label, *, required=True, allow_zero=False):
+    raw = str(value or '').strip()
+    if not raw:
+        if required:
+            raise ValueError(f'{label} wajib diisi dengan angka.')
+        return Decimal('0')
+    try:
+        number = Decimal(_normalize_decimal_input(raw))
+    except (InvalidOperation, ValueError):
+        raise ValueError(
+            f'{label} harus berupa angka yang valid. '
+            'Contoh: 1188,40 atau 1.188,40.'
+        )
+    if number < 0:
+        raise ValueError(f'{label} tidak boleh bernilai negatif.')
+    if not allow_zero and number == 0:
+        raise ValueError(f'{label} harus lebih besar dari 0.')
+    return number
+
+
+def _cashier_context(sale=None, item=None, mode='add'):
+    customers = Customer.objects.all().order_by('name')
+    harvests = Harvest.objects.select_related('pond').order_by('-date')[:200]
+    return {
+        'customers': customers,
+        'harvests': harvests,
+        'sale': sale,
+        'item': item,
+        'sale_items': list(sale.items.select_related('harvest__pond').all()) if sale else [],
+        'mode': mode,
+    }
+
+
+def _selected_fk_or_none(model, value, label):
+    value = (value or '').strip()
+    if not value:
+        return None
+    try:
+        obj_id = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f'{label} tidak valid. Pilih data dari daftar pencarian.')
+    if not model.objects.filter(pk=obj_id).exists():
+        raise ValueError(f'{label} tidak ditemukan. Pilih data dari daftar pencarian.')
+    return obj_id
+
+
+def _get_sale_items_from_request(request):
+    """Ambil satu atau beberapa item penjualan dari form kasir.
+
+    Mendukung format baru berupa daftar item dan tetap menerima field lama
+    agar kompatibel dengan request atau template lama.
+    """
+    harvest_values = request.POST.getlist('item_harvest')
+    size_values = request.POST.getlist('item_size')
+    weight_values = request.POST.getlist('item_weight')
+    price_values = request.POST.getlist('item_price')
+
+    if not any([harvest_values, size_values, weight_values, price_values]):
+        harvest_values = [request.POST.get('harvest', '')]
+        size_values = [request.POST.get('size_text', '')]
+        weight_values = [request.POST.get('weight_kg', '')]
+        price_values = [request.POST.get('price_per_kg', '')]
+
+    row_count = max(
+        len(harvest_values),
+        len(size_values),
+        len(weight_values),
+        len(price_values),
+    )
+
+    items = []
+    duplicate_keys = set()
+    for index in range(row_count):
+        harvest_raw = harvest_values[index] if index < len(harvest_values) else ''
+        size_text = (size_values[index] if index < len(size_values) else '').strip()
+        weight_raw = weight_values[index] if index < len(weight_values) else ''
+        price_raw = price_values[index] if index < len(price_values) else ''
+
+        # Baris tambahan yang sepenuhnya kosong diabaikan.
+        if not any(str(value or '').strip() for value in [harvest_raw, size_text, weight_raw, price_raw]):
+            continue
+
+        row_number = index + 1
+        if not size_text:
+            raise ValueError(f'Ukuran udang pada baris {row_number} wajib diisi.')
+
+        harvest_id = _selected_fk_or_none(
+            Harvest,
+            harvest_raw,
+            f'Sumber panen pada baris {row_number}',
+        )
+        weight = _parse_decimal_field(
+            weight_raw,
+            f'Berat pada baris {row_number}',
+        )
+        price = parse_rupiah(price_raw)
+        if price <= 0:
+            raise ValueError(
+                f'Harga/Kg pada baris {row_number} wajib lebih besar dari 0.'
+            )
+
+        duplicate_key = (harvest_id or 0, size_text.casefold())
+        if duplicate_key in duplicate_keys:
+            raise ValueError(
+                f'Ukuran {size_text} dengan sumber panen yang sama tercatat lebih dari sekali. '
+                'Gabungkan beratnya dalam satu baris.'
+            )
+        duplicate_keys.add(duplicate_key)
+
+        items.append({
+            'harvest_id': harvest_id,
+            'size_text': size_text,
+            'weight_kg': weight,
+            'price_per_kg': price,
+            'subtotal': weight * price,
+        })
+
+    if not items:
+        raise ValueError('Minimal satu ukuran udang harus dimasukkan.')
+
+    return items
+
+
+def _get_sale_totals_from_request(request, items):
+    subtotal = sum((item['subtotal'] for item in items), Decimal('0'))
+    total_kg = sum((item['weight_kg'] for item in items), Decimal('0'))
+    shipping_cost = parse_rupiah(request.POST.get('shipping_cost'))
+    packing_cost = parse_rupiah(request.POST.get('packing_cost'))
+    other_cost = parse_rupiah(request.POST.get('other_cost'))
+
+    if shipping_cost < 0 or packing_cost < 0 or other_cost < 0:
+        raise ValueError('Biaya tambahan tidak boleh bernilai negatif.')
+
+    total_amount = subtotal + shipping_cost + packing_cost + other_cost
+    return total_kg, subtotal, shipping_cost, packing_cost, other_cost, total_amount
+
+
+def _money(value):
+    try:
+        return Decimal(value or 0)
+    except Exception:
+        return Decimal('0')
+
+
+def _default_month_range(request):
+    """Filter dashboard penjualan. Default: bulan berjalan."""
+    today = timezone.localdate()
+    date_from = parse_date(request.GET.get('date_from') or '') or today.replace(day=1)
+    date_to = parse_date(request.GET.get('date_to') or '') or today
+    if date_from > date_to:
+        date_from, date_to = date_to, date_from
+    return date_from, date_to
+
+
+def _filtered_sales_for_dashboard(request):
+    date_from, date_to = _default_month_range(request)
+    qs = filter_selected_cycle(request, Sale.objects.select_related('customer', 'cashier').prefetch_related('items').order_by('-date'))
+    qs = filter_by_date_range(qs, 'date', date_from, date_to, is_datetime=True)
+    status = request.GET.get('status') or ''
+    payment_method = request.GET.get('payment_method') or ''
+    if status:
+        qs = qs.filter(status=status)
+    if payment_method:
+        qs = qs.filter(payment_method=payment_method)
+    return qs, date_from, date_to, status, payment_method
+
+
+@login_required
+@permission_required('sales.dashboard')
+def sales_dashboard(request):
+    sales, date_from, date_to, status_filter, payment_filter = _filtered_sales_for_dashboard(request)
+    all_in_period = list(sales)
+
+    total_revenue = sum((_money(s.total_amount) for s in all_in_period), Decimal('0'))
+    total_kg = sum((_money(s.total_kg) for s in all_in_period), Decimal('0'))
+    total_transactions = len(all_in_period)
+    avg_price = (total_revenue / total_kg) if total_kg else Decimal('0')
+    paid_revenue = sum((_money(s.total_amount) for s in all_in_period if s.status == 'Lunas'), Decimal('0'))
+    receivable_revenue = sum((_money(s.total_amount) for s in all_in_period if s.status in ['Belum Lunas', 'Menunggu Pembayaran']), Decimal('0'))
+    paid_count = sum(1 for s in all_in_period if s.status == 'Lunas')
+    receivable_count = sum(1 for s in all_in_period if s.status in ['Belum Lunas', 'Menunggu Pembayaran'])
+
+    # Grafik tren harian dibuat di Python agar aman untuk SQLite.
+    daily = {}
+    d = date_from
+    while d <= date_to:
+        daily[d.isoformat()] = {'label': d.strftime('%d/%m'), 'revenue': Decimal('0'), 'kg': Decimal('0'), 'count': 0}
+        d += timedelta(days=1)
+    for s in all_in_period:
+        key = timezone.localtime(s.date).date().isoformat()
+        if key not in daily:
+            daily[key] = {'label': timezone.localtime(s.date).strftime('%d/%m'), 'revenue': Decimal('0'), 'kg': Decimal('0'), 'count': 0}
+        daily[key]['revenue'] += _money(s.total_amount)
+        daily[key]['kg'] += _money(s.total_kg)
+        daily[key]['count'] += 1
+    trend_rows = list(daily.values())
+    max_revenue = max([row['revenue'] for row in trend_rows] or [Decimal('0')]) or Decimal('1')
+    for row in trend_rows:
+        row['revenue_width'] = int((row['revenue'] / max_revenue) * 100) if max_revenue else 0
+
+    payment_map = {}
+    status_map = {}
+    customer_map = {}
+    size_map = {}
+    for s in all_in_period:
+        payment_map.setdefault(s.payment_method or 'Lainnya', {'label': s.payment_method or 'Lainnya', 'amount': Decimal('0'), 'count': 0})
+        payment_map[s.payment_method or 'Lainnya']['amount'] += _money(s.total_amount)
+        payment_map[s.payment_method or 'Lainnya']['count'] += 1
+
+        status_map.setdefault(s.status or 'Lainnya', {'label': s.status or 'Lainnya', 'amount': Decimal('0'), 'count': 0})
+        status_map[s.status or 'Lainnya']['amount'] += _money(s.total_amount)
+        status_map[s.status or 'Lainnya']['count'] += 1
+
+        cname = s.customer.name if s.customer else 'Tanpa pelanggan'
+        customer_map.setdefault(cname, {'label': cname, 'amount': Decimal('0'), 'kg': Decimal('0'), 'count': 0})
+        customer_map[cname]['amount'] += _money(s.total_amount)
+        customer_map[cname]['kg'] += _money(s.total_kg)
+        customer_map[cname]['count'] += 1
+
+        for item in s.items.all():
+            size = item.size_text or 'Tidak diisi'
+            size_map.setdefault(size, {'label': size, 'amount': Decimal('0'), 'kg': Decimal('0'), 'count': 0})
+            size_map[size]['amount'] += _money(item.subtotal)
+            size_map[size]['kg'] += _money(item.weight_kg)
+            size_map[size]['count'] += 1
+
+    payment_rows = sorted(payment_map.values(), key=lambda x: x['amount'], reverse=True)
+    status_rows = sorted(status_map.values(), key=lambda x: x['amount'], reverse=True)
+    top_customers = sorted(customer_map.values(), key=lambda x: x['amount'], reverse=True)[:8]
+    size_rows = sorted(size_map.values(), key=lambda x: x['kg'], reverse=True)[:8]
+
+    def add_width(rows, key='amount'):
+        max_value = max([_money(r.get(key)) for r in rows] or [Decimal('0')]) or Decimal('1')
+        for r in rows:
+            r['width'] = int((_money(r.get(key)) / max_value) * 100) if max_value else 0
+        return rows
+
+    add_width(payment_rows, 'amount')
+    add_width(status_rows, 'amount')
+    add_width(top_customers, 'amount')
+    add_width(size_rows, 'kg')
+
+    recent_sales = all_in_period[:10]
+    unpaid_sales = [s for s in all_in_period if s.status in ['Belum Lunas', 'Menunggu Pembayaran']][:10]
+
+    context = {
+        'date_from': date_from,
+        'date_to': date_to,
+        'status_filter': status_filter,
+        'payment_filter': payment_filter,
+        'total_revenue': total_revenue,
+        'paid_revenue': paid_revenue,
+        'receivable_revenue': receivable_revenue,
+        'total_kg': total_kg,
+        'total_transactions': total_transactions,
+        'avg_price': avg_price,
+        'paid_count': paid_count,
+        'receivable_count': receivable_count,
+        'trend_rows': trend_rows[-31:],
+        'payment_rows': payment_rows,
+        'status_rows': status_rows,
+        'top_customers': top_customers,
+        'size_rows': size_rows,
+        'recent_sales': recent_sales,
+        'unpaid_sales': unpaid_sales,
+        'payment_choices': Sale.PAYMENT,
+        'status_choices': Sale.STATUS,
+    }
+    return render(request, 'sales/dashboard.html', context)
+
+
+@login_required
+@permission_required('sales.customers')
+def customers(request):
+    q = (request.GET.get('q') or '').strip()
+    customers = Customer.objects.all().order_by('name')
+    if q:
+        customers = customers.filter(
+            Q(name__icontains=q) | Q(phone__icontains=q) | Q(email__icontains=q) | Q(address__icontains=q)
+        )
+    page_obj = paginate_queryset(request, customers, per_page=10)
+    return render(request, 'sales/customers.html', {'customers': page_obj, 'page_obj': page_obj, 'q': q})
+
+
+@login_required
+@permission_required('sales.customers')
+def add_customer(request):
+    if request.method == 'POST':
+        Customer.objects.create(name=request.POST['name'], phone=request.POST.get('phone', ''), email=request.POST.get('email', ''), address=request.POST.get('address', ''))
+        return redirect('sales:customers')
+    return render(request, 'sales/customer_form.html')
+
+
+@login_required
+@permission_required('sales.cashier')
+def customer_autocomplete(request):
+    q = (request.GET.get('q') or '').strip()
+    customers = Customer.objects.all().order_by('name')
+    if q:
+        customers = customers.filter(
+            Q(name__icontains=q) | Q(phone__icontains=q) |
+            Q(email__icontains=q) | Q(address__icontains=q)
+        )
+    customers = customers[:20]
+    return JsonResponse({
+        'results': [
+            {
+                'id': customer.pk,
+                'name': customer.name,
+                'phone': customer.phone or '',
+                'email': customer.email or '',
+                'address': customer.address or '',
+                'text': f"{customer.name}{' — ' + customer.phone if customer.phone else ''}",
+            }
+            for customer in customers
+        ]
+    })
+
+
+@login_required
+@permission_required('sales.cashier')
+def cashier(request):
+    if request.method == 'POST':
+        try:
+            with transaction.atomic():
+                customer_id = _selected_fk_or_none(
+                    Customer,
+                    request.POST.get('customer'),
+                    'Pelanggan',
+                )
+                items = _get_sale_items_from_request(request)
+                total_kg, subtotal, shipping_cost, packing_cost, other_cost, total_amount = (
+                    _get_sale_totals_from_request(request, items)
+                )
+                method, cash, transfer, qris, other_pay, other_name, paid, auto_status = (
+                    _payment_data(request, total_amount)
+                )
+
+                inv = 'INV' + timezone.now().strftime('%Y%m%d%H%M%S%f')
+                sale = Sale.objects.create(
+                    cycle=get_selected_cycle(request, required=True),
+                    invoice_no=inv,
+                    customer_id=customer_id,
+                    total_kg=total_kg,
+                    total_amount=total_amount,
+                    shipping_cost=shipping_cost,
+                    packing_cost=packing_cost,
+                    other_cost=other_cost,
+                    payment_method=method,
+                    cash_amount=cash,
+                    transfer_amount=transfer,
+                    qris_amount=qris,
+                    other_payment_amount=other_pay,
+                    other_payment_method=other_name,
+                    status=auto_status,
+                    cashier=request.user,
+                    notes=request.POST.get('notes', ''),
+                )
+                SaleItem.objects.bulk_create([
+                    SaleItem(sale=sale, **item_data)
+                    for item_data in items
+                ])
+                _save_sale_documents(request, sale)
+                sync_sale_receivable(sale)
+
+            return redirect('sales:invoice', pk=sale.pk)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return render(request, 'sales/cashier.html', _cashier_context())
+
+    return render(request, 'sales/cashier.html', _cashier_context())
+
+
+@login_required
+@permission_required('sales.cashier')
+def edit_sale(request, pk):
+    sale = get_object_or_404(
+        Sale.objects.select_related('customer', 'cashier').prefetch_related(
+            'items__harvest__pond',
+            'documents',
+        ),
+        pk=pk,
+    )
+
+    if request.method == 'POST':
+        invoice_no = (request.POST.get('invoice_no') or sale.invoice_no).strip()
+        if Sale.objects.filter(invoice_no=invoice_no).exclude(pk=sale.pk).exists():
+            messages.error(
+                request,
+                'Nomor nota sudah digunakan. Silakan gunakan nomor nota lain.',
+            )
+            return render(
+                request,
+                'sales/sale_form.html',
+                _cashier_context(sale=sale, item=sale.items.first(), mode='edit'),
+            )
+
+        try:
+            with transaction.atomic():
+                customer_id = _selected_fk_or_none(
+                    Customer,
+                    request.POST.get('customer'),
+                    'Pelanggan',
+                )
+                items = _get_sale_items_from_request(request)
+                total_kg, subtotal, shipping_cost, packing_cost, other_cost, total_amount = (
+                    _get_sale_totals_from_request(request, items)
+                )
+                method, cash, transfer, qris, other_pay, other_name, paid, auto_status = (
+                    _payment_data(request, total_amount)
+                )
+
+                requested_status = (request.POST.get('status') or auto_status).strip()
+                if requested_status not in {'Lunas', 'Belum Lunas'}:
+                    requested_status = auto_status
+
+                (
+                    cash,
+                    transfer,
+                    qris,
+                    other_pay,
+                    other_name,
+                    paid,
+                ) = _apply_manual_payment_status(
+                    requested_status=requested_status,
+                    payment_method=method,
+                    total_amount=total_amount,
+                    cash=cash,
+                    transfer=transfer,
+                    qris=qris,
+                    other=other_pay,
+                    other_name=other_name,
+                )
+
+                old_total_amount = sale.total_amount
+                sale.invoice_no = invoice_no
+                sale.customer_id = customer_id
+                sale.total_kg = total_kg
+                sale.total_amount = total_amount
+                sale.shipping_cost = shipping_cost
+                sale.packing_cost = packing_cost
+                sale.other_cost = other_cost
+                sale.payment_method = method
+                sale.cash_amount = cash
+                sale.transfer_amount = transfer
+                sale.qris_amount = qris
+                sale.other_payment_amount = other_pay
+                sale.other_payment_method = other_name
+                sale.status = requested_status
+                sale.notes = request.POST.get('notes', '')
+
+                if old_total_amount != total_amount and sale.status != 'Lunas':
+                    sale.midtrans_order_id = ''
+                    sale.midtrans_snap_token = ''
+                    sale.midtrans_payment_url = ''
+                    sale.midtrans_status = ''
+                    sale.midtrans_transaction_id = ''
+                sale.save()
+
+                # Seluruh detail item diganti sesuai isi keranjang terbaru.
+                sale.items.all().delete()
+                SaleItem.objects.bulk_create([
+                    SaleItem(sale=sale, **item_data)
+                    for item_data in items
+                ])
+
+                _save_sale_documents(request, sale)
+                sync_sale_receivable(sale)
+
+            messages.success(
+                request,
+                f'Nota berhasil diperbarui dengan status {sale.status}.',
+            )
+            return redirect('sales:invoice', pk=sale.pk)
+        except ValueError as exc:
+            messages.error(request, str(exc))
+            return render(
+                request,
+                'sales/sale_form.html',
+                _cashier_context(sale=sale, item=sale.items.first(), mode='edit'),
+            )
+
+    return render(
+        request,
+        'sales/sale_form.html',
+        _cashier_context(sale=sale, item=sale.items.first(), mode='edit'),
+    )
+
+
+def _sales_queryset(request):
+    date_from, date_to = get_date_range(request)
+    sales = filter_selected_cycle(request, Sale.objects.select_related('customer', 'cashier').order_by('-date'))
+    sales = filter_by_date_range(sales, 'date', date_from, date_to, is_datetime=True)
+    status = request.GET.get('status') or ''
+    if status:
+        sales = sales.filter(status=status)
+    q = (request.GET.get('q') or '').strip()
+    if q:
+        sales = sales.filter(
+            Q(invoice_no__icontains=q) | Q(customer__name__icontains=q) |
+            Q(customer__phone__icontains=q) | Q(payment_method__icontains=q) |
+            Q(status__icontains=q) | Q(cashier__username__icontains=q)
+        ).distinct()
+    return sales, date_from, date_to
+
+
+def _sales_rows(sales):
+    rows = []
+    for s in sales:
+        rows.append([
+            s.date.strftime('%d/%m/%Y %H:%M'),
+            s.invoice_no,
+            s.customer.name if s.customer else '-',
+            float(s.total_kg),
+            rupiah(s.total_amount),
+            s.payment_method,
+            s.status,
+            s.cashier.username if s.cashier else '-',
+        ])
+    return rows
+
+
+@login_required
+@permission_required('sales.invoices')
+def invoices(request):
+    sales, date_from, date_to = _sales_queryset(request)
+    total = sales.aggregate(s=Sum('total_amount'))['s'] or 0
+    total_kg = sales.aggregate(s=Sum('total_kg'))['s'] or 0
+    page_obj = paginate_queryset(request, sales, per_page=10)
+    return render(request, 'sales/invoices.html', {'sales': page_obj, 'page_obj': page_obj, 'date_from': date_from, 'date_to': date_to, 'total': total, 'total_kg': total_kg})
+
+
+@login_required
+@permission_required('sales.invoices')
+def export_sales_excel(request):
+    sales, date_from, date_to = _sales_queryset(request)
+    rows = _sales_rows(sales)
+    total = sales.aggregate(s=Sum('total_amount'))['s'] or 0
+    total_kg = sales.aggregate(s=Sum('total_kg'))['s'] or 0
+    return export_excel(
+        'laporan_penjualan',
+        'Laporan Penjualan',
+        f'Periode: {format_date_range(date_from, date_to)}',
+        ['Tanggal', 'No Nota', 'Pelanggan', 'Total Kg', 'Total Penjualan', 'Metode', 'Status', 'Kasir'],
+        rows,
+        [['', '', 'TOTAL', float(total_kg), rupiah(total), '', '', '']]
+    )
+
+
+@login_required
+@permission_required('sales.invoices')
+def export_sales_pdf(request):
+    sales, date_from, date_to = _sales_queryset(request)
+    rows = _sales_rows(sales)
+    pdf_rows = [[r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7]] for r in rows]
+    total = sales.aggregate(s=Sum('total_amount'))['s'] or 0
+    total_kg = sales.aggregate(s=Sum('total_kg'))['s'] or 0
+    return export_pdf(
+        'laporan_penjualan',
+        'Laporan Penjualan',
+        f'Periode: {format_date_range(date_from, date_to)}',
+        ['Tanggal', 'No Nota', 'Pelanggan', 'Kg', 'Total', 'Metode', 'Status', 'Kasir'],
+        pdf_rows,
+        [['', '', 'TOTAL', total_kg, rupiah(total), '', '', '']]
+    )
+
+
+@login_required
+@permission_required('sales.invoices')
+def invoice(request, pk):
+    return render(request, 'sales/invoice.html', {'sale': get_object_or_404(Sale.objects.prefetch_related('documents','items'), pk=pk)})
+
+
+@login_required
+@permission_required('sales.invoices')
+def invoice_pdf(request, pk):
+    sale = get_object_or_404(Sale, pk=pk)
+    path = build_invoice_pdf(sale)
+    return FileResponse(open(path, 'rb'), as_attachment=True, filename=f'{safe_invoice_filename(sale.invoice_no)}.pdf')
+
+
+@login_required
+@permission_required('sales.invoices')
+@require_POST
+def create_midtrans_payment(request, pk):
+    sale = get_object_or_404(Sale.objects.select_related('customer').prefetch_related('items'), pk=pk)
+    if sale.status == 'Lunas':
+        messages.info(request, 'Nota ini sudah berstatus Lunas. Pembayaran Midtrans tidak dibuat ulang.')
+        return redirect('sales:invoice', pk=sale.pk)
+
+    if sale.midtrans_payment_url and sale.status == 'Menunggu Pembayaran':
+        return redirect(sale.midtrans_payment_url)
+
+    if sale.status in {'Expired', 'Gagal', 'Dibatalkan'}:
+        # Buat order_id baru untuk percobaan bayar ulang setelah transaksi lama gagal/expired.
+        sale.midtrans_order_id = ''
+        sale.midtrans_snap_token = ''
+        sale.midtrans_payment_url = ''
+        sale.midtrans_status = ''
+        sale.midtrans_transaction_id = ''
+        sale.save(update_fields=[
+            'midtrans_order_id', 'midtrans_snap_token', 'midtrans_payment_url',
+            'midtrans_status', 'midtrans_transaction_id'
+        ])
+
+    try:
+        data = create_snap_transaction(sale, request)
+        messages.success(request, 'Link pembayaran Midtrans berhasil dibuat. Pelanggan dapat melanjutkan pembayaran.')
+        redirect_url = data.get('redirect_url') or sale.midtrans_payment_url
+        if redirect_url:
+            return redirect(redirect_url)
+    except MidtransError as exc:
+        messages.error(request, str(exc))
+    return redirect('sales:invoice', pk=sale.pk)
+
+
+@login_required
+@permission_required('sales.invoices')
+@require_POST
+def check_midtrans_payment(request, pk):
+    sale = get_object_or_404(Sale, pk=pk)
+    try:
+        payload = get_transaction_status(sale)
+        apply_midtrans_status(sale, payload)
+        messages.success(request, f'Status Midtrans diperbarui: {sale.status}.')
+    except MidtransError as exc:
+        messages.error(request, str(exc))
+    return redirect('sales:invoice', pk=sale.pk)
+
+
+@csrf_exempt
+@require_POST
+def midtrans_notification(request):
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return HttpResponseBadRequest('Invalid JSON')
+
+    if not verify_notification_signature(payload):
+        return HttpResponseBadRequest('Invalid signature')
+
+    order_id = payload.get('order_id')
+    sale = Sale.objects.filter(midtrans_order_id=order_id).first()
+    if not sale:
+        return HttpResponseBadRequest('Order ID not found')
+
+    apply_midtrans_status(sale, payload)
+    return JsonResponse({'ok': True, 'invoice_no': sale.invoice_no, 'status': sale.status})
+
+
+@login_required
+@permission_required('sales.customers')
+def edit_customer(request, pk):
+    obj = get_object_or_404(Customer, pk=pk)
+    if request.method == 'POST':
+        obj.name = request.POST['name']
+        obj.phone = request.POST.get('phone','')
+        obj.email = request.POST.get('email','')
+        obj.address = request.POST.get('address','')
+        obj.save()
+        return redirect('sales:customers')
+    return render(request, 'sales/customer_form.html', {'obj': obj, 'mode': 'edit'})
+
+@login_required
+@permission_required('sales.customers')
+@require_POST
+def delete_customer(request, pk):
+    get_object_or_404(Customer, pk=pk).delete()
+    return redirect('sales:customers')
+
+
+@login_required
+@permission_required('sales.cashier')
+@require_POST
+def delete_sale_document(request, pk):
+    doc = get_object_or_404(SaleDocument, pk=pk)
+    sale_pk = doc.sale_id
+    if doc.file:
+        doc.file.delete(save=False)
+    doc.delete()
+    messages.success(request, 'Dokumen penjualan berhasil dihapus.')
+    return redirect('sales:edit_sale', pk=sale_pk)

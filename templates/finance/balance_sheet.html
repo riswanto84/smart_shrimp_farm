@@ -1,0 +1,322 @@
+{% extends 'base.html' %}{% load currency %}{% block content %}
+<style>
+.balance-page{--navy:#0b2f5b;--blue:#1769e0;--soft:#f5f8fc;--line:#e3eaf4;--green:#138a5b;--red:#dc3545;--amber:#c8860a;width:100%;max-width:none!important;min-width:0;box-sizing:border-box}
+.balance-page *{box-sizing:border-box}
+.balance-page .neraca-kpi-card{display:block!important;position:relative!important;min-width:0!important;width:auto!important;height:auto!important;align-items:initial!important;justify-content:initial!important;flex-direction:initial!important;text-align:left!important;overflow:hidden}
+.balance-page .neraca-kpi-label,.balance-page .neraca-kpi-value,.balance-page .neraca-kpi-sub{display:block!important;width:100%!important;max-width:100%!important;position:static!important;float:none!important;flex:none!important;text-align:left!important;white-space:normal!important}
+.balance-page .neraca-kpi-value{line-height:1.18!important;overflow-wrap:anywhere}
+.balance-page .neraca-bar-track{display:block!important;width:100%!important;min-width:70px!important;padding:0!important;border:0!important}
+.balance-page .neraca-bar-fill{display:block!important;margin:0!important;padding:0!important}
+.balance-page .panel{min-width:0}
+.balance-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:18px}
+.balance-title h1{font-size:30px;margin:0;color:#102443;font-weight:800}.balance-title p{margin:5px 0 0;color:#6b7c93}
+.balance-actions{display:flex;gap:8px;flex-wrap:wrap}.balance-filter{display:flex;gap:10px;align-items:center;padding:14px 16px;background:white;border:1px solid var(--line);border-radius:16px;margin-bottom:16px}.balance-filter input{max-width:420px}
+.neraca-kpi-grid{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:14px;margin-bottom:16px;width:100%}.neraca-kpi-card{background:white;border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 8px 24px rgba(25,55,95,.05)}.neraca-kpi-label{font-size:12px;color:#687a91;font-weight:800;letter-spacing:.025em}.neraca-kpi-value{font-size:clamp(20px,1.65vw,26px);font-weight:850;color:#102443;margin-top:8px}.neraca-kpi-sub{font-size:12px;color:#78899e;margin-top:8px;line-height:1.4}.status-ok{color:var(--green)}.status-note{color:var(--amber)}.status-bad{color:var(--red)}
+.balance-main{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);gap:16px}.panel{background:white;border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 8px 24px rgba(25,55,95,.045)}.panel h2{font-size:18px;color:#102443;font-weight:800;margin:0 0 14px}.section-title{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#60738d;font-weight:800;padding:10px 0 6px;border-bottom:1px solid var(--line)}
+.balance-table{width:100%;border-collapse:collapse}.balance-table td,.balance-table th{padding:10px 6px;border-bottom:1px solid #edf1f6}.balance-table td:last-child,.balance-table th:last-child{text-align:right;white-space:nowrap}.balance-table .subtotal th{background:#f6f9fd}.balance-table .grand th{font-size:16px;color:#102443;border-top:2px solid #ced8e7;background:#eef4fb}.warning-row td{background:#fff7d9;color:#664d03}.negative{color:#b3261e}
+.neraca-composition-list{display:grid;gap:13px}.neraca-composition-row{display:grid;grid-template-columns:135px 1fr 92px;gap:10px;align-items:center}.neraca-composition-label{font-size:13px;font-weight:700;color:#31445f}.neraca-bar-track{height:10px;background:#edf2f8;border-radius:99px;overflow:hidden}.neraca-bar-fill{height:100%;background:linear-gradient(90deg,#1769e0,#24b79b);border-radius:99px}.neraca-composition-value{text-align:right;font-size:12px;font-weight:700;color:#40536d}
+.neraca-ratio-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.neraca-ratio-card{border:1px solid var(--line);background:#f8fbff;border-radius:14px;padding:13px}.neraca-ratio-card span{display:block;color:#6c7e94;font-size:12px}.neraca-ratio-card strong{display:block;color:#102443;font-size:20px;margin-top:4px}
+.validation-list{display:grid;gap:8px}.validation-item{display:flex;gap:9px;align-items:center;padding:9px 10px;border-radius:12px;background:#f7f9fc;font-size:13px}.validation-item.ok i{color:var(--green)}.validation-item.bad i{color:var(--red)}
+.status-banner{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:15px 17px;border-radius:16px;margin:16px 0}.status-banner.ok{background:#e8f7f0;color:#0a6844;border:1px solid #b8e4d2}.status-banner.note{background:#fff7d9;color:#765400;border:1px solid #eed58a}.status-banner.bad{background:#fdecec;color:#a51d2d;border:1px solid #f4bfc5}.status-banner strong{font-size:16px}.badge-status{font-weight:800;background:rgba(255,255,255,.7);padding:6px 10px;border-radius:99px}
+.neraca-recon-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.neraca-recon-item{padding:12px;border-radius:13px;background:#f7f9fc}.neraca-recon-item span{display:block;font-size:12px;color:#6f8197}.neraca-recon-item strong{display:block;margin-top:4px;color:#102443}.warnings{margin-top:12px}.warnings .alert{margin-bottom:8px}
+
+.pond-assets-panel{margin-bottom:16px}.pond-assets-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.pond-assets-summary{font-size:20px;font-weight:850;color:#102443}.pond-assets-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.pond-asset-card{border:1px solid var(--line);border-radius:15px;padding:14px;background:#fff;position:relative;overflow:hidden}.pond-asset-card:before{content:'';position:absolute;left:0;top:0;bottom:0;width:5px}.pond-asset-card.ind-green:before{background:#16a36a}.pond-asset-card.ind-amber:before{background:#e5a315}.pond-asset-card.ind-red:before{background:#dc3545}.pond-asset-card.ind-gray:before{background:#95a1b2}.pond-asset-top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.pond-asset-name{font-weight:850;color:#102443}.pond-indicator{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;padding:5px 8px;border-radius:999px;white-space:nowrap}.pond-indicator.green{background:#dcf7eb;color:#08794d}.pond-indicator.amber{background:#fff2ce;color:#946000}.pond-indicator.red{background:#ffe1e4;color:#b4232f}.pond-indicator.gray{background:#edf0f4;color:#687386}.pond-asset-value{font-size:20px;font-weight:900;color:#0b2f5b;margin:12px 0 6px}.pond-asset-meta{font-size:12px;color:#64758b;line-height:1.55}.pond-asset-meta strong{color:#293d59}.pond-metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:11px}.pond-metric{border:1px solid #e4eaf2;border-radius:10px;padding:7px;background:#f8fafc;min-width:0}.pond-metric.green{background:#f0faf5;border-color:#bfe4d0}.pond-metric.amber{background:#fff9eb;border-color:#efd596}.pond-metric.red{background:#fff3f4;border-color:#efb7bd}.pond-metric.gray{background:#f5f6f8}.pond-metric-name{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:#6d7d91;font-weight:800}.pond-metric-value{display:block;font-size:12px;color:#102443;font-weight:850;margin-top:2px;overflow-wrap:anywhere}.pond-metric-state{display:block;font-size:9px;margin-top:2px;font-weight:700}.pond-metric.green .pond-metric-state{color:#08794d}.pond-metric.amber .pond-metric-state{color:#946000}.pond-metric.red .pond-metric-state{color:#b4232f}.pond-flow{margin-top:10px;padding:9px 10px;border-radius:11px;background:#f7f9fc;font-size:11px;color:#5f7087;line-height:1.55}.pond-flow strong{color:#223954}.positive-change{color:#08794d!important}.negative-change{color:#b4232f!important}.pond-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:#64758b;margin-top:12px}.pond-legend span{display:inline-flex;align-items:center;gap:5px}.pond-dot{width:9px;height:9px;border-radius:50%;display:inline-block}.pond-dot.green{background:#16a36a}.pond-dot.amber{background:#e5a315}.pond-dot.red{background:#dc3545}.pond-dot.gray{background:#95a1b2}
+.health-panels{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}.health-panel{border-width:1.5px}.health-panel.operational{border-color:#bfe4d0}.health-panel h2{font-size:22px}.health-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.health-card{border:1px solid var(--line);border-radius:16px;padding:16px;background:#f8fbff;position:relative;overflow:hidden}.health-card.green{background:#f2fbf6;border-color:#bfe4d0}.health-card.amber{background:#fffaf0;border-color:#efd596}.health-card.red{background:#fff5f5;border-color:#efb7bd}.health-card.gray{background:#f5f6f8;border-color:#d9dee6}.health-name{display:flex;justify-content:space-between;gap:8px;align-items:center;color:#6c7e94;font-size:14px}.health-badge{font-size:11px;font-weight:850;padding:4px 8px;border-radius:999px}.health-card.green .health-badge{background:#d9f4e7;color:#08794d}.health-card.amber .health-badge{background:#fff0c5;color:#946000}.health-card.red .health-badge{background:#ffe0e3;color:#b4232f}.health-card.gray .health-badge{background:#e7eaf0;color:#687386}.health-value{display:block;font-size:25px;color:#102443;margin-top:10px;font-weight:900}.health-card.green .health-value{color:#08794d}.health-card.amber .health-value{color:#946000}.health-card.red .health-value{color:#b4232f}.health-desc{display:block;color:#6f8197;font-size:12px;margin-top:8px;line-height:1.4}.health-note{margin-top:14px;padding:12px 14px;border-radius:13px;background:#eaf7f0;color:#326b54;font-size:13px}.excluded-note{margin-top:10px;color:#6f8197;font-size:12px}.excluded-note strong{color:#40536d}
+@media(max-width:980px){.health-panels{grid-template-columns:1fr}}
+@media(max-width:650px){.health-grid{grid-template-columns:1fr}.health-panel h2{font-size:18px}}
+@media(max-width:1050px){.pond-assets-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.pond-assets-grid{grid-template-columns:1fr}.pond-assets-head{display:block}.pond-assets-summary{margin-top:6px}.pond-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:1180px){.neraca-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.balance-main{grid-template-columns:1fr}.neraca-recon-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:650px){.balance-head{display:block}.balance-actions{margin-top:12px}.neraca-kpi-grid,.neraca-recon-grid{grid-template-columns:1fr!important}.balance-filter{display:block}.balance-filter button{margin-top:10px}.neraca-composition-row{grid-template-columns:110px 1fr}.neraca-composition-value{grid-column:2}.neraca-ratio-grid{grid-template-columns:1fr}}
+
+.health-data-note{display:block;margin-top:8px;font-size:.78rem;font-weight:700}.health-data-note.green{color:#087a4a}.health-data-note.amber{color:#b77900}.health-data-note.red{color:#c62828}.health-data-note.gray{color:#64748b}
+
+/* ===== Finance Professional UI ===== */
+.balance-page .section-kicker{
+  display:flex;align-items:center;gap:8px;font-size:11px;text-transform:uppercase;
+  letter-spacing:.09em;font-weight:850;color:#6a7c93;margin-bottom:5px
+}
+.balance-page .section-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:16px}
+.balance-page .section-heading h2{margin:0;font-size:21px;letter-spacing:-.02em}
+.balance-page .section-heading p{margin:4px 0 0;color:#72839a;font-size:12px}
+.balance-page .finance-panel{background:#fff;border:1px solid #e3eaf4;border-radius:20px;padding:20px;box-shadow:0 10px 30px rgba(25,55,95,.055)}
+.balance-page .liquidity-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.balance-page .liquidity-card{
+  position:relative;overflow:hidden;border:1px solid #e4eaf2;border-radius:16px;
+  padding:16px;background:linear-gradient(180deg,#fbfdff 0%,#f7faff 100%)
+}
+.balance-page .liquidity-card:after{
+  content:'';position:absolute;right:-28px;top:-28px;width:78px;height:78px;border-radius:50%;
+  background:rgba(23,105,224,.055)
+}
+.balance-page .liquidity-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.balance-page .liquidity-name{font-size:13px;font-weight:800;color:#52657e}
+.balance-page .liquidity-status{font-size:10px;font-weight:850;padding:5px 8px;border-radius:999px}
+.balance-page .liquidity-card.green .liquidity-status{color:#08794d;background:#dcf7eb}
+.balance-page .liquidity-card.amber .liquidity-status{color:#946000;background:#fff1c9}
+.balance-page .liquidity-card.red .liquidity-status{color:#b4232f;background:#ffe1e4}
+.balance-page .liquidity-card.gray .liquidity-status{color:#687386;background:#edf0f4}
+.balance-page .liquidity-value{font-size:28px;line-height:1.05;font-weight:900;color:#102443;margin-top:17px;letter-spacing:-.025em}
+.balance-page .liquidity-card.green .liquidity-value{color:#08794d}
+.balance-page .liquidity-card.amber .liquidity-value{color:#946000}
+.balance-page .liquidity-card.red .liquidity-value{color:#b4232f}
+.balance-page .liquidity-desc{font-size:11px;line-height:1.45;color:#71839a;margin-top:9px;min-height:32px}
+.balance-page .liquidity-meter{height:4px;background:#e9eff6;border-radius:99px;margin-top:14px;overflow:hidden}
+.balance-page .liquidity-meter span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#1769e0,#24b79b);width:72%}
+.balance-page .profit-panel{margin-top:16px;padding:0;overflow:hidden}
+.balance-page .profit-header{
+  padding:19px 20px 15px;border-bottom:1px solid #e8edf4;
+  display:flex;justify-content:space-between;align-items:center;gap:16px
+}
+.balance-page .profit-title{display:flex;align-items:flex-start;gap:12px}
+.balance-page .profit-icon{
+  width:42px;height:42px;flex:0 0 42px;border-radius:13px;display:grid;place-items:center;
+  color:#fff;background:linear-gradient(135deg,#1769e0,#0b4ea2);font-size:17px;
+  box-shadow:0 8px 18px rgba(23,105,224,.18)
+}
+.balance-page .profit-title h2{margin:0;color:#102443;font-size:20px}
+.balance-page .profit-title p{margin:4px 0 0;color:#71839a;font-size:12px}
+.balance-page .profit-controls{display:flex;align-items:center;gap:8px}
+.balance-page .profit-controls input{width:150px!important}
+.balance-page .profit-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:18px 20px}
+.balance-page .profit-card{
+  border:1px solid #e3eaf4;border-radius:16px;padding:16px;background:#fbfcfe;min-height:138px;
+  position:relative
+}
+.balance-page .profit-card.primary{background:linear-gradient(145deg,#f5f9ff,#eef5ff);border-color:#cfe0fb}
+.balance-page .profit-card.success{background:linear-gradient(145deg,#f2fbf6,#eaf8f1);border-color:#bfe4d0}
+.balance-page .profit-label{font-size:12px;color:#687a91;font-weight:750}
+.balance-page .profit-value{font-size:22px;font-weight:900;color:#102443;letter-spacing:-.02em;margin-top:10px;line-height:1.15}
+.balance-page .profit-card.success .profit-value{color:#08794d}
+.balance-page .profit-desc{font-size:11px;line-height:1.45;color:#73849a;margin-top:9px}
+.balance-page .profit-badge{display:inline-flex;align-items:center;gap:5px;margin-top:9px;padding:5px 8px;border-radius:999px;background:#d9f4e7;color:#08794d;font-size:10px;font-weight:850}
+.balance-page .profit-equation{
+  margin:0 20px 18px;padding:13px 15px;border:1px dashed #cfdbea;border-radius:13px;
+  background:#f8fafd;display:flex;justify-content:space-between;gap:15px;align-items:center
+}
+.balance-page .profit-equation span{font-size:11px;color:#6c7e94}
+.balance-page .profit-equation strong{font-size:14px;color:#102443}
+.balance-page .profit-note{
+  margin:0 20px 20px;padding:11px 13px;border-radius:12px;background:#f5f8fc;
+  color:#657890;font-size:11px;line-height:1.5
+}
+.balance-page .compact-panel{margin-top:16px}
+.balance-page .compact-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}
+.balance-page .compact-header h2{margin:0;font-size:18px}
+.balance-page .validation-list.compact{grid-template-columns:repeat(2,minmax(0,1fr));display:grid;gap:8px}
+.balance-page .validation-list.compact .validation-item{padding:10px 12px}
+.balance-page .recon-grid-pro{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.balance-page .recon-card{padding:13px 14px;border:1px solid #e4eaf2;border-radius:13px;background:#f9fbfd}
+.balance-page .recon-card span{display:block;font-size:10px;color:#75869b;text-transform:uppercase;letter-spacing:.04em;font-weight:800}
+.balance-page .recon-card strong{display:block;margin-top:6px;font-size:15px;color:#102443}
+@media(max-width:1050px){
+  .balance-page .liquidity-grid,.balance-page .profit-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .balance-page .recon-grid-pro{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:650px){
+  .balance-page .liquidity-grid,.balance-page .profit-grid,.balance-page .recon-grid-pro,
+  .balance-page .validation-list.compact{grid-template-columns:1fr}
+  .balance-page .profit-header{display:block}.balance-page .profit-controls{margin-top:12px}
+  .balance-page .profit-equation{display:block}.balance-page .profit-equation strong{display:block;margin-top:5px}
+}
+
+</style>
+<div class="balance-page">
+  <div class="balance-head">
+    <div class="balance-title"><h1>Laporan Neraca</h1><p>Posisi keuangan per {{ as_of|date:'d F Y' }}</p></div>
+    <div class="balance-actions">
+      <a class="btn btn-outline-primary" href="{% url 'finance:opening_balance' %}?as_of={{ as_of|date:'Y-m-d' }}"><i class="fa-solid fa-vault"></i> Saldo Awal</a>
+      <a class="btn btn-outline-secondary" href="{% url 'finance:balance_entries' %}"><i class="fa-solid fa-list"></i> Kelola Pos</a>
+      <a class="btn btn-danger" href="{% url 'finance:export_balance_sheet_pdf' %}?{{ request.GET.urlencode }}"><i class="fa-solid fa-file-pdf"></i> PDF</a>
+    </div>
+  </div>
+
+  <form class="balance-filter" style="display:grid;grid-template-columns:minmax(190px,1fr) minmax(230px,1.3fr) minmax(180px,1fr) auto;gap:10px;align-items:end">
+    <div><label class="form-label fw-semibold">Mode Laporan</label><select class="form-select" name="report_mode" id="reportMode"><option value="cycle" {% if report_mode == 'cycle' %}selected{% endif %}>Berdasarkan Siklus</option><option value="period" {% if report_mode == 'period' %}selected{% endif %}>Berdasarkan Tanggal</option></select></div>
+    <div class="scope-cycle"><label class="form-label fw-semibold">Siklus</label><select class="form-select" name="cycle">{% for item in cycles %}<option value="{{ item.id }}" {% if selected_cycle and item.id == selected_cycle.id %}selected{% endif %}>{{ item.name }} — {{ item.get_status_display }}</option>{% endfor %}</select></div>
+    <div><label class="form-label fw-semibold">Posisi per Tanggal</label><input type="date" name="as_of" value="{{ as_of|date:'Y-m-d' }}" class="form-control"></div>
+    <button class="btn btn-primary"><i class="fa-solid fa-filter"></i> Tampilkan</button>
+  </form>
+  <script>document.addEventListener('DOMContentLoaded',function(){const m=document.getElementById('reportMode');const sync=()=>document.querySelectorAll('.scope-cycle').forEach(x=>x.style.display=m.value==='cycle'?'':'none');m.addEventListener('change',sync);sync()});</script>
+
+  <div class="neraca-kpi-grid">
+    <div class="neraca-kpi-card"><div class="neraca-kpi-label">TOTAL ASET</div><div class="neraca-kpi-value">{{ total_assets|rupiah }}</div><div class="neraca-kpi-sub">Aset lancar dan aset tetap bersih</div></div>
+    <div class="neraca-kpi-card"><div class="neraca-kpi-label">TOTAL KEWAJIBAN</div><div class="neraca-kpi-value">{{ total_liabilities|rupiah }}</div><div class="neraca-kpi-sub">Termasuk utang usaha</div></div>
+    <div class="neraca-kpi-card"><div class="neraca-kpi-label">TOTAL EKUITAS</div><div class="neraca-kpi-value {% if total_equity_with_profit < 0 %}negative{% endif %}">{{ total_equity_with_profit|rupiah }}</div><div class="neraca-kpi-sub">Modal, laba ditahan, dan laba berjalan</div></div>
+    <div class="neraca-kpi-card"><div class="neraca-kpi-label">STATUS NERACA</div><div class="neraca-kpi-value {% if balance_status == 'balanced' %}status-ok{% elif balance_status == 'balanced_with_note' %}status-note{% else %}status-bad{% endif %}">{% if balance_status == 'balanced' %}<i class="fa-solid fa-circle-check"></i> Seimbang{% elif balance_status == 'balanced_with_note' %}<i class="fa-solid fa-circle-exclamation"></i> Seimbang dengan Catatan{% else %}<i class="fa-solid fa-triangle-exclamation"></i> Belum Seimbang{% endif %}</div><div class="neraca-kpi-sub">Selisih {{ difference|rupiah }}{% if not is_reconciled %} · saldo awal belum direkonsiliasi{% endif %}</div></div>
+  </div>
+
+  <div class="balance-main">
+    <div class="panel">
+      <h2><i class="fa-solid fa-wallet"></i> Aset</h2>
+      <table class="balance-table">
+        <tr><td colspan="2" class="section-title">Aset Lancar</td></tr>
+        {% for e in assets %}{% if e.group == 'Kas dan Bank' %}<tr><td>{{ e.account_name }}</td><td>{{ e.amount|rupiah }}</td></tr>{% endif %}{% endfor %}
+        <tr><td>Piutang Usaha</td><td>{{ receivable_total|rupiah }}</td></tr>
+        {% for e in assets %}{% if e.group != 'Kas dan Bank' %}<tr><td>{{ e.account_name }}</td><td>{{ e.amount|rupiah }}</td></tr>{% endif %}{% endfor %}
+        <tr class="subtotal"><th>Subtotal Aset Lancar</th><th>{{ current_assets|rupiah }}</th></tr>
+        <tr><td colspan="2" class="section-title">Aset Tetap</td></tr>
+        <tr><td>Harga Perolehan Aset Tetap</td><td>{{ fixed_cost|rupiah }}</td></tr>
+        <tr><td>Akumulasi Penyusutan</td><td class="negative">({{ accumulated|rupiah }})</td></tr>
+        <tr class="subtotal"><th>Aset Tetap Bersih</th><th>{{ net_fixed_assets|rupiah }}</th></tr>
+        <tr class="grand"><th>Total Aset</th><th>{{ total_assets|rupiah }}</th></tr>
+      </table>
+    </div>
+
+    <div>
+      <div class="panel" style="margin-bottom:16px">
+        <h2><i class="fa-solid fa-chart-pie"></i> Komposisi Aset</h2>
+        <div class="neraca-composition-list">
+          {% for item in asset_composition %}
+          <div class="neraca-composition-row">
+            <div class="neraca-composition-label">{{ item.label }}</div>
+            <div class="neraca-bar-track"><div class="neraca-bar-fill" style="width:{% if item.percent > 100 %}100{% else %}{{ item.percent|floatformat:1 }}{% endif %}%"></div></div>
+            <div class="neraca-composition-value">{{ item.percent|floatformat:1 }}%</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="panel">
+        <h2><i class="fa-solid fa-scale-balanced"></i> Kewajiban & Ekuitas</h2>
+        <table class="balance-table">
+          <tr><td colspan="2" class="section-title">Kewajiban</td></tr>
+          {% for e in liabilities %}<tr><td>{{ e.account_name }}</td><td>{{ e.amount|rupiah }}</td></tr>{% endfor %}
+          <tr><td>Utang Usaha</td><td>{{ payable_total|rupiah }}</td></tr>
+          <tr class="subtotal"><th>Total Kewajiban</th><th>{{ total_liabilities|rupiah }}</th></tr>
+          <tr><td colspan="2" class="section-title">Ekuitas</td></tr>
+          {% for e in equities %}<tr><td>{{ e.account_name }}</td><td>{{ e.amount|rupiah }}</td></tr>{% endfor %}
+          <tr><td>Laba/Rugi Operasional Tahun Berjalan</td><td class="{% if operating_profit < 0 %}negative{% endif %}">{{ operating_profit|rupiah }}</td></tr>
+          <tr class="grand"><th>Total Ekuitas</th><th>{{ total_equity_with_profit|rupiah }}</th></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-banner {% if balance_status == 'balanced' %}ok{% elif balance_status == 'balanced_with_note' %}note{% else %}bad{% endif %}">
+    <div><strong>{% if balance_status == 'balanced' %}<i class="fa-solid fa-circle-check"></i> Neraca Seimbang dan Terekonsiliasi{% elif balance_status == 'balanced_with_note' %}<i class="fa-solid fa-circle-exclamation"></i> Neraca Seimbang dengan Catatan{% else %}<i class="fa-solid fa-triangle-exclamation"></i> Neraca Belum Seimbang{% endif %}</strong><div class="small">{% if balance_status == 'balanced_with_note' %}Persamaan neraca terpenuhi dengan catatan.{% else %}Persamaan Aset = Kewajiban + Ekuitas{% if is_balanced %} telah terpenuhi{% else %} belum terpenuhi{% endif %}.{% endif %}</div></div>
+    <div class="badge-status">Selisih {{ difference|rupiah }}</div>
+  </div>
+
+  <div class="finance-panel" style="margin-top:16px">
+    <div class="section-heading">
+      <div>
+        <div class="section-kicker"><i class="fa-solid fa-gauge-high"></i> Analisis Keuangan</div>
+        <h2>Likuiditas & Struktur Utang</h2>
+        <p>Indikator kesehatan keuangan berdasarkan posisi Neraca saat ini.</p>
+      </div>
+    </div>
+    <div class="liquidity-grid">
+      <div class="liquidity-card {{ current_ratio_health.class }}">
+        <div class="liquidity-top"><span class="liquidity-name">Current Ratio</span><span class="liquidity-status">{{ current_ratio_health.label }}</span></div>
+        <strong class="liquidity-value">{% if current_ratio != None %}{{ current_ratio|floatformat:2 }}x{% else %}-{% endif %}</strong>
+        <div class="liquidity-desc">Kemampuan aset lancar untuk menutup kewajiban lancar.</div>
+        <div class="liquidity-meter"><span></span></div>
+      </div>
+      <div class="liquidity-card {{ cash_ratio_health.class }}">
+        <div class="liquidity-top"><span class="liquidity-name">Cash Ratio</span><span class="liquidity-status">{{ cash_ratio_health.label }}</span></div>
+        <strong class="liquidity-value">{% if cash_ratio != None %}{{ cash_ratio|floatformat:2 }}x{% else %}-{% endif %}</strong>
+        <div class="liquidity-desc">Kas & bank yang tersedia dibandingkan kewajiban.</div>
+        <div class="liquidity-meter"><span></span></div>
+      </div>
+      <div class="liquidity-card {{ debt_to_equity_health.class }}">
+        <div class="liquidity-top"><span class="liquidity-name">Debt to Equity</span><span class="liquidity-status">{{ debt_to_equity_health.label }}</span></div>
+        <strong class="liquidity-value">{% if debt_to_equity != None %}{{ debt_to_equity|floatformat:2 }}x{% else %}-{% endif %}</strong>
+        <div class="liquidity-desc">Besarnya utang dibandingkan modal dan ekuitas usaha.</div>
+        <div class="liquidity-meter"><span></span></div>
+      </div>
+      <div class="liquidity-card {{ debt_ratio_health.class }}">
+        <div class="liquidity-top"><span class="liquidity-name">Debt Ratio</span><span class="liquidity-status">{{ debt_ratio_health.label }}</span></div>
+        <strong class="liquidity-value">{% if debt_ratio != None %}{{ debt_ratio|floatformat:2 }}{% else %}-{% endif %}</strong>
+        <div class="liquidity-desc">Proporsi aset usaha yang dibiayai oleh kewajiban.</div>
+        <div class="liquidity-meter"><span></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="finance-panel profit-panel">
+    <div class="profit-header">
+      <div class="profit-title">
+        <div class="profit-icon"><i class="fa-solid fa-chart-line"></i></div>
+        <div>
+          <h2>Estimasi Laba Akhir Siklus</h2>
+          <p>Proyeksi jika biomassa Index dipanen, utang dilunasi, dan PPh Final 0,5% dibayar.</p>
+        </div>
+      </div>
+      <form method="get" class="profit-controls">
+        {% if report_mode %}<input type="hidden" name="mode" value="{{ report_mode }}">{% endif %}
+        {% if selected_cycle %}<input type="hidden" name="cycle" value="{{ selected_cycle.id }}">{% endif %}
+        {% if as_of %}<input type="hidden" name="as_of" value="{{ as_of|date:'Y-m-d' }}">{% endif %}
+        <div class="input-group input-group-sm">
+          <span class="input-group-text">Rp</span>
+          <input type="number" name="simulation_price" min="0" step="1000" value="{{ final_cycle_profit.price_used|floatformat:0 }}" class="form-control">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm"><i class="fa-solid fa-calculator"></i> Simulasikan</button>
+      </form>
+    </div>
+
+    <div class="profit-grid">
+      <div class="profit-card primary">
+        <div class="profit-label">Omzet Terealisasi</div>
+        <div class="profit-value">{{ final_cycle_profit.realized_revenue|rupiah }}</div>
+        <div class="profit-desc">Penjualan yang sudah tercatat sampai tanggal laporan.</div>
+      </div>
+      <div class="profit-card">
+        <div class="profit-label">Nilai Sisa Udang</div>
+        <div class="profit-value">{{ final_cycle_profit.remaining_biomass_value|rupiah }}</div>
+        <div class="profit-desc"><strong>{{ final_cycle_profit.remaining_biomass_kg|angka:2 }} kg</strong> × {{ final_cycle_profit.price_used|rupiah }}/kg.</div>
+        <div class="profit-badge"><i class="fa-solid fa-fish"></i> Biomassa Index</div>
+      </div>
+      <div class="profit-card">
+        <div class="profit-label">Estimasi Total Biaya</div>
+        <div class="profit-value">{{ final_cycle_profit.projected_expenses|rupiah }}</div>
+        <div class="profit-desc">Termasuk saldo utang {{ final_cycle_profit.unpaid_payables|rupiah }} yang akan dilunasi.</div>
+      </div>
+      <div class="profit-card success">
+        <div class="profit-label">Laba Bersih Akhir</div>
+        <div class="profit-value">{{ final_cycle_profit.final_net_profit|rupiah }}</div>
+        <div class="profit-badge"><i class="fa-solid fa-arrow-trend-up"></i> Margin {{ final_cycle_profit.final_margin_percent|floatformat:2 }}%</div>
+        <div class="profit-desc">Setelah estimasi pajak {{ final_cycle_profit.estimated_tax|rupiah }}.</div>
+      </div>
+    </div>
+
+    <div class="profit-equation">
+      <span><i class="fa-solid fa-calculator"></i> Potensi omzet akhir = omzet terealisasi + nilai sisa udang</span>
+      <strong>{{ final_cycle_profit.projected_revenue|rupiah }}</strong>
+    </div>
+    <div class="profit-note"><i class="fa-solid fa-circle-info"></i> Harga simulasi <strong>{{ final_cycle_profit.price_used|rupiah }}/kg</strong> · {{ final_cycle_profit.price_source }}{% if final_cycle_profit.latest_harvest_price_date %} · harga transaksi terakhir {{ final_cycle_profit.latest_harvest_price_date|date:"d M Y" }}{% endif %}. Proyeksi mengikuti biomassa, harga, mortalitas, dan transaksi baru.</div>
+  </div>
+
+  <div class="finance-panel compact-panel">
+    <div class="compact-header">
+      <h2><i class="fa-solid fa-list-check"></i> Validasi Otomatis</h2>
+      <span class="text-muted small">Pemeriksaan konsistensi laporan</span>
+    </div>
+    <div class="validation-list compact">
+      {% for check in validation_checks %}
+      <div class="validation-item {% if check.ok %}ok{% else %}bad{% endif %}">
+        <i class="fa-solid {% if check.ok %}fa-circle-check{% else %}fa-circle-exclamation{% endif %}"></i>
+        <span>{{ check.label }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="finance-panel compact-panel">
+    <div class="compact-header">
+      <h2><i class="fa-solid fa-rotate"></i> Rekonsiliasi Otomatis</h2>
+      <span class="text-muted small">Sumber pembentuk laba/rugi berjalan</span>
+    </div>
+    <div class="recon-grid-pro">
+      <div class="recon-card"><span>Pendapatan Penjualan</span><strong>{{ sales_revenue|rupiah }}</strong></div>
+      <div class="recon-card"><span>Pendapatan Lain</span><strong>{{ other_revenue|rupiah }}</strong></div>
+      <div class="recon-card"><span>Beban Operasional</span><strong>{{ operating_cost|rupiah }}</strong></div>
+      <div class="recon-card"><span>Penyusutan Tahun Berjalan</span><strong>{{ current_year_depreciation|rupiah }}</strong></div>
+    </div>
+    {% if warnings %}
+    <div class="warnings">
+      {% for warning in warnings %}<div class="alert alert-warning py-2 mb-2"><i class="fa-solid fa-triangle-exclamation"></i> {{ warning }}</div>{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

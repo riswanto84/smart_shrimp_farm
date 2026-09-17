@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% load currency %}
+{% block title %}AI Employee Finance & Payroll{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 px-3 px-lg-4">
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div><h1 class="h3 fw-bold mb-1"><i class="fa-solid fa-robot me-2"></i>AI Employee Finance & Payroll</h1><p class="text-muted mb-0">AI dapat membaca data dan membuat draft transaksi. Transaksi keuangan baru diposting setelah persetujuan.</p></div>
+    <a class="btn btn-outline-primary" href="/payroll/"><i class="fa-solid fa-money-check-dollar me-1"></i> Payroll</a>
+  </div>
+  <div class="row g-4">
+    <div class="col-xl-7">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <label class="form-label fw-semibold">Perintah untuk AI Employee</label>
+          <textarea id="aiCommand" class="form-control" rows="4" placeholder="Contoh: Kasbon Budi Rp500.000 untuk kebutuhan operasional tambak."></textarea>
+          <div class="d-flex gap-2 mt-3 flex-wrap">
+            <button class="btn btn-primary" id="sendAI" type="button"><i class="fa-solid fa-paper-plane me-1"></i> Jalankan</button>
+            <button class="btn btn-outline-secondary example" type="button">Kasbon Budi Rp500.000</button>
+            <button class="btn btn-outline-secondary example" type="button">Berapa saldo kasbon Budi?</button>
+            <button class="btn btn-outline-secondary example" type="button">Berapa gaji Budi terakhir?</button>
+          </div>
+          <div id="aiResult" class="mt-4" aria-live="polite"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-5">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-white py-3"><strong>Aturan AI Employee Tahap 1</strong></div>
+        <div class="card-body">
+          <div class="d-flex gap-3 mb-3"><i class="fa-solid fa-eye text-primary mt-1"></i><div><strong>Read</strong><div class="small text-muted">Baca pegawai, gaji, dan saldo kasbon.</div></div></div>
+          <div class="d-flex gap-3 mb-3"><i class="fa-solid fa-file-pen text-primary mt-1"></i><div><strong>Draft</strong><div class="small text-muted">Kasbon dibuat sebagai draft terlebih dahulu.</div></div></div>
+          <div class="d-flex gap-3"><i class="fa-solid fa-shield-halved text-primary mt-1"></i><div><strong>Approval</strong><div class="small text-muted">Posting kasbon membutuhkan permission persetujuan.</div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="card border-0 shadow-sm mt-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between"><strong>Menunggu Persetujuan</strong><span class="badge text-bg-warning">{{ pending|length }}</span></div>
+    <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Waktu</th><th>Action</th><th>Perintah</th><th>Status</th><th class="text-end">Aksi</th></tr></thead><tbody>
+      {% for a in pending %}<tr><td>{{ a.created_at|date:'d/m/Y H:i' }}</td><td>{{ a.get_action_display }}</td><td>{{ a.command }}</td><td><span class="badge text-bg-warning">{{ a.get_status_display }}</span></td><td class="text-end"><form method="post" action="{% url 'ai_employee:approve' a.pk %}" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-primary" onclick="return confirm('Setujui dan posting transaksi ini?')"><i class="fa-solid fa-check"></i> Setujui</button></form> <form method="post" action="{% url 'ai_employee:reject' a.pk %}" class="d-inline">{% csrf_token %}<button class="btn btn-sm btn-outline-danger"><i class="fa-solid fa-xmark"></i></button></form></td></tr>
+      {% empty %}<tr><td colspan="5" class="text-center text-muted py-4">Tidak ada draft menunggu persetujuan.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </div>
+  <div class="card border-0 shadow-sm mt-4">
+    <div class="card-header bg-white py-3"><strong>Kasbon Terbaru</strong></div>
+    <div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Pegawai</th><th>Tanggal</th><th>Kasbon</th><th>Sudah Dibayar</th><th>Sisa</th><th>Status</th></tr></thead><tbody>
+      {% for x in advances %}<tr><td><strong>{{ x.employee.name }}</strong><small class="d-block text-muted">{{ x.employee.employee_code }}</small></td><td>{{ x.advance_date|date:'d M Y' }}</td><td>{{ x.amount|rupiah }}</td><td>{{ x.repaid_amount|rupiah }}</td><td class="fw-bold">{{ x.outstanding_amount|rupiah }}</td><td>{{ x.get_status_display }}</td></tr>{% empty %}<tr><td colspan="6" class="text-center text-muted py-4">Belum ada kasbon.</td></tr>{% endfor %}
+    </tbody></table></div>
+  </div>
+</div>
+<script>
+(() => {
+  const input = document.getElementById('aiCommand'); const result = document.getElementById('aiResult'); const btn = document.getElementById('sendAI');
+  const csrf = document.querySelector('input[name=csrfmiddlewaretoken]')?.value || '';
+  document.querySelectorAll('.example').forEach(b => b.addEventListener('click', () => { input.value=b.textContent.trim(); input.focus(); }));
+  btn.addEventListener('click', async () => {
+    const message=input.value.trim(); if(!message) return;
+    btn.disabled=true; btn.innerHTML='<i class="fa-solid fa-spinner fa-spin me-1"></i> Memproses'; result.innerHTML='<div class="alert alert-info">AI sedang memproses…</div>';
+    try { const r=await fetch('{% url "ai_employee:chat" %}', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf}, body:JSON.stringify({message})}); const p=await r.json(); if(!r.ok) throw new Error(p.message||'Permintaan gagal'); result.innerHTML=`<div class="alert ${p.ok?'alert-success':'alert-danger'}"><strong>${p.type==='draft'?'Draft dibuat':'Hasil AI'}</strong><br>${String(p.message||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}${p.action_id?'<div class="mt-2 small">Action #'+p.action_id+' masuk ke daftar persetujuan di bawah.</div>':''}</div>`; if(p.action_id) setTimeout(()=>location.reload(),900); }
+    catch(e){ result.innerHTML='<div class="alert alert-danger">'+e.message+'</div>'; } finally {btn.disabled=false; btn.innerHTML='<i class="fa-solid fa-paper-plane me-1"></i> Jalankan';}
+  });
+})();
+</script>
+{% endblock %}

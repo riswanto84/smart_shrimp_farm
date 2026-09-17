@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% block title %}Detail Log Aktivitas{% endblock %}{% block content %}
+<div class="page-head"><div><h1>Detail Aktivitas</h1><p>Informasi teknis aktivitas pengguna untuk keperluan pengawasan dan audit.</p></div><a class="btn btn-outline-primary icon-only-btn" href="{% url 'accounts:activity_logs' %}" title="Kembali" aria-label="Kembali"><i class="fa-solid fa-arrow-left"></i></a></div>
+<div class="row g-3"><div class="col-lg-8"><div class="panel">
+<div class="section-mini"><i class="fa-solid fa-clock-rotate-left"></i><div><b>{{ log.action }}</b><small>{{ log.created_at|date:"d F Y, H:i:s" }} WIB</small></div></div>
+<div class="row g-3 mt-1">
+<div class="col-md-6"><label class="text-muted small">Pengguna</label><div class="detail-value">{{ log.user.get_full_name|default:log.user.username|default:"Sistem" }}</div></div>
+<div class="col-md-6"><label class="text-muted small">Role saat aktivitas</label><div class="detail-value">{{ log.role_snapshot|default:"-" }}</div></div>
+<div class="col-md-4"><label class="text-muted small">Jenis aksi</label><div class="detail-value">{{ log.get_action_type_display }}</div></div>
+<div class="col-md-4"><label class="text-muted small">Modul</label><div class="detail-value">{{ log.module|default:"-" }}</div></div>
+<div class="col-md-4"><label class="text-muted small">Status HTTP</label><div class="detail-value">{{ log.status_code }}</div></div>
+<div class="col-12"><label class="text-muted small">Keterangan</label><div class="detail-value">{{ log.description|default:"-" }}</div></div>
+<div class="col-12"><label class="text-muted small">Objek/Data</label><div class="detail-value">{{ log.object_repr|default:"-" }}</div></div>
+<div class="col-12"><label class="text-muted small">URL</label><div class="detail-value"><code>{{ log.method }} {{ log.path }}</code></div></div>
+</div></div></div>
+<div class="col-lg-4"><div class="panel"><h2 class="h5">Informasi Perangkat</h2><dl class="activity-meta"><dt>Alamat IP</dt><dd>{{ log.ip_address|default:"-" }}</dd><dt>Session</dt><dd><code>{{ log.session_key|default:"-" }}</code></dd><dt>Browser/Perangkat</dt><dd>{{ log.user_agent|default:"-" }}</dd></dl></div></div>
+<div class="col-12"><div class="panel"><h2 class="h5">Metadata Aman</h2><p class="text-muted small">Password, token, dan secret tidak pernah disimpan di log.</p><pre class="activity-json">{{ log.metadata }}</pre></div></div>
+</div>{% endblock %}

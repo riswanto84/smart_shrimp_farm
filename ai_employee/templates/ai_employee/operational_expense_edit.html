@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% load currency %}
+{% block title %}Edit Draft AI OperationalExpense{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 px-3 px-lg-4">
+  <div class="page-head mb-4">
+    <div><h1 class="h3 fw-bold mb-1"><i class="fa-solid fa-pen-to-square me-2"></i>Edit Draft AI OperationalExpense</h1><p class="text-muted mb-0">Periksa dan lengkapi hasil AI. Simpan untuk mencatat pengeluaran keuangan; setelah berhasil, Anda akan kembali ke Pengeluaran Operasional.</p></div>
+  </div>
+  <div class="row g-4">
+    <div class="col-xl-7">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          {% if messages %}{% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }}">{{ message }}</div>{% endfor %}{% endif %}
+          {% if extracted.missing_fields %}<div class="alert alert-warning"><strong>Data belum lengkap. Silakan lengkapi:</strong> {{ extracted.missing_fields|join:', ' }}</div>{% else %}<div class="alert alert-success">Semua field wajib sudah lengkap. Siap disimpan ke Pengeluaran Operasional.</div>{% endif %}
+          <form method="post">
+            {% csrf_token %}
+            <div class="mb-3"><label class="form-label fw-semibold">Siklus</label><input class="form-control" value="{{ cycle.name|default:extracted.cycle_name|default:'-' }}" readonly></div>
+            <div class="row g-3">
+              <div class="col-md-6"><label class="form-label fw-semibold">Tanggal *</label><input class="form-control" type="date" name="date" value="{{ extracted.date }}" required></div>
+              <div class="col-md-6"><label class="form-label fw-semibold">Kategori *</label><select class="form-select" name="category" required><option value="">Pilih kategori</option>{% for value,label in categories %}<option value="{{ value }}" {% if extracted.category == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+              <div class="col-md-8"><label class="form-label fw-semibold">Nama Pengeluaran *</label><input class="form-control" name="name" value="{{ extracted.name }}" required></div>
+              <div class="col-md-4">
+  <label class="form-label fw-semibold">Jumlah *</label>
+  <div class="input-group">
+    <span class="input-group-text">Rp</span>
+    <input class="form-control" id="amount_display" name="amount_display" inputmode="decimal" autocomplete="off" value="{{ extracted.amount|default:'' }}" required aria-describedby="amountHelp">
+    <input type="hidden" id="amount" name="amount" value="{{ extracted.amount|default:'' }}">
+  </div>
+  <div id="amountHelp" class="form-text">Format otomatis ribuan, contoh: 53.000.000</div>
+</div>
+              <div class="col-md-6"><label class="form-label fw-semibold">Metode Pembayaran *</label><select class="form-select" name="payment_method" required><option value="">Pilih metode</option>{% for method in payment_methods %}<option value="{{ method }}" {% if extracted.payment_method == method %}selected{% endif %}>{{ method }}</option>{% endfor %}</select></div>
+              <div class="col-md-6"><label class="form-label fw-semibold">Kolam</label><select class="form-select" name="pond_id"><option value="">Semua / tidak ditentukan</option>{% for pond in ponds %}<option value="{{ pond.id }}" {% if extracted.pond_id == pond.id %}selected{% endif %}>{{ pond.name }}</option>{% endfor %}</select></div>
+              <div class="col-12"><label class="form-label fw-semibold">Nomor Bukti</label><input class="form-control" name="document_number" value="{{ extracted.document_number }}"></div>
+              <div class="col-12"><label class="form-label fw-semibold">Catatan</label><textarea class="form-control" name="notes" rows="3">{{ extracted.notes }}</textarea></div>
+            </div>
+            <button type="submit" class="btn btn-primary w-100 mt-4"><i class="fa-solid fa-floppy-disk me-1"></i> Simpan Pengeluaran</button>
+          </form>
+          <div class="form-text mt-2">Setelah field wajib lengkap, tombol ini langsung menyimpan transaksi ke Pengeluaran Operasional. Tidak diperlukan langkah persetujuan kedua.</div>
+          <a class="btn btn-outline-secondary w-100 mt-2" href="{% url 'finance:expenses' %}">Kembali ke Pengeluaran Operasional</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-5">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white py-3"><strong>Bukti Pengeluaran</strong></div>
+        <div class="card-body p-4">{% if document %}<div class="border rounded p-3 bg-light"><i class="fa-regular fa-file me-2"></i>{{ document.original_name }} <span class="text-muted small">({{ document.file_size|filesizeformat }})</span></div>{% else %}<p class="text-muted mb-0">Bukti tidak ditemukan.</p>{% endif %}</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  const display = document.getElementById('amount_display');
+  const hidden = document.getElementById('amount');
+  if (!display || !hidden) return;
+
+  function toNumeric(value) {
+    let raw = String(value || '').trim().replace(/\s/g, '').replace(/Rp/gi, '');
+    if (!raw) return '';
+    // Indonesian format: 53.000.000,50 -> 53000000.50
+    if (raw.includes(',')) {
+      raw = raw.replace(/\./g, '').replace(',', '.');
+    } else {
+      // If there is only a dot, treat it as a thousands separator.
+      raw = raw.replace(/\./g, '');
+    }
+    raw = raw.replace(/[^0-9.]/g, '');
+    const parts = raw.split('.');
+    if (parts.length > 2) raw = parts[0] + '.' + parts.slice(1).join('');
+    return raw;
+  }
+
+  function formatThousands(value) {
+    const numeric = toNumeric(value);
+    if (!numeric) return '';
+    const parts = numeric.split('.');
+    const integer = (parts[0] || '0').replace(/^0+(?=\d)/, '');
+    const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    if (parts.length > 1) return grouped + ',' + parts[1].slice(0, 2);
+    return grouped;
+  }
+
+  function sync() {
+    hidden.value = toNumeric(display.value);
+  }
+
+  // Show the existing amount using Indonesian thousands separators.
+  display.value = formatThousands(display.value);
+  sync();
+
+  display.addEventListener('input', function () {
+    sync();
+  });
+  display.addEventListener('blur', function () {
+    display.value = formatThousands(display.value);
+    sync();
+  });
+
+  const form = display.closest('form');
+  if (form) {
+    form.addEventListener('submit', function () {
+      display.value = formatThousands(display.value);
+      sync();
+    });
+  }
+})();
+</script>
+
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% load currency %}
+{% block title %}AI OperationalExpense{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 px-3 px-lg-4">
+  <div class="page-head mb-4">
+    <div><h1 class="h3 fw-bold mb-1"><i class="fa-solid fa-robot me-2"></i>AI OperationalExpense</h1><p class="text-muted mb-0">Lampirkan bukti pengeluaran, biarkan AI membaca data, lalu periksa draft sebelum diposting.</p></div>
+  </div>
+  <div class="row g-4">
+    <div class="col-xl-6">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body p-4">
+          <div class="alert alert-info"><i class="fa-solid fa-shield-halved me-2"></i><strong>Aman:</strong> AI hanya membuat draft. Pengeluaran final baru dibuat setelah Anda menyetujui.</div>
+          <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="mb-3"><label class="form-label fw-semibold">Siklus</label><input class="form-control" value="{{ cycle.name|default:'-' }}" readonly></div>
+            <div class="mb-3"><label class="form-label fw-semibold">Bukti Pengeluaran</label><input class="form-control" type="file" name="evidence" accept=".pdf,.jpg,.jpeg,.png,.webp" required><div class="form-text">PDF/JPG/JPEG/PNG/WEBP, maksimal 10 MB.</div></div>
+            <div class="mb-3"><label class="form-label fw-semibold">Instruksi tambahan <span class="text-muted fw-normal">(opsional)</span></label><textarea class="form-control" name="command" rows="3" placeholder="Contoh: Ini untuk Kolam 3. Gunakan kategori Pakan."></textarea></div>
+            <button class="btn btn-primary w-100" type="submit"><i class="fa-solid fa-wand-magic-sparkles me-1"></i> Analisis Bukti dengan AI</button>
+          </form>
+          {% if messages %}{% for message in messages %}<div class="alert alert-{{ message.tags|default:'info' }} mt-3 mb-0">{{ message }}</div>{% endfor %}{% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-6">
+      {% if submitted and draft %}
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white py-3"><strong><i class="fa-solid fa-file-circle-check me-2 text-success"></i>Draft Pengeluaran #{{ draft.id }}</strong></div>
+        <div class="card-body p-4">
+          <div class="row g-3">
+            <div class="col-sm-6"><small class="text-muted d-block">Tanggal</small><strong>{{ extracted.date|default:'Belum terbaca' }}</strong></div>
+            <div class="col-sm-6"><small class="text-muted d-block">Kategori</small><strong>{{ extracted.category|default:'Belum terbaca' }}</strong></div>
+            <div class="col-sm-6"><small class="text-muted d-block">Nama</small><strong>{{ extracted.name|default:'Belum terbaca' }}</strong></div>
+            <div class="col-sm-6"><small class="text-muted d-block">Jumlah</small><strong>{{ extracted.amount|rupiah }}</strong></div>
+            <div class="col-sm-6"><small class="text-muted d-block">Metode</small><strong>{{ extracted.payment_method|default:'Belum diketahui' }}</strong></div>
+            <div class="col-sm-6"><small class="text-muted d-block">Kolam</small><strong>{% if extracted.pond_id %}ID {{ extracted.pond_id }}{% else %}Semua / belum diketahui{% endif %}</strong></div>
+            <div class="col-12"><small class="text-muted d-block">Nomor bukti</small><strong>{{ extracted.document_number|default:'-' }}</strong></div>
+          </div>
+          {% if extracted.missing_fields %}<div class="alert alert-warning mt-4 mb-0"><strong>Perlu diperiksa:</strong> {{ extracted.missing_fields|join:', ' }}</div>{% endif %}
+          <div class="border rounded p-3 mt-3 bg-light"><i class="fa-regular fa-file me-2"></i>{{ document.original_name }} <span class="text-muted small">({{ document.file_size|filesizeformat }})</span></div>
+          <div class="d-grid gap-2 mt-4">
+            <a class="btn btn-warning" href="{% url 'ai_employee:operational_expense_edit' draft.id %}"><i class="fa-solid fa-pen-to-square me-1"></i> Edit / Lengkapi Draft</a>
+            {% if not extracted.missing_fields %}
+            <form method="post" action="{% url 'ai_employee:approve' draft.id %}" onsubmit="return confirm('Setujui dan posting pengeluaran ini?');">{% csrf_token %}<button class="btn btn-success w-100"><i class="fa-solid fa-check me-1"></i> Setujui & Posting Pengeluaran</button></form>
+            {% else %}<div class="alert alert-warning mb-0">Draft belum dapat diposting karena masih ada field wajib yang belum lengkap: <strong>{{ extracted.missing_fields|join:', ' }}</strong>. Klik <strong>Edit / Lengkapi Draft</strong> untuk mengisinya.</div>{% endif %}
+          </div>
+          <a class="btn btn-outline-secondary w-100 mt-2" href="{% url 'finance:expenses' %}">Kembali ke Pengeluaran Operasional</a>
+        </div>
+      </div>
+      {% else %}
+      <div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><h2 class="h5 fw-bold">Contoh</h2><p class="text-muted">Upload nota pakan seperti:</p><blockquote class="border-start border-4 ps-3">“Pembelian pakan 10 sak, total Rp7.500.000, transfer, untuk Kolam 1.”</blockquote><p class="text-muted mb-0">AI akan mencoba membaca tanggal, kategori, nama pengeluaran, nominal, metode pembayaran, kolam, dan nomor bukti. Data yang tidak terbaca tidak akan ditebak.</p></div></div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

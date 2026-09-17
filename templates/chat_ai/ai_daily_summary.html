@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}AI Ringkasan Harian Owner/Investor{% endblock %}
+{% block content %}
+{% include 'chat_ai/_ai_header.html' with page_title='AI Ringkasan Harian Owner / Investor' page_subtitle='Ringkasan eksekutif harian mencakup produksi, risiko, keuangan, dan outlook panen.' show_pond=False %}
+<div class="ai-kpi-grid">
+  <div class="ai-kpi success"><i class="fa-solid fa-shield-heart"></i><span>Status Produksi</span><b>{{ status }}</b><small>Risiko {{ risk_label }}</small></div>
+  <div class="ai-kpi"><i class="fa-solid fa-money-bill-trend-up"></i><span>Omzet 7 Hari</span><b>{{ revenue_rp }}</b><small>Penjualan tercatat</small></div>
+  <div class="ai-kpi"><i class="fa-solid fa-wallet"></i><span>Biaya 7 Hari</span><b>{{ expense_rp }}</b><small>Pengeluaran operasional</small></div>
+  <div class="ai-kpi success"><i class="fa-solid fa-scale-balanced"></i><span>Laba 7 Hari</span><b>{{ profit_rp }}</b><small>Omzet - biaya</small></div>
+</div>
+<div class="ai-dashboard-grid">
+  <div class="ai-card wide">
+    <div class="ai-section-title"><i class="fa-solid fa-star"></i><h2>Executive Summary</h2></div>
+    <ul class="ai-reco-list"><li><i class="fa-solid fa-check"></i>Status produksi hari ini berada pada kategori <b>{{ status }}</b>.</li><li><i class="fa-solid fa-check"></i>Total pakan 7 hari: <b>{{ ctx.feed_7d|angka:2 }} kg</b>.</li><li><i class="fa-solid fa-check"></i>Total siphon mati 7 hari: <b>{{ ctx.dead_7d|ribuan }} ekor</b>.</li><li><i class="fa-solid fa-check"></i>{% if nearest %}Prediksi panen terdekat: <b>{{ nearest.pond.name }}</b> sekitar <b>{{ nearest.date|date:'d M Y' }}</b>.{% else %}Data panen parsial belum cukup untuk prediksi.{% endif %}</li></ul>
+  </div>
+  <div class="ai-card"><div class="ai-section-title"><i class="fa-solid fa-lightbulb"></i><h2>Highlight Manajemen</h2></div><div class="ai-highlight"><b>Risiko Utama</b><span>{% if reasons %}{{ reasons|join:', ' }}{% else %}Tidak ada risiko dominan{% endif %}</span></div><div class="ai-highlight"><b>Cashflow</b><span>Laba 7 hari {{ profit_rp }}</span></div><div class="ai-highlight"><b>Outlook</b><span>Monitor sampling, siphon, dan FCR harian.</span></div></div>
+</div>
+{% include 'chat_ai/_ai_result.html' %}
+{% include 'chat_ai/_source_data.html' %}
+{% endblock %}

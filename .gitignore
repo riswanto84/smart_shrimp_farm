@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3.backup
+media/
+staticfiles/
+
+# Jangan commit settings production/local
+smart_shrimp_farm/settings.py
+
+# Environment / secrets
+.env
+*.env
+
+# Backup / data export
+*.backup
+*.bak
+*.sql
+*.dump
+smart_shrimp_data.json
+data_sqlite.json
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
