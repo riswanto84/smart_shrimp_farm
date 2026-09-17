@@ -38,3 +38,4 @@ data_sqlite.json
 # IDE
 .vscode/
 .idea/
+runtime_cache/
