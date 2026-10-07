@@ -16,31 +16,36 @@ from operations.models import DailyParameter, DailyPondRecord, AncoCheck, Sampli
 from ponds.models import Pond
 from .file_utils import extract_text, validate_upload
 from .models import ChatAttachment, ChatMessage, ChatSession
-from .services import active_model, ollama_health, stream_ollama
+from .services import active_model, ollama_health, stream_ollama_agent
+from .ai_tools import tool_definitions, execute_tool
 
 
-def _pond_ai_context(pond):
+def _pond_ai_context(pond, cycle=None):
+    """Small, deterministic context for UI/chat grounding.
+
+    The agent now has read-only database tools for historical/deep questions;
+    this snapshot remains useful as immediate context and for chat audit logs.
+    """
     if not pond:
         return ''
-    parts = [f'Konteks kolam {pond.name}.']
-    latest_parameter = DailyParameter.objects.filter(pond=pond).order_by('-date', '-created_at').first()
-    latest_daily = DailyPondRecord.objects.filter(pond=pond).order_by('-date').first()
-    latest_anco = AncoCheck.objects.filter(pond=pond).order_by('-date').first()
-    latest_sampling = SamplingRecord.objects.filter(pond=pond).order_by('-date').first()
-    latest_siphon = SiphonRecord.objects.filter(pond=pond).order_by('-date').first()
-    latest_harvest = Harvest.objects.filter(pond=pond).order_by('-date').first()
+    cycle_id = cycle.id if cycle else None
+    parts = [f'Konteks kolam {pond.name}. Siklus: {cycle.name if cycle else "tidak ditentukan"}.']
+    latest_parameter = DailyParameter.objects.filter(pond=pond, cycle_id=cycle_id).order_by('-date', '-created_at').first() if cycle_id else DailyParameter.objects.filter(pond=pond).order_by('-date', '-created_at').first()
+    latest_anco = AncoCheck.objects.filter(pond=pond, cycle_id=cycle_id).order_by('-date').first() if cycle_id else AncoCheck.objects.filter(pond=pond).order_by('-date').first()
+    latest_sampling = SamplingRecord.objects.filter(pond=pond, cycle_id=cycle_id).order_by('-date').first() if cycle_id else SamplingRecord.objects.filter(pond=pond).order_by('-date').first()
+    latest_siphon = SiphonRecord.objects.filter(pond=pond, cycle_id=cycle_id).order_by('-date').first() if cycle_id else SiphonRecord.objects.filter(pond=pond).order_by('-date').first()
+    latest_harvest = Harvest.objects.filter(pond=pond, cycle_id=cycle_id).order_by('-date').first() if cycle_id else Harvest.objects.filter(pond=pond).order_by('-date').first()
     if latest_parameter:
         parts.append(f'Parameter terakhir {latest_parameter.date}: DOC {latest_parameter.doc}, suhu {latest_parameter.temperature}, pH pagi {latest_parameter.ph_morning}, pH sore {latest_parameter.ph_evening}, DO pagi {latest_parameter.do_morning}, DO malam {latest_parameter.do_night}, salinitas {latest_parameter.salinity}.')
-    if latest_daily:
-        parts.append(f'Data harian {latest_daily.date}: pakan {latest_daily.daily_feed_kg} kg, cuaca {latest_daily.weather}, treatment {latest_daily.treatment or "-"}.')
     if latest_anco:
-        parts.append(f'Cek anco {latest_anco.date}: status {latest_anco.appetite_status}, rekomendasi sistem {latest_anco.recommendation}.')
+        parts.append(f'Cek anco {latest_anco.date}: pakan {latest_anco.daily_feed_kg} kg, status {latest_anco.appetite_status}, rekomendasi {latest_anco.recommendation}.')
     if latest_sampling:
-        parts.append(f'Sampling {latest_sampling.date}: DOC {latest_sampling.doc}, ABW {latest_sampling.abw_g} g, size {latest_sampling.size}, ADG weekly {latest_sampling.adg_weekly}, FCR {latest_sampling.fcr}, biomassa {latest_sampling.biomass_kg} kg, SR {latest_sampling.estimated_sr}%, estimasi panen {latest_sampling.harvest_estimation}.')
+        parts.append(f'Sampling {latest_sampling.date}: DOC {latest_sampling.doc}, ABW {latest_sampling.abw_g} g, size {latest_sampling.size}, ADG {latest_sampling.adg_weekly}, FCR {latest_sampling.fcr}, biomassa index {latest_sampling.biomass_index_kg} kg, SR index {latest_sampling.sr_index_percent}%, populasi index {latest_sampling.population_index}.')
     if latest_siphon:
         parts.append(f'Siphon {latest_siphon.date}: mati {latest_siphon.dead_count} ekor, hidup tersiphon {latest_siphon.live_count} ekor, indikator {latest_siphon.health_indicator}.')
     if latest_harvest:
         parts.append(f'Panen terakhir {latest_harvest.date}: {latest_harvest.harvest_type}, size {latest_harvest.size_text}, total {latest_harvest.total_kg} kg.')
+    parts.append('Data historis dapat diambil melalui AI Tools read-only jika diperlukan. Jangan mengarang data yang tidak tersedia.')
     return ' '.join(parts)
 
 
@@ -144,8 +149,9 @@ def stream_chat(request):
         session.pond = get_object_or_404(Pond, id=pond_id)
         session.save(update_fields=['pond', 'updated_at'])
 
-    context = _pond_ai_context(session.pond)
-    snapshot = {'pond_id': session.pond_id, 'pond_name': session.pond.name if session.pond else '', 'context_text': context}
+    cycle = session.cycle or get_selected_cycle(request)
+    context = _pond_ai_context(session.pond, cycle)
+    snapshot = {'cycle_id': cycle.id if cycle else None, 'cycle_name': cycle.name if cycle else '', 'pond_id': session.pond_id, 'pond_name': session.pond.name if session.pond else '', 'context_text': context, 'agent_tools_enabled': True}
     user_message = ChatMessage.objects.create(session=session, role='user', message=msg or 'Mohon analisis file terlampir.', context_snapshot=snapshot)
 
     extracted_sections = []
@@ -178,7 +184,10 @@ def stream_chat(request):
         'Anda adalah Smart Shrimp AI, asisten profesional dalam aplikasi Smart Shrimp Farm. '
         'Jawab dalam Bahasa Indonesia yang jelas, praktis, berbasis data, dan tidak mengarang angka. '
         'Untuk saran budidaya, jelaskan risiko dan tindakan pemantauan. Gunakan format markdown bila membantu. '
-        'Anda dapat menganalisis data tambak dan isi dokumen yang diberikan pengguna.'
+        'Anda dapat menganalisis data tambak dan isi dokumen yang diberikan pengguna. '
+        'Untuk pertanyaan tentang data aplikasi, gunakan AI Tools terlebih dahulu. '
+        'Jangan mengarang angka. Data harus mengikuti siklus terpilih dan kolam terpilih bila ada. '
+        'Gunakan tools hanya untuk membaca data; Anda tidak boleh mengubah data aplikasi.'
     )
     current_content = msg or 'Analisis file terlampir.'
     if context:
@@ -197,7 +206,12 @@ def stream_chat(request):
         full_text = ''
         try:
             yield json.dumps({'type': 'start', 'user_message': _serialize_message(user_message), 'assistant_id': assistant_message.id, 'session_title': session.title}, ensure_ascii=False) + '\n'
-            for chunk in stream_ollama(ollama_messages, model=session.model_name, images=image_payloads):
+            for chunk in stream_ollama_agent(
+                ollama_messages, model=session.model_name, images=image_payloads,
+                tools=tool_definitions(), execute_tool=execute_tool,
+                current_cycle_id=cycle.id if cycle else None,
+                current_pond_id=session.pond_id,
+            ):
                 full_text += chunk
                 yield json.dumps({'type': 'token', 'content': chunk}, ensure_ascii=False) + '\n'
             assistant_message.message = full_text
